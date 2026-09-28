@@ -1,0 +1,11 @@
+[submodule "modular-express-typescript-starter-postgre"]
+	path = modular-express-typescript-starter-postgre
+	url = https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre.git
+
+[submodule "modular-golang"]
+	path = modular-golang
+	url = https://github.com/RidhuanDEV/golang-backend.git
+
+[submodule "modular-NET"]
+	path = modular-NET
+	url = https://github.com/RidhuanDEV/NET-backend.git

@@ -1,0 +1,51 @@
+{
+  "name": "create-ridhuan-backend",
+  "version": "1.0.0",
+  "description": "Multi-template CLI to scaffold modular backend projects in Express TypeScript, Golang, or .NET 10",
+  "type": "module",
+  "bin": {
+    "create-ridhuan-backend": "./dist/bin/index.js"
+  },
+  "files": [
+    "dist",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "cli",
+    "starter",
+    "template",
+    "modular",
+    "express",
+    "typescript",
+    "golang",
+    "dotnet",
+    "postgresql",
+    "prisma",
+    "sqlc",
+    "efcore"
+  ],
+  "author": "RidhuanDEV",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RidhuanDEV/create-ridhuan-backend.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepare:templates": "node ./scripts/prepare-templates.mjs",
+    "build": "tsc",
+    "prepack": "npm run prepare:templates && npm run build",
+    "test": "node ./scripts/verify-cli.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "typescript": "^5.7.3"
+  }
+}

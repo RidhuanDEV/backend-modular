@@ -1,0 +1,4 @@
+services:
+  migrate:
+    environment:
+      DATABASE_URL: postgres://invalid:invalid@postgres:5432/backend?sslmode=disable

@@ -1,0 +1,7 @@
+example.com/smoke-api
+3101
+smoke_db
+backend
+backend
+n
+local

@@ -1,0 +1,29 @@
+.env
+.env.*
+!.env.example
+uploads/
+bin/
+coverage.out
+*.test
+.tmp-postgres-test/
+
+# Local editor, build, and coverage artifacts
+.idea/
+.vscode/
+*.out
+*.prof
+*.cover
+*.exe
+*.dll
+*.so
+*.dylib
+*.log
+*.swp
+*.swo
+*~
+
+# Internal planning and cross-template notes are kept locally
+/IMPLEMENTATION-PLAN.md
+/docs/GO-ARCHITECTURE-IMPLEMENTATION-REPORT.md
+/docs/GO-ARCHITECTURE-REFINEMENT-PLAN.md
+/docs/DOTNET-ENTERPRISE-TEMPLATE-PROMPT.md

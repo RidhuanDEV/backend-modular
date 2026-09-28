@@ -1,0 +1,8 @@
+# Isolated smoke configuration; never reads the developer's .env.
+services:
+  app:
+    env_file: !override [.env.example]
+    environment:
+      CACHE_ENABLED: ${CACHE_ENABLED:-false}
+      RATE_LIMIT_STORE: ${RATE_LIMIT_STORE:-memory}
+      UPLOAD_STORAGE: ${UPLOAD_STORAGE:-local}

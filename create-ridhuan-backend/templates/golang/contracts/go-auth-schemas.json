@@ -1,0 +1,53 @@
+{
+  "source": "Explicit public Go auth DTOs",
+  "endpoints": [
+    {
+      "id": "auth.register",
+      "response": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean", "const": true},
+          "data": {"type": "object", "properties": {"id": {"type": "string", "format": "uuid"}, "email": {"type": "string", "format": "email"}, "roleId": {"type": "string", "format": "uuid"}, "createdAt": {"type": "string", "format": "date-time"}, "updatedAt": {"type": "string", "format": "date-time"}}, "required": ["id", "email", "roleId", "createdAt", "updatedAt"], "additionalProperties": false}
+        },
+        "required": ["success", "data"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "auth.me",
+      "response": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean", "const": true},
+          "data": {"type": "object", "properties": {"id": {"type": "string", "format": "uuid"}, "email": {"type": "string", "format": "email"}, "roleId": {"type": "string", "format": "uuid"}, "createdAt": {"type": "string", "format": "date-time"}, "updatedAt": {"type": "string", "format": "date-time"}}, "required": ["id", "email", "roleId", "createdAt", "updatedAt"], "additionalProperties": false}
+        },
+        "required": ["success", "data"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "auth.login",
+      "response": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean", "const": true},
+          "data": {"type": "object", "properties": {"token": {"type": "string"}, "refreshToken": {"type": "string"}, "tokenType": {"type": "string", "const": "Bearer"}, "expiresIn": {"type": "integer", "const": 900}}, "required": ["token", "refreshToken", "tokenType", "expiresIn"], "additionalProperties": false}
+        },
+        "required": ["success", "data"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "auth.refresh",
+      "response": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean", "const": true},
+          "data": {"type": "object", "properties": {"token": {"type": "string"}, "refreshToken": {"type": "string"}, "tokenType": {"type": "string", "const": "Bearer"}, "expiresIn": {"type": "integer", "const": 900}}, "required": ["token", "refreshToken", "tokenType", "expiresIn"], "additionalProperties": false}
+        },
+        "required": ["success", "data"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

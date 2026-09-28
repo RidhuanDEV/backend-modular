@@ -1,0 +1,32 @@
+{
+  "source": "modular-express-typescript-starter-postgre/src/core/http/endpoint-registry.ts (snapshot 2026-09-24)",
+  "endpoints": [
+    ["health.get", "GET", "/health", "system", true, "", "none", "public", "off", 200],
+    ["live.get", "GET", "/live", "system", true, "", "none", "public", "off", 200],
+    ["ready.get", "GET", "/ready", "system", true, "", "none", "public", "off", 200],
+    ["docs.spec", "GET", "/docs/openapi.json", "docs", true, "", "none", "public", "off", 200],
+    ["docs.moduleSpec", "GET", "/docs/specs/{module}.json", "docs", true, "", "none", "public", "off", 200],
+    ["docs.ui", "GET", "/docs", "docs", true, "", "none", "public", "off", 200],
+    ["auth.register", "POST", "/api/auth/register", "auth", true, "", "required", "auth", "off", 201],
+    ["auth.login", "POST", "/api/auth/login", "auth", true, "", "optional", "auth", "off", 200],
+    ["auth.me", "GET", "/api/auth/me", "auth", false, "", "none", "internal", "off", 200],
+    ["user.list", "GET", "/api/users", "user", false, "manage_users", "none", "internal", "read", 200],
+    ["user.get", "GET", "/api/users/{id}", "user", false, "manage_users", "none", "internal", "read", 200],
+    ["user.create", "POST", "/api/users", "user", false, "manage_users", "required", "internal", "off", 201],
+    ["user.update", "PATCH", "/api/users/{id}", "user", false, "manage_users", "required", "internal", "off", 200],
+    ["user.delete", "DELETE", "/api/users/{id}", "user", false, "manage_users", "required", "internal", "off", 204],
+    ["role.list", "GET", "/api/roles", "roles", false, "manage_roles", "none", "internal", "read", 200],
+    ["role.get", "GET", "/api/roles/{id}", "roles", false, "manage_roles", "none", "internal", "read", 200],
+    ["role.create", "POST", "/api/roles", "roles", false, "manage_roles", "required", "internal", "off", 201],
+    ["role.update", "PATCH", "/api/roles/{id}", "roles", false, "manage_roles", "required", "internal", "off", 200],
+    ["role.delete", "DELETE", "/api/roles/{id}", "roles", false, "manage_roles", "required", "internal", "off", 204],
+    ["role.assignPermissions", "POST", "/api/roles/{id}/permissions", "roles", false, "manage_roles", "required", "internal", "off", 200],
+    ["permission.list", "GET", "/api/permissions", "permissions", false, "manage_permissions", "none", "internal", "read", 200],
+    ["permission.get", "GET", "/api/permissions/{id}", "permissions", false, "manage_permissions", "none", "internal", "read", 200],
+    ["permission.create", "POST", "/api/permissions", "permissions", false, "manage_permissions", "required", "internal", "off", 201],
+    ["permission.update", "PATCH", "/api/permissions/{id}", "permissions", false, "manage_permissions", "required", "internal", "off", 200],
+    ["permission.delete", "DELETE", "/api/permissions/{id}", "permissions", false, "manage_permissions", "required", "internal", "off", 204],
+    ["upload.create", "POST", "/api/upload", "upload", false, "manage_users", "required", "internal", "off", 201],
+    ["upload.get", "GET", "/api/upload/{id}", "upload", false, "manage_users", "none", "internal", "read", 200]
+  ]
+}

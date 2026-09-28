@@ -1,0 +1,126 @@
+// schema.prisma — v1 Template Base (RBAC Only)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────
+// RBAC MODELS
+// ─────────────────────────────────────────
+
+model Role {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  users       User[]
+  permissions RolePermission[]
+
+}
+
+model Permission {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  roles RolePermission[]
+
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+// ─────────────────────────────────────────
+// CORE MODELS
+// ─────────────────────────────────────────
+
+model User {
+  id       String  @id @default(uuid())
+  email    String  @unique
+  password String
+  roleId   String
+
+  // Soft delete
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  // Relations
+  role          Role           @relation(fields: [roleId], references: [id])
+  activityLogs  ActivityLog[]
+  uploadedFiles StoredFile[]
+  refreshTokens RefreshToken[]
+
+  @@index([roleId])
+}
+
+// ─────────────────────────────────────────
+// AUDIT
+// ─────────────────────────────────────────
+
+model ActivityLog {
+  id        String  @id @default(uuid())
+  behavior  String
+  module    String
+  entityId  String?
+  userId    String?
+  actorIdSnapshot String?
+  before    Json?
+  after     Json?
+  requestId String?
+  endpointId String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([module, entityId, createdAt])
+  @@index([userId, createdAt])
+  @@index([endpointId, createdAt])
+  @@index([createdAt])
+  @@map("CrudAuditLog")
+}
+
+model StoredFile {
+  id           String @id @default(uuid())
+  storage      String
+  status       String @default("READY")
+  objectKey    String @unique
+  originalName String
+  mimeType     String
+  size         Int
+  uploaderId   String?
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  uploader     User? @relation(fields: [uploaderId], references: [id], onDelete: SetNull)
+
+  @@index([uploaderId, createdAt])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  familyId  String
+  userId    String
+  expiresAt DateTime  @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+}

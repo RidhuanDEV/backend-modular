@@ -1,0 +1,208 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using ModularBackend.Domain;
+
+namespace ModularBackend.Application;
+
+public sealed class BackendService(IBackendStore store, IPasswordService passwords, ITokenService tokens, TimeProvider clock, IAuditFailureReporter auditFailures, ICacheInvalidation invalidation)
+{
+    private static UserResult Map(User u) => new(u.Id, u.Email, u.RoleId, u.CreatedAt, u.UpdatedAt,
+        new UserRole(u.Role.Id, u.Role.Name, u.Role.Permissions.Select(p => new PermissionSummary(p.Permission.Id, p.Permission.Name)).ToArray()));
+    private static AuthUserResult AuthMap(User u) => new(u.Id, u.Email, u.RoleId);
+    private static RoleResult Map(Role r, bool grants = true) => new(r.Id, r.Name, r.CreatedAt, r.UpdatedAt, grants ? r.Permissions.Select(p => new RoleGrant(new(p.Permission.Id, p.Permission.Name))).ToArray() : null);
+    private static PermissionResult Map(Permission p) => new(p.Id, p.Name, p.CreatedAt, p.UpdatedAt);
+    public static FileResult MapFile(StoredFile f) => new(f.Id, f.OriginalName, f.MimeType, f.Size, f.CreatedAt);
+    private ActivityLog Audit(OperationContext ctx, string behavior, Guid? id, string? before, string? after) => new()
+    {
+        UserId = ctx.Actor?.Id,
+        ActorIdSnapshot = ctx.Actor?.Id,
+        ActorEmailSnapshot = ctx.Actor?.Email,
+        Module = ctx.Module,
+        EndpointId = ctx.EndpointId,
+        RequestId = ctx.RequestId,
+        Behavior = behavior,
+        EntityId = id,
+        Before = AuditRedactor.Redact(before),
+        After = AuditRedactor.Redact(after),
+        CreatedAt = clock.GetUtcNow()
+    };
+    private async Task<T> MutateAsync<T>(OperationContext ctx, string behavior, Func<CancellationToken, Task<(T Result, Guid Id, string? Before, string? After)>> mutation, CancellationToken ct)
+    {
+        await store.BeginAsync(ct);
+        (T Result, Guid Id, string? Before, string? After) result;
+        try
+        {
+            result = await mutation(ct);
+            if (ctx.EndpointId == "auth.register" && result.Result is AuthUserResult registered) ctx = ctx with { Actor = new(registered.Id, registered.Email, registered.RoleId) };
+            if (ctx.Audit == AuditMode.Required) store.AddAudit(Audit(ctx, behavior, result.Id, result.Before, result.After));
+            await store.CommitAsync(ct);
+        }
+        catch { await store.RollbackAsync(CancellationToken.None); throw; }
+        await invalidation.InvalidateAsync(CancellationToken.None);
+        if (ctx.Audit == AuditMode.Optional) await OptionalAuditAsync(Audit(ctx, behavior, result.Id, result.Before, result.After));
+        return result.Result;
+    }
+    private async Task OptionalAuditAsync(ActivityLog audit)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        try { store.AddAudit(audit); await store.SaveAsync(timeout.Token); }
+        catch (Exception ex) { auditFailures.Report(ex, audit.EndpointId); }
+    }
+    public async Task<AuthUserResult> RegisterAsync(string email, string password, OperationContext ctx, CancellationToken ct)
+    {
+        return await MutateAsync<AuthUserResult>(ctx, "REGISTER", async token =>
+        {
+            if (await store.UserByEmailAsync(email, token) is not null) throw new ApiException(409, "Email already registered");
+            var role = await store.RoleByNameAsync("user", token) ?? throw new ApiException(500, "Default role not found. Please seed the database.");
+            var user = NewUser(email, password, role);
+            store.AddUser(user);
+            var result = AuthMap(user);
+            return (result, user.Id, null, JsonSerializer.Serialize(result));
+        }, ct);
+    }
+    private User NewUser(string email, string password, Role role)
+    {
+        var user = new User { Email = email, PasswordHash = "", RoleId = role.Id, Role = role, CreatedAt = clock.GetUtcNow(), UpdatedAt = clock.GetUtcNow() };
+        user.PasswordHash = passwords.Hash(user, password);
+        return user;
+    }
+    private static string NewRefreshToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    private static string HashRefreshToken(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+    private AuthTokensResult IssuePair(User user, string refreshToken) => new(tokens.Issue(user), refreshToken, "Bearer", 900);
+    private (RefreshToken Entity, string Plaintext) CreateRefreshToken(Guid userId, Guid? familyId = null, DateTimeOffset? familyExpiresAt = null)
+    {
+        var now = clock.GetUtcNow(); var raw = NewRefreshToken(); var familyExpiry = familyExpiresAt ?? now.AddDays(90);
+        return (new RefreshToken { TokenHash = HashRefreshToken(raw), FamilyId = familyId ?? Guid.NewGuid(), UserId = userId, CreatedAt = now, ExpiresAt = now.AddDays(30) < familyExpiry ? now.AddDays(30) : familyExpiry, FamilyExpiresAt = familyExpiry }, raw);
+    }
+    public async Task<AuthTokensResult> LoginAsync(string email, string password, OperationContext ctx, CancellationToken ct)
+    {
+        var user = await store.UserByEmailAsync(email, ct);
+        if (user is null || user.DeletedAt is not null || !passwords.Verify(user, password)) throw new ApiException(401, "Invalid email or password");
+        var (refresh, plaintext) = CreateRefreshToken(user.Id);
+        await store.BeginAsync(ct);
+        try { store.AddRefreshToken(refresh); if (ctx.Audit == AuditMode.Required) store.AddAudit(Audit(ctx with { Actor = new(user.Id, user.Email, user.RoleId) }, "LOGIN", user.Id, null, JsonSerializer.Serialize(new PermissionSummary(user.Id, user.Email)))); await store.CommitAsync(ct, invalidateCache: false); }
+        catch { await store.RollbackAsync(CancellationToken.None); throw; }
+        if (ctx.Audit == AuditMode.Optional) await OptionalAuditAsync(Audit(ctx with { Actor = new(user.Id, user.Email, user.RoleId) }, "LOGIN", user.Id, null, null));
+        return IssuePair(user, plaintext);
+    }
+    public async Task<AuthTokensResult> RefreshAsync(string suppliedToken, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow(); var currentHash = HashRefreshToken(suppliedToken);
+        await store.BeginAsync(ct);
+        try
+        {
+            var current = await store.RefreshTokenAsync(currentHash, ct);
+            if (current is null) { await store.RollbackAsync(CancellationToken.None); throw new ApiException(401, "Invalid refresh token"); }
+            if (current.RevokedAt is not null)
+            {
+                await store.RevokeRefreshFamilyAsync(current.FamilyId, now, ct);
+                await store.CommitAsync(ct, invalidateCache: false);
+                throw new ApiException(401, "Refresh token reuse detected");
+            }
+            var user = await store.UserAsync(current.UserId, ct);
+            if (current.ExpiresAt <= now || current.FamilyExpiresAt <= now || user is null || user.DeletedAt is not null)
+            {
+                await store.RevokeRefreshFamilyAsync(current.FamilyId, now, ct);
+                await store.CommitAsync(ct, invalidateCache: false);
+                throw new ApiException(401, "Refresh token expired or inactive");
+            }
+            var (replacement, plaintext) = CreateRefreshToken(user.Id, current.FamilyId, current.FamilyExpiresAt);
+            current.RevokedAt = now; current.ReplacedByTokenHash = replacement.TokenHash;
+            store.AddRefreshToken(replacement);
+            await store.CommitAsync(ct, invalidateCache: false);
+            return IssuePair(user, plaintext);
+        }
+        catch (ApiException) { await store.RollbackAsync(CancellationToken.None); throw; }
+        catch { await store.RollbackAsync(CancellationToken.None); throw; }
+    }
+    public async Task<AuthUserResult> MeAsync(Guid id, CancellationToken ct) => AuthMap(await store.UserAsync(id, ct) ?? throw new ApiException(404, "User not found"));
+    public async Task<UserResult> UserAsync(Guid id, CancellationToken ct) => Map(await store.UserAsync(id, ct) ?? throw new ApiException(404, "User not found"));
+    public async Task<PageResult> UsersAsync(UserQuery query, CancellationToken ct)
+    {
+        if (query.Page < 1 || query.Limit is < 1 or > 100 || query.Page > int.MaxValue / Math.Max(1, query.Limit)) throw new ApiException(400, "Invalid pagination");
+        if (query.OrderBy is not (null or "asc" or "desc")) throw new ApiException(400, "Invalid orderBy");
+        var (rows, total) = await store.UsersAsync(query, ct);
+        var pages = (int)Math.Ceiling((double)total / query.Limit);
+        var fields = (query.Fields ?? "").Split(',').Select(f => f.Trim()).Where(f => f is "id" or "email" or "roleId").ToHashSet(StringComparer.Ordinal);
+        var projected = rows.Select(u => fields.Count == 0
+            ? new UserProjection(u.Id, u.Email, u.RoleId, u.CreatedAt, u.UpdatedAt, Map(u).Role)
+            : new UserProjection(fields.Contains("id") ? u.Id : null, fields.Contains("email") ? u.Email : null, fields.Contains("roleId") ? u.RoleId : null)).ToArray();
+        return new(projected, new(query.Page, query.Limit, total, pages, query.Page < pages, query.Page > 1));
+    }
+    public Task<UserResult> CreateUserAsync(string email, string password, Guid roleId, OperationContext ctx, CancellationToken ct) => MutateAsync<UserResult>(ctx, "CREATE", async token =>
+    {
+        var role = await store.RoleAsync(roleId, token) ?? throw new ApiException(400, "Role not found");
+        var user = NewUser(email, password, role); store.AddUser(user); var result = Map(user);
+        return (result, user.Id, null, JsonSerializer.Serialize(result));
+    }, ct);
+    public Task<UserResult> UpdateUserAsync(Guid id, string? email, Guid? roleId, OperationContext ctx, CancellationToken ct) => MutateAsync(ctx, "UPDATE", async token =>
+    {
+        var user = await store.UserAsync(id, token) ?? throw new ApiException(404, "User not found");
+        var before = JsonSerializer.Serialize(Map(user));
+        if (email is not null) user.Email = email;
+        if (roleId is not null) { user.Role = await store.RoleAsync(roleId.Value, token) ?? throw new ApiException(400, "Role not found"); user.RoleId = roleId.Value; }
+        user.UpdatedAt = clock.GetUtcNow(); var result = Map(user); return (result, id, before, JsonSerializer.Serialize(result));
+    }, ct);
+    public async Task DeleteUserAsync(Guid id, OperationContext ctx, CancellationToken ct)
+    {
+        await MutateAsync(ctx, "DELETE", async token =>
+        {
+            if (ctx.Actor?.Id == id) throw new ApiException(403, "You cannot delete your own account.");
+            var actor = ctx.Actor is null ? null : await store.UserAsync(ctx.Actor.Id, token);
+            if (actor?.Role.Name != "admin") throw new ApiException(403, "Only administrators are allowed to delete user accounts.");
+            var user = await store.UserAsync(id, token) ?? throw new ApiException(404, "User not found");
+            var before = JsonSerializer.Serialize(Map(user)); user.DeletedAt = clock.GetUtcNow(); user.UpdatedAt = clock.GetUtcNow(); return (true, id, before, (string?)null);
+        }, ct);
+    }
+    public async Task<IReadOnlyList<RoleResult>> RolesAsync(CancellationToken ct) => (await store.RolesAsync(ct)).Select(r => Map(r)).ToArray();
+    public async Task<RoleResult> RoleAsync(Guid id, CancellationToken ct) => Map(await store.RoleAsync(id, ct) ?? throw new ApiException(404, "Role not found"));
+    public Task<RoleResult> CreateRoleAsync(string name, OperationContext ctx, CancellationToken ct) => MutateAsync(ctx, "CREATE", token =>
+    {
+        token.ThrowIfCancellationRequested(); var role = new Role { Name = name, CreatedAt = clock.GetUtcNow(), UpdatedAt = clock.GetUtcNow() }; store.AddRole(role); var result = Map(role, false);
+        return Task.FromResult((result, role.Id, (string?)null, (string?)JsonSerializer.Serialize(result)));
+    }, ct);
+    public Task<RoleResult> UpdateRoleAsync(Guid id, string? name, OperationContext ctx, CancellationToken ct) => MutateAsync(ctx, "UPDATE", async token =>
+    {
+        var role = await store.RoleAsync(id, token) ?? throw new ApiException(404, "Role not found"); var before = JsonSerializer.Serialize(Map(role));
+        if (name is not null) role.Name = name; role.UpdatedAt = clock.GetUtcNow(); var result = Map(role, false); return (result, id, before, JsonSerializer.Serialize(result));
+    }, ct);
+    public async Task DeleteRoleAsync(Guid id, OperationContext ctx, CancellationToken ct) => await MutateAsync(ctx, "DELETE", async token =>
+    {
+        var role = await store.RoleAsync(id, token) ?? throw new ApiException(404, "Role not found");
+        if (await store.HasRoleUsersAsync(id, token)) throw new ApiException(409, "Role is assigned to users");
+        var before = JsonSerializer.Serialize(Map(role)); store.RemoveRole(role); return (true, id, before, (string?)null);
+    }, ct);
+    public Task<RoleResult> AssignPermissionsAsync(Guid id, IReadOnlyList<Guid> ids, OperationContext ctx, CancellationToken ct) => MutateAsync(ctx, "ASSIGN_PERMISSIONS", async token =>
+    {
+        var role = await store.RoleAsync(id, token) ?? throw new ApiException(404, "Role not found"); var before = JsonSerializer.Serialize(Map(role));
+        var permissions = new List<Permission>(); foreach (var permissionId in ids.Distinct()) permissions.Add(await store.PermissionAsync(permissionId, token) ?? throw new ApiException(400, "Permission not found"));
+        role.Permissions.RemoveAll(p => !ids.Contains(p.PermissionId));
+        foreach (var p in permissions.Where(p => role.Permissions.All(g => g.PermissionId != p.Id))) role.Permissions.Add(new RolePermission { RoleId = id, PermissionId = p.Id, Permission = p, Role = role });
+        role.UpdatedAt = clock.GetUtcNow(); var result = Map(role); return (result, id, before, JsonSerializer.Serialize(result));
+    }, ct);
+    public async Task<IReadOnlyList<PermissionResult>> PermissionsAsync(CancellationToken ct) => (await store.PermissionsAsync(ct)).Select(Map).ToArray();
+    public async Task<PermissionResult> PermissionAsync(Guid id, CancellationToken ct) => Map(await store.PermissionAsync(id, ct) ?? throw new ApiException(404, "Permission not found"));
+    public Task<PermissionResult> CreatePermissionAsync(string name, OperationContext ctx, CancellationToken ct) => MutateAsync(ctx, "CREATE", token =>
+    {
+        token.ThrowIfCancellationRequested(); var p = new Permission { Name = name, CreatedAt = clock.GetUtcNow(), UpdatedAt = clock.GetUtcNow() }; store.AddPermission(p); var result = Map(p); return Task.FromResult((result, p.Id, (string?)null, (string?)JsonSerializer.Serialize(result)));
+    }, ct);
+    public Task<PermissionResult> UpdatePermissionAsync(Guid id, string? name, OperationContext ctx, CancellationToken ct) => MutateAsync(ctx, "UPDATE", async token =>
+    {
+        var p = await store.PermissionAsync(id, token) ?? throw new ApiException(404, "Permission not found"); var before = JsonSerializer.Serialize(Map(p)); if (name is not null) p.Name = name; p.UpdatedAt = clock.GetUtcNow(); var result = Map(p); return (result, id, before, JsonSerializer.Serialize(result));
+    }, ct);
+    public async Task DeletePermissionAsync(Guid id, OperationContext ctx, CancellationToken ct) => await MutateAsync(ctx, "DELETE", async token =>
+    {
+        var p = await store.PermissionAsync(id, token) ?? throw new ApiException(404, "Permission not found"); var before = JsonSerializer.Serialize(Map(p)); store.RemovePermission(p); return (true, id, before, (string?)null);
+    }, ct);
+    public Task<bool> IsFileReferencedAsync(string objectKey, CancellationToken ct) => store.IsFileReferencedAsync(objectKey, ct);
+    public async Task<FileResult> FileAsync(Guid id, CancellationToken ct) => MapFile(await store.FileAsync(id, ct) ?? throw new ApiException(404, "File not found"));
+    public Task<FileResult> SaveFileAsync(StoredFile file, OperationContext ctx, CancellationToken ct) => MutateAsync(ctx, "CREATE", token =>
+    {
+        token.ThrowIfCancellationRequested(); store.AddFile(file); var result = MapFile(file); return Task.FromResult((result, file.Id, (string?)null, (string?)JsonSerializer.Serialize(result)));
+    }, ct);
+    public async Task ReadAuditAsync(OperationContext ctx, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested(); if (ctx.Audit == AuditMode.Optional) await OptionalAuditAsync(Audit(ctx, "READ", null, null, null));
+    }
+}

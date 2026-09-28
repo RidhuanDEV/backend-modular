@@ -1,0 +1,14 @@
+services:
+  app:
+    ports:
+      - "${APP_PORT:-3000}:3000"
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+  minio:
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"

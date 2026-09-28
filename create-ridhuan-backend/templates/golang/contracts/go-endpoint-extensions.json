@@ -1,0 +1,6 @@
+{
+  "source": "Go-only auth refresh endpoint, approved in the Go template",
+  "endpoints": [
+    ["auth.refresh", "POST", "/api/auth/refresh", "auth", true, "", "required", "auth", "off", 200]
+  ]
+}

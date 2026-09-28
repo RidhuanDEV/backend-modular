@@ -1,0 +1,70 @@
+# ==========================================
+# Non-modular / Irrelevant Folders
+# ==========================================
+backend/
+frontend/
+nestjs/
+react/
+modular-go-refine-smoke/
+modular-go-refine-smoke-final/
+
+# ==========================================
+# Dependencies & Build Outputs
+# ==========================================
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+bin/
+**/bin/
+obj/
+**/obj/
+TestResults/
+**/TestResults/
+artifacts/
+**/artifacts/
+uploads/
+**/uploads/
+.refresh-publish/
+**/.refresh-publish/
+
+# ==========================================
+# Environment & Secrets (Keep .env.example)
+# ==========================================
+.env
+**/.env
+.env.local
+**/.env.local
+.env.*.local
+**/.env.*.local
+!.env.example
+!**/.env.example
+
+# ==========================================
+# Temporary & Cache Files
+# ==========================================
+.tmp-*
+**/.tmp-*
+*.tmp
+**/*.tmp
+*.log
+**/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================================
+# IDE & System Files
+# ==========================================
+.idea/
+**/.idea/
+.vscode/*
+!**/.vscode/extensions.json
+!**/.vscode/settings.json
+*.user
+**/*.user
+.DS_Store
+Thumbs.db

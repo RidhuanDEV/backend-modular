@@ -1,0 +1,13 @@
+**/bin
+**/obj
+.git
+.env
+uploads
+artifacts
+TestResults
+
+.env.*
+!.env.example
+**/*.pfx
+**/*.pem
+**/*.key
