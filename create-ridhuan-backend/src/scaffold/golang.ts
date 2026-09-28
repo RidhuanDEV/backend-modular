@@ -99,10 +99,11 @@ export async function scaffoldGolang(
 
   const instructions: readonly string[] = [
     `cd ${answers.projectName}`,
-    `# Pastikan database '${answers.dbName}' sudah dibuat di PostgreSQL:`,
-    `psql -U ${answers.dbUser} -c "CREATE DATABASE ${answers.dbName};"`,
+    "# Jalankan instan via Docker (PostgreSQL & migrasi otomatis dibuat):",
+    "docker compose up --build -d",
+    "",
+    "# Atau jika menjalankan manual di host:",
     "go mod tidy",
-    "docker compose up -d",
     "go run ./cmd/api",
   ];
 

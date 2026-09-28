@@ -135,10 +135,11 @@ export async function scaffoldDotnet(
 
   const instructions: readonly string[] = [
     `cd ${answers.projectName}`,
-    `# Pastikan database '${answers.dbName}' sudah dibuat di PostgreSQL:`,
-    `psql -U ${answers.dbUser} -c "CREATE DATABASE ${answers.dbName};"`,
+    "# Jalankan instan via Docker (PostgreSQL & migrasi otomatis dibuat):",
+    "docker compose up --build -d",
+    "",
+    "# Atau jika menjalankan manual di host:",
     "dotnet restore",
-    "docker compose up -d",
     `dotnet run --project src/${csharpName}.Api`,
   ];
 

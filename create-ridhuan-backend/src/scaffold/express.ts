@@ -73,13 +73,14 @@ export async function scaffoldExpress(
 
   const instructions: readonly string[] = [
     `cd ${answers.projectName}`,
-    `# Pastikan database '${answers.dbName}' sudah dibuat di PostgreSQL:`,
-    `psql -U ${answers.dbUser} -c "CREATE DATABASE ${answers.dbName};"`,
     "npm install",
     "npx prisma generate",
     "npx prisma migrate dev",
     "npm run seed",
     "npm run dev",
+    "",
+    "# Atau jalankan instan via Docker (PostgreSQL otomatis dibuat):",
+    "docker compose up -d",
   ];
 
   return {
