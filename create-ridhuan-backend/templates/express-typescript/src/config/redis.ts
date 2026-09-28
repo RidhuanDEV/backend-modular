@@ -3,9 +3,8 @@ import { env } from "./env.js";
 import { logger } from "../core/logger/logger.js";
 
 export const redis: Redis | null = env.REDIS_URL && (env.CACHE_ENABLED || env.RATE_LIMIT_STORE === "redis") ? new Redis(env.REDIS_URL, {
-  lazyConnect: true,
-  enableOfflineQueue: false,
-  connectTimeout: 1000,
+  enableOfflineQueue: true,
+  connectTimeout: 2000,
   maxRetriesPerRequest: 1,
   retryStrategy: () => null,
 }) : null;

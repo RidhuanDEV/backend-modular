@@ -1,7 +1,8 @@
-import { randomBytes } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { verifyPostgresConnection, type PostgresCheckResult } from "./prompts/db-check.js";
 import { selectPrompt } from "./prompts/select.js";
 import { textPrompt } from "./prompts/text.js";
 import { colors, symbols } from "./prompts/terminal-theme.js";
@@ -22,16 +23,22 @@ const templateOptions: readonly PromptOption<TemplateId>[] = [
     label: "Express TypeScript",
     value: "express-typescript",
     hint: "Prisma, Zod, JWT, RBAC, PostgreSQL",
+    activeColor: colors.tsColor,
+    inactiveColor: colors.tsDim,
   },
   {
     label: "Golang",
     value: "golang",
     hint: "Chi, Huma, sqlc, JWT, PostgreSQL",
+    activeColor: colors.goColor,
+    inactiveColor: colors.goDim,
   },
   {
     label: ".NET 10",
     value: "dotnet",
     hint: "ASP.NET Core, EF Core / Npgsql, JWT, PostgreSQL",
+    activeColor: colors.dotnetColor,
+    inactiveColor: colors.dotnetDim,
   },
 ];
 
@@ -109,6 +116,23 @@ function verifyEmptyDirectory(targetPath: string): void {
   }
 }
 
+function tryGitInit(targetDir: string): void {
+  try {
+    const res = spawnSync("git", ["init"], {
+      cwd: targetDir,
+      stdio: "ignore",
+      shell: process.platform === "win32",
+    });
+    if (res.status === 0) {
+      process.stdout.write(
+        `\n${colors.brightGreen}${symbols.check}${colors.reset} Initialized Git repository\n`,
+      );
+    }
+  } catch {
+    // Gracefully pass if git is not installed or fails
+  }
+}
+
 export async function runCli(): Promise<void> {
   process.stdout.write(
     `\n${colors.brightCyan}${colors.bold}create-ridhuan-backend${colors.reset} ${colors.dim}v1.0.0${colors.reset}\n`,
@@ -148,9 +172,72 @@ export async function runCli(): Promise<void> {
 
   const defaultDb = sanitizeDbIdentifier(projectName);
   const dbName = await textPrompt("PostgreSQL database name", defaultDb, cliArgs.yes);
-  const dbUser = await textPrompt("PostgreSQL username", defaultDb, cliArgs.yes);
-  const generatedPassword = randomBytes(16).toString("hex");
-  const dbPassword = await textPrompt("PostgreSQL password", generatedPassword, cliArgs.yes);
+  let dbUser = await textPrompt(
+    "PostgreSQL username (PostgreSQL default: 'postgres', bukan 'root')",
+    "postgres",
+    cliArgs.yes,
+  );
+  let dbPassword = await textPrompt("PostgreSQL password", "postgres", cliArgs.yes);
+
+  if (!cliArgs.yes && process.stdin.isTTY) {
+    let checkPassed = false;
+    while (!checkPassed) {
+      process.stdout.write(
+        `\n${colors.cyan}${symbols.info}${colors.reset} Checking PostgreSQL connection at localhost:5432 for user '${dbUser}'...\n`,
+      );
+      const check: PostgresCheckResult = await verifyPostgresConnection(
+        "localhost",
+        5432,
+        dbUser,
+        dbName,
+      );
+
+      if (check.reachable && check.roleExists) {
+        process.stdout.write(
+          `${colors.brightGreen}${symbols.check}${colors.reset} PostgreSQL reachable and user '${dbUser}' recognized!\n`,
+        );
+        checkPassed = true;
+      } else {
+        if (!check.reachable) {
+          process.stdout.write(
+            `${colors.yellow}${symbols.cross} PostgreSQL server tidak aktif di localhost:5432 (${check.message})${colors.reset}\n`,
+          );
+        } else if (!check.roleExists) {
+          process.stdout.write(
+            `${colors.red}${symbols.cross} ${check.message}${colors.reset}\n`,
+          );
+        }
+
+        const proceedChoice = await selectPrompt<string>(
+          "Bagaimana Anda ingin melanjutkan?",
+          [
+            {
+              label: "Ketik ulang username & password yang benar",
+              value: "retry",
+              hint: "Direkomendasikan (gunakan 'postgres')",
+            },
+            {
+              label: "Tetap lanjutkan dengan kredensial ini",
+              value: "ignore",
+              hint: "Saya akan setup user & database secara manual nanti",
+            },
+          ],
+          0,
+        );
+
+        if (proceedChoice === "retry") {
+          dbUser = await textPrompt(
+            "PostgreSQL username (default: 'postgres', bukan 'root')",
+            "postgres",
+            false,
+          );
+          dbPassword = await textPrompt("PostgreSQL password", "", false);
+        } else {
+          checkPassed = true;
+        }
+      }
+    }
+  }
 
   const redisOptions: readonly PromptOption<boolean>[] = [
     { label: "No", value: false, hint: "In-memory rate limiting and no cache" },
@@ -228,6 +315,8 @@ export async function runCli(): Promise<void> {
     result = await scaffoldDotnet(sourceTemplateDir, answers);
   }
 
+  tryGitInit(targetDirectory);
+
   process.stdout.write(
     `\n${colors.brightGreen}${symbols.check}${colors.reset} ${colors.bold}Successfully created ${projectName}!${colors.reset}\n\n`,
   );
@@ -238,4 +327,8 @@ export async function runCli(): Promise<void> {
   }
 
   process.stdout.write("\n");
+  if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
+    process.stdin.setRawMode(false);
+  }
+  process.stdin.pause();
 }

@@ -1,6 +1,6 @@
 {
   "name": "create-ridhuan-backend",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Multi-template CLI to scaffold modular backend projects in Express TypeScript, Golang, or .NET 10",
   "type": "module",
   "bin": {

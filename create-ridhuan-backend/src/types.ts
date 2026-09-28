@@ -13,6 +13,8 @@ export interface PromptOption<T> {
   readonly label: string;
   readonly value: T;
   readonly hint?: string;
+  readonly activeColor?: string;
+  readonly inactiveColor?: string;
 }
 
 export interface CliArguments {

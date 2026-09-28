@@ -8,8 +8,20 @@ export const colors = {
   green: "\x1b[32m",
   brightGreen: "\x1b[1;32m",
   yellow: "\x1b[33m",
+  brightYellow: "\x1b[1;33m",
   red: "\x1b[31m",
+  brightRed: "\x1b[1;31m",
+  blue: "\x1b[34m",
+  brightBlue: "\x1b[1;94m",
+  magenta: "\x1b[35m",
+  brightMagenta: "\x1b[1;95m",
   brightWhite: "\x1b[1;37m",
+  tsColor: "\x1b[1;94m",
+  tsDim: "\x1b[34m",
+  goColor: "\x1b[1;96m",
+  goDim: "\x1b[36m",
+  dotnetColor: "\x1b[1;95m",
+  dotnetDim: "\x1b[35m",
 };
 
 export const cursor = {

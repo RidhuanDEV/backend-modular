@@ -105,6 +105,10 @@ export async function scaffoldDotnet(
     .replaceAll("CHANGE_ME_S3_SECRET_KEY", s3Secret)
     .replaceAll("Database=modular_net;", `Database=${answers.dbName};`)
     .replaceAll("POSTGRES_DB=modular_net", `POSTGRES_DB=${answers.dbName}`)
+    .replaceAll("POSTGRES_USER=modular_net", `POSTGRES_USER=${answers.dbUser}`)
+    .replaceAll("Username=modular_net;", `Username=${answers.dbUser};`)
+    .replaceAll("APP_PORT=5080", `APP_PORT=${answers.appPort}`)
+    .replaceAll("ASPNETCORE_URLS=http://localhost:5080", `ASPNETCORE_URLS=http://localhost:${answers.appPort}`)
     .replaceAll("Rate__Store=memory", `Rate__Store=${answers.enableRedis ? "redis" : "memory"}`)
     .replaceAll("Cache__Enabled=false", `Cache__Enabled=${answers.enableRedis ? "true" : "false"}`)
     .replaceAll("Upload__Storage=local", `Upload__Storage=${answers.uploadStorage}`)
@@ -131,6 +135,8 @@ export async function scaffoldDotnet(
 
   const instructions: readonly string[] = [
     `cd ${answers.projectName}`,
+    `# Pastikan database '${answers.dbName}' sudah dibuat di PostgreSQL:`,
+    `psql -U ${answers.dbUser} -c "CREATE DATABASE ${answers.dbName};"`,
     "dotnet restore",
     "docker compose up -d",
     `dotnet run --project src/${csharpName}.Api`,

@@ -77,6 +77,7 @@ export async function scaffoldGolang(
 
   const envReplacements: Record<string, string> = {
     PORT: String(answers.appPort),
+    APP_PORT: String(answers.appPort),
     POSTGRES_DB: answers.dbName,
     POSTGRES_USER: answers.dbUser,
     POSTGRES_PASSWORD: answers.dbPassword,
@@ -98,6 +99,8 @@ export async function scaffoldGolang(
 
   const instructions: readonly string[] = [
     `cd ${answers.projectName}`,
+    `# Pastikan database '${answers.dbName}' sudah dibuat di PostgreSQL:`,
+    `psql -U ${answers.dbUser} -c "CREATE DATABASE ${answers.dbName};"`,
     "go mod tidy",
     "docker compose up -d",
     "go run ./cmd/api",

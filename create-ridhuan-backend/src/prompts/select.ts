@@ -42,14 +42,16 @@ export function selectPrompt<T>(
         const lineContent = cursor.clearLine;
 
         if (isActive) {
-          const arrow = `${colors.brightCyan}${symbols.pointer}${colors.reset}`;
-          const label = `${colors.brightCyan}${colors.bold}${option.label}${colors.reset}`;
-          const hint = option.hint !== undefined ? ` ${colors.dim}(${option.hint})${colors.reset}` : "";
+          const activeColor = option.activeColor !== undefined ? option.activeColor : colors.brightCyan;
+          const arrow = `${activeColor}${symbols.pointer}${colors.reset}`;
+          const label = `${activeColor}${colors.bold}${option.label}${colors.reset}`;
+          const hint = option.hint !== undefined ? ` ${activeColor}(${option.hint})${colors.reset}` : "";
           process.stdout.write(`${lineContent} ${arrow} ${label}${hint}\n`);
         } else {
+          const inactiveColor = option.inactiveColor !== undefined ? option.inactiveColor : colors.gray;
           const space = " ";
-          const label = `${colors.gray}${option.label}${colors.reset}`;
-          const hint = option.hint !== undefined ? ` ${colors.dim}(${option.hint})${colors.reset}` : "";
+          const label = `${inactiveColor}${option.label}${colors.reset}`;
+          const hint = option.hint !== undefined ? ` ${colors.gray}(${option.hint})${colors.reset}` : "";
           process.stdout.write(`${lineContent}  ${space} ${label}${hint}\n`);
         }
       }
@@ -93,9 +95,10 @@ export function selectPrompt<T>(
 
         const chosenOption = options[currentIndex];
         const chosen = chosenOption !== undefined ? chosenOption : fallbackItem;
+        const chosenColor = chosen.activeColor !== undefined ? chosen.activeColor : colors.brightCyan;
 
         process.stdout.write(
-          `${colors.green}${symbols.check}${colors.reset} ${colors.bold}${message}:${colors.reset} ${colors.brightCyan}${chosen.label}${colors.reset}\n`,
+          `${colors.green}${symbols.check}${colors.reset} ${colors.bold}${message}:${colors.reset} ${chosenColor}${chosen.label}${colors.reset}\n`,
         );
 
         resolve(chosen.value);
