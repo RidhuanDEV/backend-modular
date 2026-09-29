@@ -24,12 +24,20 @@ func TestSMTPConfigurationIsOptionalButValidatedWhenEnabled(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://example")
 	t.Setenv("JWT_SECRET", "this_is_a_long_test_secret_over_32_chars")
 	t.Setenv("SMTP_ENABLED", "false")
-	if _, err := Load(); err != nil { t.Fatal(err) }
+	if _, err := Load(); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("SMTP_ENABLED", "true")
-	if _, err := Load(); err == nil { t.Fatal("enabled SMTP without host accepted") }
+	if _, err := Load(); err == nil {
+		t.Fatal("enabled SMTP without host accepted")
+	}
 	t.Setenv("SMTP_HOST", "smtp.example.test")
 	t.Setenv("SMTP_FROM", "not-an-email")
-	if _, err := Load(); err == nil { t.Fatal("invalid sender accepted") }
+	if _, err := Load(); err == nil {
+		t.Fatal("invalid sender accepted")
+	}
 	t.Setenv("SMTP_FROM", "robot@example.test")
-	if _, err := Load(); err != nil { t.Fatal(err) }
+	if _, err := Load(); err != nil {
+		t.Fatal(err)
+	}
 }

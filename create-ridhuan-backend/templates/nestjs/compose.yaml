@@ -92,7 +92,9 @@ services:
       retries: 10
 
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    build:
+      context: .
+      dockerfile: scripts/minio.Dockerfile
     profiles: ["s3"]
     command: ["server", "/data", "--console-address", ":9001"]
     environment:

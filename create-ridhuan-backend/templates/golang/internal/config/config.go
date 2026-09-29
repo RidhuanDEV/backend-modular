@@ -123,7 +123,9 @@ func Load() (Config, error) {
 	}
 	if c.SMTPEnabled {
 		address, parseErr := mail.ParseAddress(c.SMTPFrom)
-		if parseErr != nil || address.Address != c.SMTPFrom { return c, errors.New("SMTP_FROM must be a valid email address") }
+		if parseErr != nil || address.Address != c.SMTPFrom {
+			return c, errors.New("SMTP_FROM must be a valid email address")
+		}
 	}
 	if c.InstanceCount, err = integer("APP_INSTANCE_COUNT", 1); err != nil {
 		return c, err

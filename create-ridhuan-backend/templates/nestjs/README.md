@@ -15,7 +15,7 @@ docker compose -f compose.yaml up -d --build
 docker compose -f compose.yaml exec app node dist/tools/seed.js
 ```
 
-Compose starts PostgreSQL, runs a one shot `prisma migrate deploy` service, then starts the API only after migration succeeds. `GET http://localhost:3000/live` shows process liveness; `GET /ready` checks required dependencies. Use `compose.override.yaml.example` as a reference for host port overrides. Enable Redis or MinIO with `--profile redis` or `--profile s3` and set the corresponding env values. The S3 bucket must exist before upload.
+Compose starts PostgreSQL, runs a one shot `prisma migrate deploy` service, then starts the API only after migration succeeds. `GET http://localhost:3000/live` shows process liveness; `GET /ready` checks required dependencies. Use `compose.override.yaml.example` as a reference for host port overrides. Enable Redis or MinIO with `--profile redis` or `--profile s3` and set the corresponding env values. The S3 bucket must exist before upload. The optional MinIO profile builds a pinned community release from official source, so its first build takes longer.
 
 ### Manual
 

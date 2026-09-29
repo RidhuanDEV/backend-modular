@@ -143,7 +143,7 @@ const nestSource = resolve(root, "../nestjs");
 const nestTarget = join(templatesDir, "nestjs");
 const nestFiles = [
   ".dockerignore", ".env.example", ".gitignore", ".github", "AGENTS.md", "Dockerfile", "LICENSE", "README.md",
-  "compose.override.yaml.example", "compose.yaml", "contracts", "docs", "nest-cli.json", "package.json", "package-lock.json",
+  "compose.override.yaml.example", "compose.yaml", "contracts", "docs", "scripts", "nest-cli.json", "package.json", "package-lock.json",
   "prisma.config.ts", "prisma", "src", "tsconfig.build.json", "tsconfig.json", "tsconfig.test.json",
 ];
 await recreateTarget(nestTarget);

@@ -54,9 +54,10 @@ jobs:
         run: npm run test:redis
       - name: Start MinIO
         run: |
+          docker build -f scripts/minio.Dockerfile -t nestjs-minio-fixture:ci .
           docker run -d --name nestjs-ci-minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+            nestjs-minio-fixture:ci server /data
           for attempt in $(seq 1 30); do curl --fail --silent http://127.0.0.1:9000/minio/health/live && break; sleep 2; done
           curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null
       - name: S3 upload with MinIO
