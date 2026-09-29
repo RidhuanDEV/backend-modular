@@ -23,6 +23,7 @@ public sealed record UserResult(Guid Id, string Email, Guid RoleId, DateTimeOffs
 public sealed record UserProjection(Guid? Id = null, string? Email = null, Guid? RoleId = null, DateTimeOffset? CreatedAt = null, DateTimeOffset? UpdatedAt = null, UserRole? Role = null);
 public sealed record AuthUserResult(Guid Id, string Email, Guid RoleId);
 public sealed record FileResult(Guid Id, string OriginalName, string MimeType, long Size, DateTimeOffset CreatedAt);
+public sealed record NotificationResult(Guid Id, Guid RecipientId, string Title, string Body, string EmailStatus, DateTimeOffset? ReadAt, DateTimeOffset CreatedAt);
 public sealed record UserQuery(int Page = 1, int Limit = 10, string? SortBy = null, string? OrderBy = null, string? Search = null, string? Fields = null);
 public sealed record PageResult(IReadOnlyList<UserProjection> Data, Pagination Meta);
 public sealed record Actor(Guid Id, string Email, Guid RoleId);

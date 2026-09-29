@@ -45,3 +45,16 @@ public interface IObjectStorage
     Task RemoveAsync(StoredObject storedObject, CancellationToken ct);
 }
 public interface ICacheInvalidation { Task InvalidateAsync(CancellationToken ct); }
+public interface INotificationStore
+{
+    Task<Notification> CreateAsync(Guid recipientId, string title, string body, bool sendEmail, OperationContext context, CancellationToken ct);
+    Task<IReadOnlyList<Notification>> ListAsync(Guid recipientId, bool unreadOnly, CancellationToken ct);
+    Task<Notification> MarkReadAsync(Guid id, OperationContext context, CancellationToken ct);
+    Task<Notification> SetEmailStatusAsync(Guid id, string status, CancellationToken ct);
+    Task<string?> RecipientEmailAsync(Guid id, CancellationToken ct);
+}
+public interface INotificationMailSender
+{
+    bool Enabled { get; }
+    Task SendAsync(string recipient, string subject, string body, CancellationToken ct);
+}

@@ -53,7 +53,7 @@ public sealed class RuntimeTests
         await using var db = Db(); await db.Database.MigrateAsync();
         var now = TimeProvider.System.GetUtcNow();
         var adminRole = new Role { Name = "admin", CreatedAt = now, UpdatedAt = now }; var userRole = new Role { Name = "user", CreatedAt = now, UpdatedAt = now };
-        foreach (var name in new[] { "manage_users", "manage_roles", "manage_permissions" })
+        foreach (var name in new[] { "manage_users", "manage_roles", "manage_permissions", "manage_uploads", "manage_notifications" })
         { var p = new Permission { Name = name, CreatedAt = now, UpdatedAt = now }; adminRole.Permissions.Add(new() { Role = adminRole, RoleId = adminRole.Id, Permission = p, PermissionId = p.Id }); }
         var admin = new User { Email = "admin@example.test", PasswordHash = "", Role = adminRole, RoleId = adminRole.Id, CreatedAt = now, UpdatedAt = now }; admin.PasswordHash = new PasswordService().Hash(admin, "fixture-password");
         db.Roles.AddRange(adminRole, userRole); db.Users.Add(admin); await db.SaveChangesAsync(); adminId = admin.Id; userRoleId = userRole.Id;
@@ -79,6 +79,27 @@ public sealed class RuntimeTests
     private async Task<JsonElement> Get(string path)
     {
         using var response = await client.GetAsync(path); var raw = await response.Content.ReadAsStringAsync(); Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, raw); using var json = JsonDocument.Parse(raw); return json.RootElement.Clone();
+    }
+    [TestMethod]
+    public async Task NotificationsPersistStreamAndMarkRead()
+    {
+        var created = await Send(HttpMethod.Post, "/api/notifications",
+            new { recipientId = adminId, title = "Hello", body = "Your update", sendEmail = true }, HttpStatusCode.Created);
+        var data = created.GetProperty("data"); var id = data.GetProperty("id").GetGuid();
+        Assert.AreEqual("FAILED", data.GetProperty("emailStatus").GetString());
+        var listed = await Get("/api/notifications");
+        Assert.IsTrue(listed.GetProperty("data").EnumerateArray().Any(item => item.GetProperty("id").GetGuid() == id));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var stream = await client.GetAsync("/api/notifications/stream", HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        Assert.AreEqual(HttpStatusCode.OK, stream.StatusCode);
+        Assert.AreEqual("text/event-stream", stream.Content.Headers.ContentType?.MediaType);
+        await using var body = await stream.Content.ReadAsStreamAsync(timeout.Token);
+        using var reader = new StreamReader(body);
+        Assert.AreEqual($"id: {id}", await reader.ReadLineAsync(timeout.Token));
+        var read = await Send(HttpMethod.Patch, $"/api/notifications/{id}/read", new { }, HttpStatusCode.OK);
+        Assert.AreEqual(JsonValueKind.String, read.GetProperty("data").GetProperty("readAt").ValueKind);
+        await using var db = Db();
+        Assert.AreEqual(2, await db.ActivityLogs.CountAsync(x => x.Module == "notifications" && x.EntityId == id));
     }
     [TestMethod]
     public async Task CrudAuthRbacAuditAndLocalUploadRoundTrip()
@@ -122,6 +143,18 @@ public sealed class RuntimeTests
     {
         await using var db = Db(); var grant = await db.RolePermissions.Include(g => g.Permission).FirstAsync(g => g.Permission.Name == "manage_users"); db.RolePermissions.Remove(grant); await db.SaveChangesAsync();
         using var response = await client.GetAsync("/api/users"); Assert.AreEqual(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+    [TestMethod]
+    public async Task NotificationAndUploadPermissionsAreSeparateFromUserManagement()
+    {
+        await using var db = Db();
+        var grants = await db.RolePermissions.Include(g => g.Permission)
+            .Where(g => g.Permission.Name == "manage_notifications" || g.Permission.Name == "manage_uploads")
+            .ToArrayAsync();
+        db.RolePermissions.RemoveRange(grants); await db.SaveChangesAsync();
+        using var users = await client.GetAsync("/api/users"); Assert.AreEqual(HttpStatusCode.OK, users.StatusCode);
+        await Send(HttpMethod.Post, "/api/notifications", new { recipientId = adminId, title = "Hello", body = "Your update" }, HttpStatusCode.Forbidden);
+        using var upload = await client.GetAsync("/api/upload/" + Guid.NewGuid()); Assert.AreEqual(HttpStatusCode.Forbidden, upload.StatusCode);
     }
     [TestMethod]
     public async Task ConcurrencyTokenRejectsLostUpdate()

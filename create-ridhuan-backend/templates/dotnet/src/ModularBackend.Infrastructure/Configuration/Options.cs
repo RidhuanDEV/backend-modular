@@ -38,3 +38,13 @@ public sealed class UploadOptions
 }
 public sealed class CorsOptions { public string[] Origins { get; set; } = []; }
 public sealed class TelemetryOptions { public bool Enabled { get; set; } public string Endpoint { get; set; } = "http://localhost:4317"; public string ServiceName { get; set; } = "modular-net"; }
+public sealed class SmtpOptions
+{
+    public bool Enabled { get; set; }
+    public string Host { get; set; } = "";
+    [Range(1, 65535)] public int Port { get; set; } = 587;
+    public bool Secure { get; set; }
+    public string User { get; set; } = "";
+    public string Password { get; set; } = "";
+    public string From { get; set; } = "";
+}

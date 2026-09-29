@@ -17,6 +17,7 @@ using ModularBackend.Api.OpenApi;
 using ModularBackend.Application;
 using ModularBackend.Infrastructure.Caching;
 using ModularBackend.Infrastructure.Configuration;
+using ModularBackend.Infrastructure.Mail;
 using ModularBackend.Infrastructure.Persistence;
 using ModularBackend.Infrastructure.Security;
 using ModularBackend.Infrastructure.Storage;
@@ -50,6 +51,7 @@ builder.Services.AddOptions<UploadOptions>().BindConfiguration("Upload").Validat
 builder.Services.AddOptions<ModularBackend.Infrastructure.Configuration.CorsOptions>().BindConfiguration("Cors").Validate(o => (!builder.Environment.IsProduction() || o.Origins.Length > 0) && o.Origins.All(ValidOrigin), "Explicit valid CORS origins required in production").ValidateOnStart();
 builder.Services.AddOptions<TelemetryOptions>().BindConfiguration("Telemetry").Validate(o => !o.Enabled || Uri.TryCreate(o.Endpoint, UriKind.Absolute, out var url) && url.Scheme is "http" or "https", "Invalid telemetry endpoint").ValidateOnStart();
 builder.Services.AddOptions<ProxyOptions>().BindConfiguration("Proxy").Validate(o => o.ForwardLimit is > 0 and <= 10 && o.KnownProxies.All(ip => System.Net.IPAddress.TryParse(ip, out _)), "Explicit valid proxy IPs required").ValidateOnStart();
+builder.Services.AddOptions<SmtpOptions>().BindConfiguration("Smtp").Validate(o => !o.Enabled || o.Host.Length > 0 && o.From.Length > 0 && (o.User.Length == 0) == (o.Password.Length == 0) && System.Net.Mail.MailAddress.TryCreate(o.From, out _), "Invalid SMTP configuration").ValidateOnStart();
 builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(o =>
 {
     var proxy = builder.Configuration.GetSection("Proxy").Get<ProxyOptions>() ?? new();
@@ -62,11 +64,12 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<EndpointRegistry>(); builder.Services.AddSingleton<RedisConnection>(); builder.Services.AddSingleton<EndpointLimiter>();
 builder.Services.AddDbContext<BackendDbContext>((services, options) => options.UseNpgsql(services.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString, npgsql => npgsql.CommandTimeout(10)));
 builder.Services.AddScoped<IBackendStore, BackendStore>(); builder.Services.AddScoped<BackendService>(); builder.Services.AddScoped<UploadService>();
+builder.Services.AddScoped<INotificationStore, NotificationStore>(); builder.Services.AddScoped<NotificationService>(); builder.Services.AddSingleton<INotificationMailSender, SmtpNotificationSender>();
 builder.Services.AddSingleton<IPasswordService, PasswordService>(); builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddSingleton<IAuditFailureReporter, AuditFailureReporter>(); builder.Services.AddSingleton<ObjectStorage>(); builder.Services.AddSingleton<IObjectStorage>(s => s.GetRequiredService<ObjectStorage>());
 builder.Services.AddScoped<ResponseCache>(); builder.Services.AddScoped<ICacheInvalidation>(s => s.GetRequiredService<ResponseCache>());
 builder.Services.AddHttpContextAccessor(); builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
-builder.Services.AddAuthorization(options => { foreach (var name in new[] { "manage_users", "manage_roles", "manage_permissions" }) options.AddPolicy(name, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(name))); });
+builder.Services.AddAuthorization(options => { foreach (var name in new[] { "manage_users", "manage_roles", "manage_permissions", "manage_uploads", "manage_notifications" }) options.AddPolicy(name, p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(name))); });
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
 builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme).Configure<IOptions<JwtOptions>>((options, jwt) =>
 {
@@ -102,7 +105,7 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? (builder.Environment.IsDevelopment() ? ["http://localhost:5173", "http://localhost:3000"] : []);
     p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod();
 }));
-foreach (var documentName in new[] { "v1", "auth", "user", "roles", "permissions", "upload", "system", "docs" })
+foreach (var documentName in new[] { "v1", "auth", "user", "roles", "permissions", "upload", "notifications", "system", "docs" })
 {
     builder.Services.AddOpenApi(documentName, o =>
     {
@@ -121,5 +124,5 @@ app.Run();
 
 static bool ValidDatabase(string connection) { try { return !string.IsNullOrWhiteSpace(new Npgsql.NpgsqlConnectionStringBuilder(connection).Database); } catch (ArgumentException) { return false; } }
 static bool ValidOrigin(string origin) => Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && uri.AbsolutePath == "/" && uri.Query.Length == 0 && uri.Fragment.Length == 0 && uri.UserInfo.Length == 0 && origin == uri.GetLeftPart(UriPartial.Authority);
-static string Module(EndpointId id) => id.ToString() switch { var name when name.StartsWith("User", StringComparison.Ordinal) => "user", var name when name.StartsWith("Role", StringComparison.Ordinal) => "roles", var name when name.StartsWith("Permission", StringComparison.Ordinal) => "permissions", var name when name.StartsWith("Auth", StringComparison.Ordinal) => "auth", var name when name.StartsWith("Upload", StringComparison.Ordinal) => "upload", var name when name.StartsWith("Docs", StringComparison.Ordinal) => "docs", _ => "system" };
+static string Module(EndpointId id) => id.ToString() switch { var name when name.StartsWith("User", StringComparison.Ordinal) => "user", var name when name.StartsWith("Role", StringComparison.Ordinal) => "roles", var name when name.StartsWith("Permission", StringComparison.Ordinal) => "permissions", var name when name.StartsWith("Auth", StringComparison.Ordinal) => "auth", var name when name.StartsWith("Upload", StringComparison.Ordinal) => "upload", var name when name.StartsWith("Notification", StringComparison.Ordinal) => "notifications", var name when name.StartsWith("Docs", StringComparison.Ordinal) => "docs", _ => "system" };
 public partial class Program;

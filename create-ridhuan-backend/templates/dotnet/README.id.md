@@ -1,5 +1,13 @@
 # Modular .NET Backend
 
+## Notifications dan SMTP opsional
+
+Notifikasi disimpan di PostgreSQL. Pengguna dengan izin `manage_notifications` membuatnya melalui `POST /api/notifications` berisi `recipientId`, `title`, `body`, dan `sendEmail` opsional. Penerima yang login dapat memakai `GET /api/notifications`, `PATCH /api/notifications/{id}/read`, dan `GET /api/notifications/stream` untuk SSE. SSE membaca PostgreSQL setiap tiga detik sehingga tetap bekerja di beberapa replica tanpa Redis. Koneksi berakhir setelah 14 menit; perbarui bearer token lalu sambungkan ulang memakai `fetch` dengan header Authorization. Jangan letakkan token di URL.
+
+Saat upgrade, jalankan seeder eksplisit untuk menambahkan `manage_notifications` dan `manage_uploads` ke role admin. Berikan izin secara terpisah untuk role khusus yang sudah ada.
+
+SMTP mati secara default (`Smtp__Enabled=false`). Jika diaktifkan, isi `Smtp__Host`, `Smtp__Port`, `Smtp__Secure`, `Smtp__User`, `Smtp__Password`, dan `Smtp__From`. Kegagalan email tidak menghapus notifikasi; `emailStatus` menjadi `FAILED`. Status `PENDING` dapat tertinggal jika proses berhenti saat mengirim. Untuk jaminan pengiriman email, proyek turunan perlu menambah outbox dan pekerja retry. Banyak klien SSE menambah beban polling PostgreSQL.
+
 [![CI](https://github.com/RidhuanDEV/NET-backend/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RidhuanDEV/NET-backend/actions/workflows/ci.yml)
 
 > English README: [README.md](README.md).
@@ -145,7 +153,7 @@ Integration test memerlukan PostgreSQL dan membuat database sementara yang dapat
 ## Keamanan dan batasan
 
 - Access token berlaku 15 menit. `POST /api/auth/login` dan `POST /api/auth/refresh` memberikan refresh token yang dirotasi setiap pemakaian; kirim `{ "refreshToken": "..." }` untuk memperbarui token. Perlakukan refresh token sebagai kredensial dan simpan dengan aman. Server hanya menyimpan hash; tiap token berlaku hingga 30 hari dan keluarga token berakhir setelah 90 hari. Pemakaian ulang mencabut keluarga aktif. Respons user auth hanya berisi `id`, `email`, dan `roleId`.
-- Permission upload masih `manage_users`, mengikuti kontrak sumber, sehingga terikat pada administrasi user. Ganti dengan permission khusus saat mengadaptasi template.
+- Upload dan metadata file dilindungi izin khusus `manage_uploads`.
 - `GET /api/upload/{id}` memberi metadata file yang dilindungi, bukan bytes. Alur download/presigned URL belum tersedia.
 - Profil S3 di Compose dan CI menggunakan [Adobe S3Mock](https://github.com/adobe/S3Mock), fixture pengujian dengan dukungan sebagian API S3 dan bukan untuk production. Gunakan layanan S3 kompatibel yang dikelola/dipelihara untuk deployment.
 - Atur TLS, CORS, proxy tepercaya, secret manager, backup, retention, dan telemetry pada deployment Anda. Untuk beberapa instance API, set `Rate__Store=redis` dan `Rate__InstanceCount` sesuai jumlah replica, lalu isi koneksi Redis yang bisa dijangkau. Validasi startup menolak konfigurasi memory limiter jika jumlah instance yang dideklarasikan lebih dari satu.

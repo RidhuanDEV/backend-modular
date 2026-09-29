@@ -1,0 +1,72 @@
+{
+  "name": "modular-nestjs-backend-template",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NestJS modular backend template with PostgreSQL, RBAC, audit, uploads and optional Redis",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "build": "prisma generate && nest build",
+    "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
+    "typecheck": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "seed": "node dist/tools/seed.js",
+    "uploads:cleanup": "node dist/tools/cleanup-orphan-uploads.js",
+    "api-docs": "node dist/tools/export-openapi.js",
+    "verify:contract": "node dist/tools/verify-contract.js",
+    "generate:feature": "node dist/tools/generate-feature.js",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/test/*.test.js",
+    "test:integration": "tsc -p tsconfig.test.json && node --test dist-test/integration/*.integration.js",
+    "test:database": "tsc -p tsconfig.test.json && node --test dist-test/integration/template.integration.js",
+    "test:redis": "tsc -p tsconfig.test.json && node --test dist-test/integration/redis.integration.js",
+    "test:s3": "tsc -p tsconfig.test.json && node --test dist-test/integration/s3.integration.js",
+    "verify:template": "npm run build && npm run typecheck && npm run prisma:validate && npm run verify:contract && npm test"
+  },
+  "engines": {
+    "node": ">=24.15 <27"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.900.0",
+    "@nestjs/common": "12.1.1",
+    "@nestjs/config": "12.0.1",
+    "@nestjs/core": "12.1.1",
+    "@nestjs/jwt": "12.0.2",
+    "@nestjs/platform-express": "12.1.1",
+    "@nestjs/swagger": "12.0.2",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "bcrypt": "^6.0.0",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.14.4",
+    "dotenv": "^17.3.1",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.10.0",
+    "multer": "^2.4.0",
+    "nodemailer": "^10.0.12",
+    "pg": "^8.20.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "12.0.8",
+    "@nestjs/testing": "12.1.1",
+    "@types/bcrypt": "^6.0.0",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^25.0.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.15.0",
+    "@types/supertest": "^6.0.3",
+    "prisma": "7.10.0",
+    "supertest": "^7.2.2",
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.2",
+    "mysql2": "3.24.4"
+  }
+}

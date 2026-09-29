@@ -12,6 +12,7 @@ import { registerUserRoutes } from "./modules/user/user.routes.js";
 import { registerRoleRoutes } from "./modules/roles/role.routes.js";
 import { registerPermissionRoutes } from "./modules/permissions/permission.routes.js";
 import { registerUploadRoutes } from "./modules/upload/upload.routes.js";
+import { registerNotificationRoutes } from "./modules/notifications/notification.routes.js";
 import { env } from "./config/env.js";
 import { sendSuccess } from "./utils/response.js";
 import { readinessHandler } from "./core/http/health.js";
@@ -48,6 +49,7 @@ registerUserRoutes(app);
 registerRoleRoutes(app);
 registerPermissionRoutes(app);
 registerUploadRoutes(app);
+registerNotificationRoutes(app);
 assertEndpointCoverage();
 
 app.use(errorMiddleware);

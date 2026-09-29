@@ -22,7 +22,10 @@ const (
 	None     Mode = "none"
 )
 
-type Actor struct{ ID, Email, RoleID string }
+type Actor struct {
+	ID, Email, RoleID string
+	ExpiresAt         time.Time
+}
 type Policy struct {
 	ID, Module, RequestID string
 	Mode                  Mode

@@ -83,6 +83,12 @@ const DEFAULT_PERMISSION_GROUPS: PermissionGroupMap = {
   PERMISSION: {
     MANAGE: "manage_permissions",
   },
+  UPLOAD: {
+    MANAGE: "manage_uploads",
+  },
+  NOTIFICATION: {
+    MANAGE: "manage_notifications",
+  },
 };
 
 function preferredConstantOrder(keys: string[]): string[] {

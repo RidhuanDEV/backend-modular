@@ -80,6 +80,51 @@ namespace ModularBackend.Infrastructure.Persistence.Migrations
                     b.ToTable("activity_logs", (string)null);
                 });
 
+            modelBuilder.Entity("ModularBackend.Domain.Notification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EmailStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTimeOffset?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("RecipientId", "CreatedAt", "Id");
+
+                    b.ToTable("notifications", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_notifications_email_status", "\"EmailStatus\" IN ('NOT_REQUESTED','PENDING','SENT','FAILED')");
+                        });
+                });
+
             modelBuilder.Entity("ModularBackend.Domain.Permission", b =>
                 {
                     b.Property<Guid>("Id")
@@ -317,6 +362,20 @@ namespace ModularBackend.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("ModularBackend.Domain.Notification", b =>
+                {
+                    b.HasOne("ModularBackend.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ModularBackend.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("RecipientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ModularBackend.Domain.RefreshToken", b =>

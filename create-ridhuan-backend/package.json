@@ -1,7 +1,7 @@
 {
   "name": "create-ridhuan-backend",
-  "version": "1.0.3",
-  "description": "Multi-template CLI to scaffold modular backend projects in Express TypeScript, Golang, or .NET 10",
+  "version": "1.1.0",
+  "description": "Multi-template CLI for Express TypeScript, NestJS, Golang, and .NET backends",
   "type": "module",
   "bin": {
     "create-ridhuan-backend": "./dist/bin/index.js"
@@ -22,6 +22,7 @@
     "modular",
     "express",
     "typescript",
+    "nestjs",
     "golang",
     "dotnet",
     "postgresql",

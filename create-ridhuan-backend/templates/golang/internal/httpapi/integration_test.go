@@ -39,7 +39,7 @@ func TestPostgresContract(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, name := range []string{"manage_users", "manage_roles", "manage_permissions"} {
+	for _, name := range []string{"manage_users", "manage_roles", "manage_permissions", "manage_uploads", "manage_notifications"} {
 		if _, err = pool.Exec(ctx, `INSERT INTO permissions(name) VALUES($1) ON CONFLICT DO NOTHING`, name); err != nil {
 			t.Fatal(err)
 		}

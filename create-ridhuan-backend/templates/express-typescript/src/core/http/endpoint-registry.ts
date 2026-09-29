@@ -108,6 +108,13 @@ const pagination = z.object({
 const success = (data: ZodType) =>
   z.object({ success: z.literal(true), data, meta: pagination.optional() });
 const noContent = z.undefined();
+const notification = z.object({ id: z.uuid(), recipientId: z.uuid(), title: z.string(), body: z.string(),
+  emailStatus: z.enum(["NOT_REQUESTED", "PENDING", "SENT", "FAILED"]),
+  readAt: isoDate.nullable(), createdAt: isoDate });
+const notificationId = z.object({ id: z.uuid() });
+const createNotification = z.object({ recipientId: z.uuid(), title: z.string().trim().min(1).max(160),
+  body: z.string().trim().min(1).max(4000), sendEmail: z.boolean().default(false) });
+export { createNotification };
 
 export const endpointRegistry = {
   "health.get": {
@@ -459,7 +466,7 @@ export const endpointRegistry = {
     path: "/api/upload",
     module: "upload",
     summary: "Upload file",
-    access: { kind: "internal", permission: "manage_users" },
+    access: { kind: "internal", permission: "manage_uploads" },
     audit: "required",
     rateLimit: "internal",
     cache: "off",
@@ -472,7 +479,7 @@ export const endpointRegistry = {
     path: "/api/upload/:id",
     module: "upload",
     summary: "Get file metadata",
-    access: { kind: "internal", permission: "manage_users" },
+    access: { kind: "internal", permission: "manage_uploads" },
     audit: "none",
     rateLimit: "internal",
     cache: "read",
@@ -480,6 +487,21 @@ export const endpointRegistry = {
     params: z.object({ id: z.uuid() }),
     response: success(file),
   },
+  "notification.create": { method: "POST", path: "/api/notifications", module: "notifications",
+    summary: "Create notification", access: { kind: "internal", permission: "manage_notifications" },
+    audit: "required", rateLimit: "internal", cache: "off", status: 201,
+    body: createNotification, response: success(notification) },
+  "notification.list": { method: "GET", path: "/api/notifications", module: "notifications",
+    summary: "List own notifications", access: { kind: "internal" },
+    audit: "none", rateLimit: "internal", cache: "off", status: 200,
+    response: success(z.array(notification)) },
+  "notification.read": { method: "PATCH", path: "/api/notifications/:id/read", module: "notifications",
+    summary: "Mark own notification read", access: { kind: "internal" },
+    audit: "required", rateLimit: "internal", cache: "off", status: 200,
+    params: notificationId, response: success(notification) },
+  "notification.stream": { method: "GET", path: "/api/notifications/stream", module: "notifications",
+    summary: "Stream own notifications", access: { kind: "internal" },
+    audit: "none", rateLimit: "internal", cache: "off", status: 200 },
 } as const satisfies Record<string, EndpointDefinition>;
 
 export type EndpointId = keyof typeof endpointRegistry;

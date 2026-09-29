@@ -31,11 +31,11 @@ ALTER TABLE "CrudAuditLog"
 ALTER TABLE "CrudAuditLog" RENAME COLUMN "action" TO "behavior";
 UPDATE "CrudAuditLog" SET "actorIdSnapshot" = "userId";
 DROP FUNCTION audit_legacy_json(TEXT);
-CREATE FUNCTION audit_redact(value JSONB) RETURNS JSONB LANGUAGE plpgsql AS $$
+CREATE FUNCTION audit_redact(input_value JSONB) RETURNS JSONB LANGUAGE plpgsql AS $$
 DECLARE result JSONB := '{}'::jsonb; entry RECORD; element JSONB;
 BEGIN
-  IF jsonb_typeof(value) = 'object' THEN
-    FOR entry IN SELECT key, value FROM jsonb_each(value) LOOP
+  IF jsonb_typeof(input_value) = 'object' THEN
+    FOR entry IN SELECT key, value FROM jsonb_each(input_value) LOOP
       IF entry.key ~* '(password|token|authorization|secret|api.?key|credential|cookie)' THEN
         result := result || jsonb_build_object(entry.key, '[REDACTED]');
       ELSE
@@ -43,14 +43,14 @@ BEGIN
       END IF;
     END LOOP;
     RETURN result;
-  ELSIF jsonb_typeof(value) = 'array' THEN
+  ELSIF jsonb_typeof(input_value) = 'array' THEN
     result := '[]'::jsonb;
-    FOR element IN SELECT jsonb_array_elements(value) LOOP
+    FOR element IN SELECT jsonb_array_elements(input_value) LOOP
       result := result || jsonb_build_array(audit_redact(element));
     END LOOP;
     RETURN result;
   END IF;
-  RETURN value;
+  RETURN input_value;
 END;
 $$;
 UPDATE "CrudAuditLog" SET "before" = audit_redact("before"), "after" = audit_redact("after");

@@ -41,7 +41,7 @@ func integrationServer(t *testing.T) (*Server, *pgxpool.Pool, string) {
 			t.Fatal(err)
 		}
 	}
-	for _, name := range []string{"manage_users", "manage_roles", "manage_permissions"} {
+	for _, name := range []string{"manage_users", "manage_roles", "manage_permissions", "manage_uploads", "manage_notifications"} {
 		if err = q.SeedPermission(t.Context(), name); err != nil {
 			t.Fatal(err)
 		}

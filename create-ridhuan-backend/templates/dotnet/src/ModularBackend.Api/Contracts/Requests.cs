@@ -13,6 +13,9 @@ public sealed record UpdateRoleRequest([property: JsonConverter(typeof(NonNullSt
 public sealed record CreatePermissionRequest([Required, StringLength(128, MinimumLength = 1)] string Name);
 public sealed record UpdatePermissionRequest([property: JsonConverter(typeof(NonNullStringConverter))][StringLength(128, MinimumLength = 1)] string? Name = null);
 public sealed record AssignPermissionsRequest([Required, MinLength(1)] Guid[] PermissionIds);
+public sealed record CreateNotificationRequest([Required, NonEmptyGuid] Guid RecipientId,
+    [Required, StringLength(160, MinimumLength = 1)] string Title,
+    [Required, StringLength(4000, MinimumLength = 1)] string Body, bool SendEmail = false);
 public sealed class NonEmptyGuidAttribute : ValidationAttribute
 {
     public override bool IsValid(object? value) => value is null || value is Guid id && id != Guid.Empty;

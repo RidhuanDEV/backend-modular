@@ -24,8 +24,8 @@ func TestRegistryAndOpenAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(server.registered); got != 28 {
-		t.Fatalf("mounted %d endpoints, want 28", got)
+	if got := len(server.registered); got != len(Definitions) {
+		t.Fatalf("mounted %d endpoints, want %d", got, len(Definitions))
 	}
 	req := httptest.NewRequest(http.MethodGet, "/docs/openapi.json", nil)
 	rec := httptest.NewRecorder()
@@ -49,8 +49,8 @@ func TestRegistryAndOpenAPI(t *testing.T) {
 			}
 		}
 	}
-	if count != 28 {
-		t.Fatalf("OpenAPI documented %d operations, want 28", count)
+	if count != len(Definitions) {
+		t.Fatalf("OpenAPI documented %d operations, want %d", count, len(Definitions))
 	}
 	for _, ep := range Definitions {
 		if ep.ID == "ready.get" {

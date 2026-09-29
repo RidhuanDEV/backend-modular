@@ -1,6 +1,14 @@
 # Modular Express TypeScript Starter
 
-Express 5, TypeScript strict, Prisma/PostgreSQL, Zod, JWT/RBAC, audit, optional Redis cache, rate limiting, local/S3 uploads, and OpenAPI generated from endpoint contracts.
+Express 5, TypeScript strict, Prisma/PostgreSQL, Zod, JWT/RBAC, audit, PostgreSQL notifications with SSE, optional SMTP and Redis cache, rate limiting, local/S3 uploads, and OpenAPI generated from endpoint contracts.
+
+## Notifications
+
+An administrator with `manage_notifications` can call `POST /api/notifications` with `{ "recipientId": "uuid", "title": "...", "body": "...", "sendEmail": false }`. Authenticated recipients can call `GET /api/notifications` for their newest 50 items, `PATCH /api/notifications/:id/read`, and `GET /api/notifications/stream` for SSE. The response contains only `id`, `recipientId`, `title`, `body`, `emailStatus`, `readAt`, and `createdAt`. SSE polls PostgreSQL every three seconds, so notifications from other replicas appear without Redis. Connections close after 14 minutes; refresh the bearer token and reconnect using an authenticated `fetch` stream. Do not put bearer tokens in URLs.
+
+SMTP is disabled by default. Set `SMTP_ENABLED=true` plus `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_FROM`, and optional matching `SMTP_USER`/`SMTP_PASSWORD` to send email to the recipient's stored address. If email fails, the database notification stays available with `emailStatus=FAILED`; `PENDING` may remain after a process crash during delivery. Guaranteed email delivery requires an application-specific outbox and retry worker. A large number of SSE clients increases PostgreSQL polling load. The notification API has its own Prisma migration.
+
+On upgrade, run the seed explicitly to add `manage_notifications` and `manage_uploads` to the admin role. Existing custom roles need those grants assigned separately.
 
 ## Create a new project
 
@@ -34,7 +42,7 @@ The default stack is app + PostgreSQL. Compose runs the `migrate` service once a
 
 Set `CORS_ORIGINS` to a comma-separated list of browser origins. It is required when `NODE_ENV=production`; development defaults to `http://localhost:5173,http://localhost:3000` if omitted. No wildcard or credentialed CORS is enabled. Requests without `Origin` remain available to server-side clients.
 
-Uploaded local files use a persistent Compose volume. When running manually, `UPLOAD_LOCAL_DIR` selects the directory. The template accepts PNG, JPEG, and PDF with signature checks; `UPLOAD_ALLOWED_MIME` can narrow this list. `POST /api/upload` uses multipart field `file`; `GET /api/upload/:id` returns metadata. Both require JWT and `manage_users` permission. No public file download route is enabled.
+Uploaded local files use a persistent Compose volume. When running manually, `UPLOAD_LOCAL_DIR` selects the directory. The template accepts PNG, JPEG, and PDF with signature checks; `UPLOAD_ALLOWED_MIME` can narrow this list. `POST /api/upload` uses multipart field `file`; `GET /api/upload/:id` returns metadata. Both require JWT and `manage_uploads` permission. No public file download route is enabled.
 
 For orphaned objects after a failed database write or process crash, run `npm run uploads:cleanup` to list candidates older than `UPLOAD_ORPHAN_GRACE_HOURS`. Review them, then run `npm run uploads:cleanup -- --apply` to delete those without a metadata row. The script operates on the configured local directory or S3 bucket and skips keys outside the template's UUID format.
 
@@ -57,6 +65,8 @@ Set `CACHE_ENABLED=true` to activate response data caching on registry endpoints
 ## Time contract and migration
 
 Database instants use `timestamptz(3)` and API timestamps use ISO 8601 UTC. `src/core/time/time.ts` parses instants with explicit offset and formats in validated IANA zones such as `Asia/Jakarta`, `Asia/Makassar`, `Asia/Jayapura`, or overseas zones. Client display should use the viewer's zone. Existing `timestamp` values are interpreted as **UTC** by migration `20260922120000_endpoint_foundation`; verify the source timezone and take a backup before running it against a populated production database.
+
+The historical `20260922120000_endpoint_foundation` SQL was corrected so audit redaction works when upgrading a database that already contains audit rows on PostgreSQL 18. This changes that migration file's checksum. Existing deployments that applied the earlier file should review Prisma migration history before using `migrate dev` against the same database; use the normal release `migrate deploy` path for rollout. Never reset a populated database to reconcile a checksum.
 
 ## API documentation and checks
 

@@ -4,6 +4,7 @@ export const MODULES = {
   ROLE: "role",
   PERMISSION: "permission",
   UPLOAD: "upload",
+  NOTIFICATIONS: "notifications",
 } as const;
 
 export type ModuleName = typeof MODULES[keyof typeof MODULES];
@@ -13,3 +14,4 @@ export const USER_MODULE = MODULES.USER;
 export const ROLE_MODULE = MODULES.ROLE;
 export const PERMISSION_MODULE = MODULES.PERMISSION;
 export const UPLOAD_MODULE = MODULES.UPLOAD;
+export const NOTIFICATIONS_MODULE = MODULES.NOTIFICATIONS;

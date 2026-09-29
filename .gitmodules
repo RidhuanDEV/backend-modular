@@ -9,3 +9,7 @@
 [submodule "modular-NET"]
 	path = modular-NET
 	url = https://github.com/RidhuanDEV/NET-backend.git
+
+[submodule "nestjs"]
+	path = nestjs
+	url = https://github.com/RidhuanDEV/modular-nestjs.git

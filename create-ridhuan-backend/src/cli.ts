@@ -9,6 +9,7 @@ import { colors, symbols } from "./prompts/terminal-theme.js";
 import { scaffoldExpress } from "./scaffold/express.js";
 import { scaffoldGolang } from "./scaffold/golang.js";
 import { scaffoldDotnet } from "./scaffold/dotnet.js";
+import { scaffoldNestjs } from "./scaffold/nestjs.js";
 import type {
   CliArguments,
   PromptOption,
@@ -23,6 +24,13 @@ const templateOptions: readonly PromptOption<TemplateId>[] = [
     label: "Express TypeScript",
     value: "express-typescript",
     hint: "Prisma, Zod, JWT, RBAC, PostgreSQL",
+    activeColor: colors.tsColor,
+    inactiveColor: colors.tsDim,
+  },
+  {
+    label: "NestJS",
+    value: "nestjs",
+    hint: "NestJS, Prisma, class-validator, JWT, PostgreSQL",
     activeColor: colors.tsColor,
     inactiveColor: colors.tsDim,
   },
@@ -68,6 +76,9 @@ function parseCliArgs(args: readonly string[]): CliArguments {
         i++;
       } else if (next === "dotnet" || next === "net" || next === "csharp") {
         template = "dotnet";
+        i++;
+      } else if (next === "nestjs" || next === "nest") {
+        template = "nestjs";
         i++;
       }
     } else if (!arg.startsWith("-") && projectName === undefined) {
@@ -133,9 +144,19 @@ function tryGitInit(targetDir: string): void {
   }
 }
 
+function installDependencies(targetDir: string, template: TemplateId): void {
+  const command = template === "golang" ? "go" : template === "dotnet" ? "dotnet" : "npm";
+  const args = template === "golang" ? ["mod", "download"] : template === "dotnet" ? ["restore"] : ["ci"];
+  process.stdout.write(`\n${colors.cyan}${symbols.info}${colors.reset} Installing dependencies...\n`);
+  const result = spawnSync(command, args, { cwd: targetDir, stdio: "inherit", shell: process.platform === "win32" });
+  if (result.error || result.status !== 0) {
+    throw new Error(`${command} ${args.join(" ")} failed in ${targetDir}. Project files were created; install dependencies manually.`);
+  }
+}
+
 export async function runCli(): Promise<void> {
   process.stdout.write(
-    `\n${colors.brightCyan}${colors.bold}create-ridhuan-backend${colors.reset} ${colors.dim}v1.0.0${colors.reset}\n`,
+    `\n${colors.brightCyan}${colors.bold}create-ridhuan-backend${colors.reset} ${colors.dim}v1.1.0${colors.reset}\n`,
   );
   process.stdout.write(`${colors.gray}Modular backend starter generator${colors.reset}\n\n`);
 
@@ -311,9 +332,13 @@ export async function runCli(): Promise<void> {
     result = await scaffoldExpress(sourceTemplateDir, answers);
   } else if (chosenTemplate === "golang") {
     result = await scaffoldGolang(sourceTemplateDir, answers);
-  } else {
+  } else if (chosenTemplate === "dotnet") {
     result = await scaffoldDotnet(sourceTemplateDir, answers);
+  } else {
+    result = await scaffoldNestjs(sourceTemplateDir, answers);
   }
+
+  if (!cliArgs.noInstall) installDependencies(targetDirectory, chosenTemplate);
 
   tryGitInit(targetDirectory);
 
@@ -322,8 +347,11 @@ export async function runCli(): Promise<void> {
   );
   process.stdout.write(`${colors.bold}Next steps:${colors.reset}\n`);
 
-  for (const step of result.instructions) {
+  for (const [index, step] of result.instructions.entries()) {
     process.stdout.write(`  ${colors.brightCyan}${step}${colors.reset}\n`);
+    if (index === 0 && cliArgs.noInstall && chosenTemplate === "nestjs") {
+      process.stdout.write(`  ${colors.brightCyan}npm ci${colors.reset}\n`);
+    }
   }
 
   process.stdout.write("\n");

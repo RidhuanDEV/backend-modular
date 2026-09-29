@@ -1,4 +1,4 @@
-export type TemplateId = "express-typescript" | "golang" | "dotnet";
+export type TemplateId = "express-typescript" | "golang" | "dotnet" | "nestjs";
 
 export type UploadStorageType = "local" | "s3";
 

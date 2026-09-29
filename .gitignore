@@ -3,7 +3,6 @@
 # ==========================================
 backend/
 frontend/
-nestjs/
 react/
 modular-go-refine-smoke/
 modular-go-refine-smoke-final/
@@ -29,6 +28,7 @@ uploads/
 **/uploads/
 .refresh-publish/
 **/.refresh-publish/
+nestjs-prototype-snapshot-*.zip
 
 # ==========================================
 # Environment & Secrets (Keep .env.example)

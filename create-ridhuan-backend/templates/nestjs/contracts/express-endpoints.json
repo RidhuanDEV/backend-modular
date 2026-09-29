@@ -1,0 +1,269 @@
+{
+  "source": "modular-express-typescript-starter-postgre/src/core/http/endpoint-registry.ts",
+  "sourceCommit": "0d679e35d14c0430549848f7d245518a8d5c3757",
+  "endpoints": [
+    {
+      "id": "auth.login",
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": 200,
+      "audit": "optional",
+      "cache": "off",
+      "rateLimit": "auth"
+    },
+    {
+      "id": "auth.logout",
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "status": 204,
+      "audit": "none",
+      "cache": "off",
+      "rateLimit": "auth"
+    },
+    {
+      "id": "auth.me",
+      "method": "GET",
+      "path": "/api/auth/me",
+      "status": 200,
+      "audit": "none",
+      "cache": "off",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "auth.refresh",
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "status": 200,
+      "audit": "none",
+      "cache": "off",
+      "rateLimit": "auth"
+    },
+    {
+      "id": "auth.register",
+      "method": "POST",
+      "path": "/api/auth/register",
+      "status": 201,
+      "audit": "required",
+      "cache": "off",
+      "rateLimit": "auth"
+    },
+    {
+      "id": "docs.moduleSpec",
+      "method": "GET",
+      "path": "/docs/specs/{module}.json",
+      "status": 200,
+      "audit": "none",
+      "cache": "off",
+      "rateLimit": "public"
+    },
+    {
+      "id": "docs.spec",
+      "method": "GET",
+      "path": "/docs/openapi.json",
+      "status": 200,
+      "audit": "none",
+      "cache": "off",
+      "rateLimit": "public"
+    },
+    {
+      "id": "docs.ui",
+      "method": "GET",
+      "path": "/docs",
+      "status": 200,
+      "audit": "none",
+      "cache": "off",
+      "rateLimit": "public"
+    },
+    {
+      "id": "health.get",
+      "method": "GET",
+      "path": "/health",
+      "status": 200,
+      "audit": "none",
+      "cache": "off",
+      "rateLimit": "public"
+    },
+    {
+      "id": "live.get",
+      "method": "GET",
+      "path": "/live",
+      "status": 200,
+      "audit": "none",
+      "cache": "off",
+      "rateLimit": "public"
+    },
+    {
+      "id": "permission.create",
+      "method": "POST",
+      "path": "/api/permissions",
+      "status": 201,
+      "audit": "required",
+      "cache": "off",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "permission.delete",
+      "method": "DELETE",
+      "path": "/api/permissions/{id}",
+      "status": 204,
+      "audit": "required",
+      "cache": "off",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "permission.get",
+      "method": "GET",
+      "path": "/api/permissions/{id}",
+      "status": 200,
+      "audit": "none",
+      "cache": "read",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "permission.list",
+      "method": "GET",
+      "path": "/api/permissions",
+      "status": 200,
+      "audit": "none",
+      "cache": "read",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "permission.update",
+      "method": "PATCH",
+      "path": "/api/permissions/{id}",
+      "status": 200,
+      "audit": "required",
+      "cache": "off",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "ready.get",
+      "method": "GET",
+      "path": "/ready",
+      "status": 200,
+      "audit": "none",
+      "cache": "off",
+      "rateLimit": "public"
+    },
+    {
+      "id": "role.assignPermissions",
+      "method": "POST",
+      "path": "/api/roles/{id}/permissions",
+      "status": 200,
+      "audit": "required",
+      "cache": "off",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "role.create",
+      "method": "POST",
+      "path": "/api/roles",
+      "status": 201,
+      "audit": "required",
+      "cache": "off",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "role.delete",
+      "method": "DELETE",
+      "path": "/api/roles/{id}",
+      "status": 204,
+      "audit": "required",
+      "cache": "off",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "role.get",
+      "method": "GET",
+      "path": "/api/roles/{id}",
+      "status": 200,
+      "audit": "none",
+      "cache": "read",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "role.list",
+      "method": "GET",
+      "path": "/api/roles",
+      "status": 200,
+      "audit": "none",
+      "cache": "read",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "role.update",
+      "method": "PATCH",
+      "path": "/api/roles/{id}",
+      "status": 200,
+      "audit": "required",
+      "cache": "off",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "upload.create",
+      "method": "POST",
+      "path": "/api/upload",
+      "permission": "manage_uploads",
+      "status": 201,
+      "audit": "required",
+      "cache": "off",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "upload.get",
+      "method": "GET",
+      "path": "/api/upload/{id}",
+      "permission": "manage_uploads",
+      "status": 200,
+      "audit": "none",
+      "cache": "read",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "user.create",
+      "method": "POST",
+      "path": "/api/users",
+      "status": 201,
+      "audit": "required",
+      "cache": "off",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "user.delete",
+      "method": "DELETE",
+      "path": "/api/users/{id}",
+      "status": 204,
+      "audit": "required",
+      "cache": "off",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "user.get",
+      "method": "GET",
+      "path": "/api/users/{id}",
+      "status": 200,
+      "audit": "none",
+      "cache": "read",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "user.list",
+      "method": "GET",
+      "path": "/api/users",
+      "status": 200,
+      "audit": "none",
+      "cache": "read",
+      "rateLimit": "internal"
+    },
+    {
+      "id": "user.update",
+      "method": "PATCH",
+      "path": "/api/users/{id}",
+      "status": 200,
+      "audit": "required",
+      "cache": "off",
+      "rateLimit": "internal"
+    }
+  ]
+}

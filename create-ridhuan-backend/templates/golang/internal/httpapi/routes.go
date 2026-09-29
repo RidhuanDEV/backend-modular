@@ -7,4 +7,5 @@ func (s *Server) mount() {
 	s.mountRoles()
 	s.mountPermissions()
 	s.mountUploads()
+	s.mountNotifications()
 }

@@ -1,0 +1,20 @@
+node_modules
+dist
+dist-test
+openapi.json
+coverage
+# Keep environment variables out of version control
+.env
+.env.local
+
+/generated/prisma
+
+# Local prototype snapshot, generated clients, runtime data and diagnostics
+.legacy/
+src/generated/
+uploads/
+*.log
+*.tsbuildinfo
+*.zip
+.env.*
+!.env.example

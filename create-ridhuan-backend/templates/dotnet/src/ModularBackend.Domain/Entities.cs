@@ -69,3 +69,14 @@ public sealed class StoredFile
     public Guid? UploaderId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
+public sealed class Notification
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid RecipientId { get; set; }
+    public Guid? ActorId { get; set; }
+    public required string Title { get; set; }
+    public required string Body { get; set; }
+    public string EmailStatus { get; set; } = "NOT_REQUESTED";
+    public DateTimeOffset? ReadAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+}

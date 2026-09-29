@@ -4,6 +4,14 @@
 
 Starter **modular monolith** untuk membangun HTTP API dengan Go, PostgreSQL, Chi, Huma, dan sqlc. Cocok untuk tim yang ingin memulai dari auth, RBAC, audit, upload lokal/S3, rate limiting, cache Redis opsional, OpenAPI, dan container setup yang sudah terhubung.
 
+## Notifications dan SMTP opsional
+
+Notifikasi disimpan di PostgreSQL oleh migrasi Goose. Pemegang izin `manage_notifications` dapat membuatnya melalui `POST /api/notifications` dengan `recipientId`, `title`, `body`, dan `sendEmail` opsional. Penerima yang login memakai `GET /api/notifications` (50 terbaru), `PATCH /api/notifications/{id}/read`, dan `GET /api/notifications/stream` untuk SSE. Respons publik hanya memuat `id`, `recipientId`, `title`, `body`, `emailStatus`, `readAt`, dan `createdAt`. SSE melakukan polling PostgreSQL setiap tiga detik sehingga notifikasi dari replica lain tetap muncul tanpa Redis. Koneksi berakhir setelah 14 menit; perbarui bearer token lalu sambungkan lagi memakai `fetch` dengan header Authorization. Jangan menaruh token di URL.
+
+SMTP mati secara default. Isi `SMTP_ENABLED=true`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_FROM`, serta pasangan `SMTP_USER`/`SMTP_PASSWORD` bila dibutuhkan. Email dikirim ke alamat tersimpan milik penerima. Jika email gagal, notifikasi tetap tersedia dengan `emailStatus=FAILED`; status `PENDING` bisa tertinggal bila proses berhenti saat pengiriman. Untuk jaminan pengiriman email, proyek turunan perlu menambah outbox dan pekerja retry. Banyak klien SSE menambah beban polling PostgreSQL.
+
+Saat upgrade, jalankan seed secara eksplisit untuk menambahkan `manage_notifications` dan `manage_uploads` pada role admin. Role khusus yang sudah ada perlu diberi izin tersebut secara terpisah.
+
 Proyek ini ditujukan untuk satu aplikasi yang dikembangkan dan dirilis sebagai satu unit dengan batas package per fitur. Pilih layanan terpisah bila fitur perlu dirilis, diskalakan, atau dimiliki secara independen. Database aplikasi ini milik proyek Go dan tidak berbagi schema dengan starter Express atau stack lain.
 
 Perlu Go 1.27.1 untuk initializer dan mode manual. Compose memerlukan Docker Engine/Desktop serta Docker Compose v2. Mode manual memerlukan PostgreSQL 18; Redis hanya diperlukan bila cache atau rate store Redis diaktifkan.
@@ -83,10 +91,11 @@ Untuk mencoba endpoint admin, set `ADMIN_EMAIL` dan `ADMIN_PASSWORD` sebelum see
 | User | `GET/POST /api/users`, `GET/PATCH/DELETE /api/users/{id}` | `manage_users` |
 | Role | `GET/POST /api/roles`, `GET/PATCH/DELETE /api/roles/{id}`, `POST /api/roles/{id}/permissions` | `manage_roles` |
 | Permission | `GET/POST /api/permissions`, `GET/PATCH/DELETE /api/permissions/{id}` | `manage_permissions` |
-| Upload | `POST /api/upload`, `GET /api/upload/{id}` | `manage_users` saat ini |
+| Upload | `POST /api/upload`, `GET /api/upload/{id}` | `manage_uploads` |
+| Notifications | `POST /api/notifications`; `GET /api/notifications`, `PATCH /api/notifications/{id}/read`, `GET /api/notifications/stream` | `manage_notifications` untuk membuat; penerima yang login untuk membaca miliknya |
 | System/docs | `/health`, `/live`, `/ready`, `/docs`, `/docs/openapi.json`, `/docs/specs/{module}.json` | Publik |
 
-Seed membuat role `admin` dan `user`, serta permission `manage_users`, `manage_roles`, dan `manage_permissions`; semua permission itu diberikan ke role admin. Endpoint register memberi role `user`. DTO auth/user hanya menampilkan ID, email, role, dan timestamp publik; password serta `deletedAt` internal tidak dikirim. Upload belum memiliki permission tersendiri dan endpoint GET upload hanya mengembalikan metadata, bukan bytes atau presigned URL. Pertimbangkan permission khusus dan alur download sebelum mengadopsi upload untuk aplikasi pengguna.
+Seed membuat role `admin` dan `user`, serta permission `manage_users`, `manage_roles`, `manage_permissions`, `manage_uploads`, dan `manage_notifications`; semua permission itu diberikan ke role admin. Endpoint register memberi role `user`. DTO auth/user hanya menampilkan ID, email, role, dan timestamp publik; password serta `deletedAt` internal tidak dikirim. Upload memakai izin `manage_uploads`; endpoint GET upload hanya mengembalikan metadata, bukan bytes atau presigned URL. Tentukan alur download sesuai kebutuhan aplikasi.
 
 ## Arsitektur
 

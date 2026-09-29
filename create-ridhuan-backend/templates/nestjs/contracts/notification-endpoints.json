@@ -1,0 +1,9 @@
+{
+  "source": "shared Notifications API implemented in Express, Go, .NET and NestJS",
+  "endpoints": [
+    {"id":"notification.create","method":"POST","path":"/api/notifications","permission":"manage_notifications","status":201,"audit":"required","cache":"off","rateLimit":"internal"},
+    {"id":"notification.list","method":"GET","path":"/api/notifications","status":200,"audit":"none","cache":"off","rateLimit":"internal"},
+    {"id":"notification.read","method":"PATCH","path":"/api/notifications/{id}/read","status":200,"audit":"required","cache":"off","rateLimit":"internal"},
+    {"id":"notification.stream","method":"GET","path":"/api/notifications/stream","status":200,"audit":"none","cache":"off","rateLimit":"internal"}
+  ]
+}

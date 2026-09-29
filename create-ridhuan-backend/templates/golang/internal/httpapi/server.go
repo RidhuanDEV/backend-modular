@@ -16,6 +16,7 @@ import (
 	"github.com/RidhuanDEV/golang-backend/internal/auth"
 	"github.com/RidhuanDEV/golang-backend/internal/cache"
 	"github.com/RidhuanDEV/golang-backend/internal/config"
+	"github.com/RidhuanDEV/golang-backend/internal/notification"
 	"github.com/RidhuanDEV/golang-backend/internal/ratelimit"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -57,13 +58,14 @@ type Server struct {
 	DB     *pgxpool.Pool
 	Redis  *redis.Client
 	app.Services
-	Cache      *cache.Cache
-	Limiter    *ratelimit.Limiter
-	Policies   map[EndpointID]Endpoint
-	Router     chi.Router
-	Docs       huma.API
-	registered map[EndpointID]struct{}
-	Logger     *slog.Logger
+	Cache         *cache.Cache
+	Limiter       *ratelimit.Limiter
+	Policies      map[EndpointID]Endpoint
+	Router        chi.Router
+	Docs          huma.API
+	registered    map[EndpointID]struct{}
+	Logger        *slog.Logger
+	Notifications *notification.Service
 }
 
 func NewServer(c config.Config, pool *pgxpool.Pool, client *redis.Client, services app.Services, logger *slog.Logger) (*Server, error) {
@@ -87,6 +89,7 @@ func NewServer(c config.Config, pool *pgxpool.Pool, client *redis.Client, servic
 		}
 		return nil
 	}()), Policies: policies, Router: r, Docs: humachi.New(r, docsCfg), registered: map[EndpointID]struct{}{}, Logger: logger}
+	s.Notifications = &notification.Service{Pool: pool, Audit: services.Audit, SMTP: c}
 	r.Use(s.middleware)
 	s.mount()
 	if len(s.registered) != len(Definitions) {
@@ -129,7 +132,11 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 			}
 			s.Logger.Info("http request", "method", r.Method, "path", r.URL.Path, "status", tracked.status, "endpointId", tracked.endpointID, "actorId", tracked.actorID, "requestId", id, "durationMs", time.Since(start).Milliseconds())
 		}()
-		bounded, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		timeout := 30 * time.Second
+		if r.URL.Path == "/api/notifications/stream" {
+			timeout = 14 * time.Minute
+		}
+		bounded, cancel := context.WithTimeout(r.Context(), timeout)
 		defer cancel()
 		next.ServeHTTP(tracked, r.WithContext(context.WithValue(bounded, requestIDKey{}, id)))
 	})

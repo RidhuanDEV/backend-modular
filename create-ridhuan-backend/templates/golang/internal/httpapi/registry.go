@@ -69,8 +69,12 @@ var Definitions = []Endpoint{
 	{"permission.create", "POST", "/api/permissions", "permissions", "Create permission", "manage_permissions", false, AuditRequired, CacheOff, RateInternal, 201},
 	{"permission.update", "PATCH", "/api/permissions/{id}", "permissions", "Update permission", "manage_permissions", false, AuditRequired, CacheOff, RateInternal, 200},
 	{"permission.delete", "DELETE", "/api/permissions/{id}", "permissions", "Delete permission", "manage_permissions", false, AuditRequired, CacheOff, RateInternal, 204},
-	{"upload.create", "POST", "/api/upload", "upload", "Upload file", "manage_users", false, AuditRequired, CacheOff, RateInternal, 201},
-	{"upload.get", "GET", "/api/upload/{id}", "upload", "Get file metadata", "manage_users", false, AuditNone, CacheRead, RateInternal, 200},
+	{"upload.create", "POST", "/api/upload", "upload", "Upload file", "manage_uploads", false, AuditRequired, CacheOff, RateInternal, 201},
+	{"upload.get", "GET", "/api/upload/{id}", "upload", "Get file metadata", "manage_uploads", false, AuditNone, CacheRead, RateInternal, 200},
+	{"notification.create", "POST", "/api/notifications", "notifications", "Create notification", "manage_notifications", false, AuditRequired, CacheOff, RateInternal, 201},
+	{"notification.list", "GET", "/api/notifications", "notifications", "List own notifications", "", false, AuditNone, CacheOff, RateInternal, 200},
+	{"notification.read", "PATCH", "/api/notifications/{id}/read", "notifications", "Mark own notification read", "", false, AuditRequired, CacheOff, RateInternal, 200},
+	{"notification.stream", "GET", "/api/notifications/stream", "notifications", "Stream own notifications", "", false, AuditNone, CacheOff, RateInternal, 200},
 }
 
 func Resolve(c config.Config) (map[EndpointID]Endpoint, error) {

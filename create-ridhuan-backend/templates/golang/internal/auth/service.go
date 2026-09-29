@@ -217,7 +217,7 @@ func (s *Service) Authenticate(ctx context.Context, raw string) (*Actor, error) 
 		}
 		return nil, fault.DB(err)
 	}
-	return &Actor{ID: row.ID, Email: row.Email, RoleID: row.RoleID}, nil
+	return &Actor{ID: row.ID, Email: row.Email, RoleID: row.RoleID, ExpiresAt: claims.ExpiresAt.Time}, nil
 }
 func (s *Service) Authorize(ctx context.Context, actor *Actor, permission string) error {
 	if permission == "" {

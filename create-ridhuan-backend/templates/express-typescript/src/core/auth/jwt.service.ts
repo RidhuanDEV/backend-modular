@@ -25,6 +25,7 @@ export function verifyToken(token: string): JwtUserPayload {
         id: decoded["id"],
         email: decoded["email"],
         roleId: decoded["roleId"],
+        ...(typeof decoded["exp"] === "number" ? { exp: decoded["exp"] } : {}),
       };
     }
   }

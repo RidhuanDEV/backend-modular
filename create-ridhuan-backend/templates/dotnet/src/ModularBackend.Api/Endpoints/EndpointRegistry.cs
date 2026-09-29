@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc.Infrastructure;
 using ModularBackend.Application;
 namespace ModularBackend.Api.Endpoints;
 
-public enum EndpointId { HealthGet, LiveGet, ReadyGet, DocsSpec, DocsModuleSpec, DocsUi, AuthRegister, AuthLogin, AuthRefresh, AuthMe, UserList, UserGet, UserCreate, UserUpdate, UserDelete, RoleList, RoleGet, RoleCreate, RoleUpdate, RoleDelete, RoleAssignPermissions, PermissionList, PermissionGet, PermissionCreate, PermissionUpdate, PermissionDelete, UploadCreate, UploadGet }
+public enum EndpointId { HealthGet, LiveGet, ReadyGet, DocsSpec, DocsModuleSpec, DocsUi, AuthRegister, AuthLogin, AuthRefresh, AuthMe, UserList, UserGet, UserCreate, UserUpdate, UserDelete, RoleList, RoleGet, RoleCreate, RoleUpdate, RoleDelete, RoleAssignPermissions, PermissionList, PermissionGet, PermissionCreate, PermissionUpdate, PermissionDelete, UploadCreate, UploadGet, NotificationCreate, NotificationList, NotificationRead, NotificationStream }
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class EndpointAttribute(EndpointId id) : Attribute { public EndpointId Id { get; } = id; }
 public sealed record EndpointPolicy(EndpointId Id, string WireId, string Method, string Path, string Module, bool Public, string Permission, AuditMode Audit, RateLimitGroup RateLimit, CacheMode Cache, int Status);
@@ -40,8 +40,12 @@ new(EndpointId.PermissionGet, "permission.get", "GET", "/api/permissions/{id}", 
 new(EndpointId.PermissionCreate, "permission.create", "POST", "/api/permissions", "permissions", false, "manage_permissions", AuditMode.Required, RateLimitGroup.Internal, CacheMode.Off, 201),
 new(EndpointId.PermissionUpdate, "permission.update", "PATCH", "/api/permissions/{id}", "permissions", false, "manage_permissions", AuditMode.Required, RateLimitGroup.Internal, CacheMode.Off, 200),
 new(EndpointId.PermissionDelete, "permission.delete", "DELETE", "/api/permissions/{id}", "permissions", false, "manage_permissions", AuditMode.Required, RateLimitGroup.Internal, CacheMode.Off, 204),
-new(EndpointId.UploadCreate, "upload.create", "POST", "/api/upload", "upload", false, "manage_users", AuditMode.Required, RateLimitGroup.Internal, CacheMode.Off, 201),
-new(EndpointId.UploadGet, "upload.get", "GET", "/api/upload/{id}", "upload", false, "manage_users", AuditMode.None, RateLimitGroup.Internal, CacheMode.Read, 200),
+new(EndpointId.UploadCreate, "upload.create", "POST", "/api/upload", "upload", false, "manage_uploads", AuditMode.Required, RateLimitGroup.Internal, CacheMode.Off, 201),
+new(EndpointId.UploadGet, "upload.get", "GET", "/api/upload/{id}", "upload", false, "manage_uploads", AuditMode.None, RateLimitGroup.Internal, CacheMode.Read, 200),
+new(EndpointId.NotificationCreate, "notification.create", "POST", "/api/notifications", "notifications", false, "manage_notifications", AuditMode.Required, RateLimitGroup.Internal, CacheMode.Off, 201),
+new(EndpointId.NotificationList, "notification.list", "GET", "/api/notifications", "notifications", false, "", AuditMode.None, RateLimitGroup.Internal, CacheMode.Off, 200),
+new(EndpointId.NotificationRead, "notification.read", "PATCH", "/api/notifications/{id}/read", "notifications", false, "", AuditMode.Required, RateLimitGroup.Internal, CacheMode.Off, 200),
+new(EndpointId.NotificationStream, "notification.stream", "GET", "/api/notifications/stream", "notifications", false, "", AuditMode.None, RateLimitGroup.Internal, CacheMode.Off, 200),
  ];
     public FrozenDictionary<EndpointId, EndpointPolicy> Policies { get; }
     public EndpointRegistry(IConfiguration configuration)
@@ -80,7 +84,7 @@ new(EndpointId.UploadGet, "upload.get", "GET", "/api/upload/{id}", "upload", fal
             var policy = Policies[attr.Id];
             var methods = action.ActionConstraints?.OfType<Microsoft.AspNetCore.Mvc.ActionConstraints.HttpMethodActionConstraint>().SelectMany(c => c.HttpMethods).ToArray() ?? [];
             if (!methods.Contains(policy.Method) || "/" + action.AttributeRouteInfo?.Template != policy.Path) throw new InvalidOperationException("Endpoint route differs from registry");
-            if (policy.Permission is not ("" or "manage_users" or "manage_roles" or "manage_permissions")) throw new InvalidOperationException("Unknown permission");
+            if (policy.Permission is not ("" or "manage_users" or "manage_roles" or "manage_permissions" or "manage_uploads" or "manage_notifications")) throw new InvalidOperationException("Unknown permission");
         }
         if (mounted.Count != Policies.Count || Policies.Values.Select(p => p.Method + p.Path).Distinct().Count() != Policies.Count) throw new InvalidOperationException("Registry incomplete or colliding");
     }

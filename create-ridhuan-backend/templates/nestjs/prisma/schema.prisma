@@ -1,0 +1,137 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Role {
+  id          String           @id @default(uuid()) @db.Uuid
+  name        String           @unique @db.VarChar(64)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id        String           @id @default(uuid()) @db.Uuid
+  name      String           @unique @db.VarChar(128)
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(3)
+  roles     RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id            String         @id @default(uuid()) @db.Uuid
+  email         String         @unique @db.VarChar(255)
+  password      String         @db.VarChar(255)
+  roleId        String         @db.Uuid
+  deletedAt     DateTime?      @db.Timestamptz(3)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+  role          Role           @relation(fields: [roleId], references: [id])
+  activityLogs  ActivityLog[]
+  uploadedFiles StoredFile[]
+  refreshTokens RefreshToken[]
+  notifications Notification[] @relation("NotificationRecipient")
+  sentNotifications Notification[] @relation("NotificationActor")
+
+  @@index([roleId])
+  @@map("users")
+}
+
+model ActivityLog {
+  id              String   @id @default(uuid()) @db.Uuid
+  behavior        String   @db.VarChar(64)
+  module          String   @db.VarChar(64)
+  entityId        String?  @db.VarChar(128)
+  userId          String?  @db.Uuid
+  actorIdSnapshot String?  @db.Uuid
+  before          Json?
+  after           Json?
+  requestId       String?  @db.VarChar(128)
+  endpointId      String?  @db.VarChar(128)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([module, entityId, createdAt])
+  @@index([userId, createdAt])
+  @@index([endpointId, createdAt])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+model StoredFile {
+  id           String   @id @default(uuid()) @db.Uuid
+  storage      String   @db.VarChar(16)
+  status       String   @default("READY") @db.VarChar(16)
+  objectKey    String   @unique @db.VarChar(255)
+  originalName String   @db.VarChar(255)
+  mimeType     String   @db.VarChar(128)
+  size         Int
+  uploaderId   String?  @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  uploader     User?    @relation(fields: [uploaderId], references: [id], onDelete: SetNull)
+
+  @@index([uploaderId, createdAt])
+  @@map("stored_files")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  tokenHash String    @unique @db.VarChar(64)
+  familyId  String    @db.Uuid
+  userId    String    @db.Uuid
+  expiresAt DateTime  @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([userId, expiresAt])
+  @@index([revokedAt, expiresAt])
+  @@map("refresh_tokens")
+}
+
+enum NotificationEmailStatus {
+  NOT_REQUESTED
+  PENDING
+  SENT
+  FAILED
+}
+
+model Notification {
+  id          String                  @id @default(uuid()) @db.Uuid
+  recipientId String                  @db.Uuid
+  actorId     String?                 @db.Uuid
+  title       String                  @db.VarChar(160)
+  body        String                  @db.VarChar(4000)
+  emailStatus NotificationEmailStatus @default(NOT_REQUESTED)
+  readAt      DateTime?               @db.Timestamptz(3)
+  createdAt   DateTime                @default(now()) @db.Timestamptz(3)
+  recipient   User                    @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor       User?                   @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, createdAt(sort: Desc)])
+  @@index([recipientId, readAt, createdAt(sort: Desc)])
+  @@map("notifications")
+}

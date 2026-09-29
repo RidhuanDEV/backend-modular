@@ -62,11 +62,21 @@ const envSchema = z
       .default("true")
       .transform((v) => v === "true"),
     JWT_SECRET: z.string().min(32),
+    SMTP_ENABLED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+    SMTP_SECURE: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASSWORD: z.string().optional(),
+    SMTP_FROM: z.union([z.email(), z.literal("")]).optional().transform((value) => value || undefined),
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),
   })
   .superRefine((value, ctx) => {
+    if (value.SMTP_ENABLED && (!value.SMTP_HOST || !value.SMTP_FROM || Boolean(value.SMTP_USER) !== Boolean(value.SMTP_PASSWORD))) {
+      ctx.addIssue({ code: "custom", path: ["SMTP_ENABLED"], message: "SMTP requires host, sender, and matching username/password" });
+    }
     if (value.NODE_ENV === "production" && value.CORS_ORIGINS.length === 0) {
       ctx.addIssue({ code: "custom", path: ["CORS_ORIGINS"], message: "CORS_ORIGINS is required in production" });
     }

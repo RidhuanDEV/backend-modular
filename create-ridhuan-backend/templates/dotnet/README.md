@@ -8,6 +8,8 @@ A ready-to-run modular monolith backend template built with ASP.NET Core 10, Pos
 
 Built for teams starting a new API that want a typed modular structure and explicit operational controls. It may be more than you need for a small prototype, serverless function, or application that requires independent deployable services from day one.
 
+On upgrade, run the explicit seeder to add `manage_notifications` and `manage_uploads` to the admin role. Grant them separately to existing custom roles as needed.
+
 ## Quick start
 
 You need Git, Docker Desktop or Docker Engine with Compose, and a terminal. The Compose images pin the tested runtime versions. To build or run .NET tools on your host, install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) using [Microsoft's official installer](https://learn.microsoft.com/dotnet/core/tools/dotnet-install-script).
@@ -70,6 +72,12 @@ dotnet new modular-net --name MyBackend --output ../MyBackend --port 5180
 ```
 
 ## Features
+
+### Notifications and optional SMTP
+
+Notifications are stored in PostgreSQL. An administrator with `manage_notifications` can call `POST /api/notifications` with `recipientId`, `title`, `body`, and optional `sendEmail`. Authenticated recipients can call `GET /api/notifications` for their newest 50 items, `PATCH /api/notifications/{id}/read` to mark one read, and `GET /api/notifications/stream` for SSE. The response contains only `id`, `recipientId`, `title`, `body`, `emailStatus`, `readAt`, and `createdAt`. SSE polls PostgreSQL every three seconds, which works across API replicas without Redis. Connections close after 14 minutes; refresh the bearer token and reconnect using an authenticated `fetch` stream. Do not put bearer tokens in URLs.
+
+`Smtp__Enabled=false` is the default. To enable outbound email set `Smtp__Host`, `Smtp__Port`, `Smtp__Secure`, `Smtp__User`, `Smtp__Password`, and `Smtp__From` in the deployment environment. `sendEmail=true` uses the recipient's stored email address. SMTP failure does not remove the database notification; `emailStatus` becomes `FAILED`. `PENDING` may remain after a process crash during delivery. For guaranteed email delivery, add an application-specific outbox and retry worker. A large number of SSE clients increases PostgreSQL polling load.
 
 - JWT bearer authentication with live account and permission checks from PostgreSQL.
 - Role and permission management, soft deletion, optimistic concurrency, and auditable mutations.
@@ -150,7 +158,7 @@ Integration tests require PostgreSQL and create a temporary database that the te
 ## Security and known limits
 
 - Access tokens expire after 15 minutes. `POST /api/auth/login` and `POST /api/auth/refresh` return a rotating refresh token; send `{ "refreshToken": "..." }` to refresh. Treat refresh tokens as credentials and store them securely. The server stores only their hashes, each token lives up to 30 days, and its family expires after 90 days. Reuse revokes the active family. Auth user responses contain only `id`, `email`, and `roleId`.
-- Uploads and file metadata are protected by `manage_users` in the starter registry. This follows the source contract but couples file access to user administration; replace it with a dedicated permission when adapting the template.
+- Uploads and file metadata are protected by the dedicated `manage_uploads` permission.
 - `GET /api/upload/{id}` returns protected file metadata, not file bytes. There is no download endpoint or presigned URL flow in this starter.
 - The optional S3 Compose profile and CI use [Adobe S3Mock](https://github.com/adobe/S3Mock), a test fixture that implements a subset of S3 and is not for production. Use a managed or maintained S3-compatible service for deployment.
 - Configure TLS termination, explicit CORS origins, trusted proxy addresses, secrets storage, backups, retention, and telemetry for your deployment. For multiple API instances, set `Rate__Store=redis` and `Rate__InstanceCount` to the replica count, then provide a reachable Redis connection. Startup validation rejects a declared multi-instance memory limiter.

@@ -64,8 +64,31 @@ model User {
   activityLogs  ActivityLog[]
   uploadedFiles StoredFile[]
   refreshTokens RefreshToken[]
+  receivedNotifications Notification[] @relation("NotificationRecipient")
+  sentNotifications Notification[] @relation("NotificationActor")
 
   @@index([roleId])
+}
+
+enum NotificationEmailStatus {
+  NOT_REQUESTED
+  PENDING
+  SENT
+  FAILED
+}
+
+model Notification {
+  id String @id @default(uuid())
+  recipientId String
+  actorId String?
+  title String @db.VarChar(160)
+  body String @db.VarChar(4000)
+  emailStatus NotificationEmailStatus @default(NOT_REQUESTED)
+  readAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  recipient User @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  @@index([recipientId, createdAt, id])
 }
 
 // ─────────────────────────────────────────

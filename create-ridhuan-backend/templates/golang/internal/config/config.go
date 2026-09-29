@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/mail"
 	"net/url"
 	"os"
 	"strconv"
@@ -49,6 +50,13 @@ type Config struct {
 	OTelEnabled            bool
 	OTelServiceName        string
 	OTelEndpoint           string
+	SMTPEnabled            bool
+	SMTPHost               string
+	SMTPPort               int
+	SMTPSecure             bool
+	SMTPUser               string
+	SMTPPassword           string
+	SMTPFrom               string
 }
 
 func getenv(key, fallback string) string {
@@ -92,10 +100,30 @@ func Load() (Config, error) {
 		S3SecretKey:       os.Getenv("S3_SECRET_ACCESS_KEY"),
 		OTelServiceName:   getenv("OTEL_SERVICE_NAME", "modular-golang"),
 		OTelEndpoint:      os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		SMTPHost:          os.Getenv("SMTP_HOST"),
+		SMTPUser:          os.Getenv("SMTP_USER"),
+		SMTPPassword:      os.Getenv("SMTP_PASSWORD"),
+		SMTPFrom:          os.Getenv("SMTP_FROM"),
 	}
 	var err error
 	if c.Port, err = integer("PORT", 3000); err != nil {
 		return c, err
+	}
+	if c.SMTPPort, err = integer("SMTP_PORT", 587); err != nil {
+		return c, err
+	}
+	if c.SMTPEnabled, err = boolean("SMTP_ENABLED", false); err != nil {
+		return c, fmt.Errorf("SMTP_ENABLED: %w", err)
+	}
+	if c.SMTPSecure, err = boolean("SMTP_SECURE", false); err != nil {
+		return c, fmt.Errorf("SMTP_SECURE: %w", err)
+	}
+	if c.SMTPEnabled && (c.SMTPHost == "" || c.SMTPFrom == "" || c.SMTPPort < 1 || c.SMTPPort > 65535 || (c.SMTPUser == "") != (c.SMTPPassword == "")) {
+		return c, errors.New("SMTP requires host, sender, valid port, and matching username/password")
+	}
+	if c.SMTPEnabled {
+		address, parseErr := mail.ParseAddress(c.SMTPFrom)
+		if parseErr != nil || address.Address != c.SMTPFrom { return c, errors.New("SMTP_FROM must be a valid email address") }
 	}
 	if c.InstanceCount, err = integer("APP_INSTANCE_COUNT", 1); err != nil {
 		return c, err

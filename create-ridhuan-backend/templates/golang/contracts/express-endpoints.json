@@ -26,7 +26,7 @@
     ["permission.create", "POST", "/api/permissions", "permissions", false, "manage_permissions", "required", "internal", "off", 201],
     ["permission.update", "PATCH", "/api/permissions/{id}", "permissions", false, "manage_permissions", "required", "internal", "off", 200],
     ["permission.delete", "DELETE", "/api/permissions/{id}", "permissions", false, "manage_permissions", "required", "internal", "off", 204],
-    ["upload.create", "POST", "/api/upload", "upload", false, "manage_users", "required", "internal", "off", 201],
-    ["upload.get", "GET", "/api/upload/{id}", "upload", false, "manage_users", "none", "internal", "read", 200]
+    ["upload.create", "POST", "/api/upload", "upload", false, "manage_uploads", "required", "internal", "off", 201],
+    ["upload.get", "GET", "/api/upload/{id}", "upload", false, "manage_uploads", "none", "internal", "read", 200]
   ]
 }
