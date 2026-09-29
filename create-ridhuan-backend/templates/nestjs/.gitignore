@@ -12,7 +12,7 @@ coverage
 # Local prototype snapshot, generated clients, runtime data and diagnostics
 .legacy/
 src/generated/
-uploads/
+/uploads/
 *.log
 *.tsbuildinfo
 *.zip
