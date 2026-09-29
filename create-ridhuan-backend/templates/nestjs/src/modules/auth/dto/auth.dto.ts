@@ -1,8 +1,9 @@
 import { IsEmail, IsString, MinLength, MaxLength } from "class-validator";
+import { MaxUtf8Bytes } from "../../../common/dto/password";
 
 export class RegisterDto {
   @IsEmail() email!: string;
-  @IsString() @MinLength(6) @MaxLength(128) password!: string;
+  @IsString() @MinLength(6) @MaxLength(128) @MaxUtf8Bytes(72) password!: string;
 }
 
 export class LoginDto {

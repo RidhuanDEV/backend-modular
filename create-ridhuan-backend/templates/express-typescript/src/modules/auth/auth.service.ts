@@ -34,6 +34,13 @@ function createRefreshToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
+// Unknown emails still pay one bcrypt comparison so response time does not reveal which accounts exist.
+let timingHash: Promise<string> | undefined;
+function dummyPasswordHash(): Promise<string> {
+  timingHash ??= bcrypt.hash(randomBytes(16).toString("hex"), SALT_ROUNDS);
+  return timingHash;
+}
+
 export class AuthService {
   async register(dto: RegisterDto, requestId?: string) {
     const exists = await repository.emailExists(dto.email);
@@ -78,13 +85,8 @@ export class AuthService {
 
   async login(dto: LoginDto, requestId?: string) {
     const user = await repository.findByEmail(dto.email);
-
-    if (!user) {
-      throw HttpError.unauthorized("Invalid email or password");
-    }
-
-    const isMatch = await bcrypt.compare(dto.password, user.password);
-    if (!isMatch) {
+    const isMatch = await bcrypt.compare(dto.password, user?.password ?? (await dummyPasswordHash()));
+    if (!user || user.deletedAt !== null || !isMatch) {
       throw HttpError.unauthorized("Invalid email or password");
     }
 
@@ -101,14 +103,18 @@ export class AuthService {
       after: { email: user.email }, requestId,
     });
 
-    await prisma.refreshToken.create({
-      data: {
-        tokenHash: hashRefreshToken(refreshToken),
-        familyId: randomUUID(),
-        userId: user.id,
-        expiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL_MS),
-      },
-    });
+    await prisma.$transaction([
+      // Keep the table bounded: drop this user's sessions that can no longer be used.
+      prisma.refreshToken.deleteMany({ where: { userId: user.id, expiresAt: { lt: now } } }),
+      prisma.refreshToken.create({
+        data: {
+          tokenHash: hashRefreshToken(refreshToken),
+          familyId: randomUUID(),
+          userId: user.id,
+          expiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL_MS),
+        },
+      }),
+    ]);
 
     return { token, refreshToken };
   }

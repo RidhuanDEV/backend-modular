@@ -67,6 +67,27 @@ public sealed class BackendService(IBackendStore store, IPasswordService passwor
         user.PasswordHash = passwords.Hash(user, password);
         return user;
     }
+    // Unknown emails still pay one hash verification so response time does not reveal which accounts exist.
+    private static string? timingHash;
+    private void VerifyAgainstDummyHash(string password)
+    {
+        var dummy = new User { Email = "", PasswordHash = "" };
+        dummy.PasswordHash = timingHash ??= passwords.Hash(dummy, Convert.ToHexString(RandomNumberGenerator.GetBytes(16)));
+        passwords.Verify(dummy, password);
+    }
+    // The seeded root role is exempt: it must be able to hand out permissions created after seeding, which it does not hold itself.
+    public const string RootRole = "admin";
+    // Anti-escalation rule: an actor may only grant, assign or manage permissions it already holds.
+    // Route policies (manage_users, manage_roles) decide who may call an endpoint; this decides what they may hand out.
+    private async Task EnsureWithinActorAsync(OperationContext ctx, IEnumerable<Guid> permissionIds, CancellationToken ct)
+    {
+        var required = permissionIds.ToHashSet();
+        if (required.Count == 0) return;
+        var actorRole = ctx.Actor is null ? null : await store.RoleAsync(ctx.Actor.RoleId, ct);
+        if (actorRole?.Name == RootRole) return;
+        if (actorRole is null || !required.IsSubsetOf(actorRole.Permissions.Select(p => p.PermissionId))) throw new ApiException(403, "You cannot grant or manage permissions you do not hold");
+    }
+    private Task EnsureRoleWithinActorAsync(OperationContext ctx, Role role, CancellationToken ct) => EnsureWithinActorAsync(ctx, role.Permissions.Select(p => p.PermissionId).ToArray(), ct);
     private static string NewRefreshToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     private static string HashRefreshToken(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     private AuthTokensResult IssuePair(User user, string refreshToken) => new(tokens.Issue(user), refreshToken, "Bearer", 900);
@@ -78,10 +99,11 @@ public sealed class BackendService(IBackendStore store, IPasswordService passwor
     public async Task<AuthTokensResult> LoginAsync(string email, string password, OperationContext ctx, CancellationToken ct)
     {
         var user = await store.UserByEmailAsync(email, ct);
+        if (user is null) VerifyAgainstDummyHash(password);
         if (user is null || user.DeletedAt is not null || !passwords.Verify(user, password)) throw new ApiException(401, "Invalid email or password");
         var (refresh, plaintext) = CreateRefreshToken(user.Id);
         await store.BeginAsync(ct);
-        try { store.AddRefreshToken(refresh); if (ctx.Audit == AuditMode.Required) store.AddAudit(Audit(ctx with { Actor = new(user.Id, user.Email, user.RoleId) }, "LOGIN", user.Id, null, JsonSerializer.Serialize(new PermissionSummary(user.Id, user.Email)))); await store.CommitAsync(ct, invalidateCache: false); }
+        try { await store.DeleteExpiredRefreshTokensAsync(user.Id, clock.GetUtcNow(), ct); store.AddRefreshToken(refresh); if (ctx.Audit == AuditMode.Required) store.AddAudit(Audit(ctx with { Actor = new(user.Id, user.Email, user.RoleId) }, "LOGIN", user.Id, null, JsonSerializer.Serialize(new PermissionSummary(user.Id, user.Email)))); await store.CommitAsync(ct, invalidateCache: false); }
         catch { await store.RollbackAsync(CancellationToken.None); throw; }
         if (ctx.Audit == AuditMode.Optional) await OptionalAuditAsync(Audit(ctx with { Actor = new(user.Id, user.Email, user.RoleId) }, "LOGIN", user.Id, null, null));
         return IssuePair(user, plaintext);
@@ -133,15 +155,22 @@ public sealed class BackendService(IBackendStore store, IPasswordService passwor
     public Task<UserResult> CreateUserAsync(string email, string password, Guid roleId, OperationContext ctx, CancellationToken ct) => MutateAsync<UserResult>(ctx, "CREATE", async token =>
     {
         var role = await store.RoleAsync(roleId, token) ?? throw new ApiException(400, "Role not found");
+        await EnsureRoleWithinActorAsync(ctx, role, token);
         var user = NewUser(email, password, role); store.AddUser(user); var result = Map(user);
         return (result, user.Id, null, JsonSerializer.Serialize(result));
     }, ct);
     public Task<UserResult> UpdateUserAsync(Guid id, string? email, Guid? roleId, OperationContext ctx, CancellationToken ct) => MutateAsync(ctx, "UPDATE", async token =>
     {
         var user = await store.UserAsync(id, token) ?? throw new ApiException(404, "User not found");
+        await EnsureRoleWithinActorAsync(ctx, user.Role, token);
         var before = JsonSerializer.Serialize(Map(user));
         if (email is not null) user.Email = email;
-        if (roleId is not null) { user.Role = await store.RoleAsync(roleId.Value, token) ?? throw new ApiException(400, "Role not found"); user.RoleId = roleId.Value; }
+        if (roleId is not null)
+        {
+            var nextRole = await store.RoleAsync(roleId.Value, token) ?? throw new ApiException(400, "Role not found");
+            await EnsureRoleWithinActorAsync(ctx, nextRole, token);
+            user.Role = nextRole; user.RoleId = roleId.Value;
+        }
         user.UpdatedAt = clock.GetUtcNow(); var result = Map(user); return (result, id, before, JsonSerializer.Serialize(result));
     }, ct);
     public async Task DeleteUserAsync(Guid id, OperationContext ctx, CancellationToken ct)
@@ -149,9 +178,8 @@ public sealed class BackendService(IBackendStore store, IPasswordService passwor
         await MutateAsync(ctx, "DELETE", async token =>
         {
             if (ctx.Actor?.Id == id) throw new ApiException(403, "You cannot delete your own account.");
-            var actor = ctx.Actor is null ? null : await store.UserAsync(ctx.Actor.Id, token);
-            if (actor?.Role.Name != "admin") throw new ApiException(403, "Only administrators are allowed to delete user accounts.");
             var user = await store.UserAsync(id, token) ?? throw new ApiException(404, "User not found");
+            await EnsureRoleWithinActorAsync(ctx, user.Role, token);
             var before = JsonSerializer.Serialize(Map(user)); user.DeletedAt = clock.GetUtcNow(); user.UpdatedAt = clock.GetUtcNow(); return (true, id, before, (string?)null);
         }, ct);
     }
@@ -165,17 +193,22 @@ public sealed class BackendService(IBackendStore store, IPasswordService passwor
     public Task<RoleResult> UpdateRoleAsync(Guid id, string? name, OperationContext ctx, CancellationToken ct) => MutateAsync(ctx, "UPDATE", async token =>
     {
         var role = await store.RoleAsync(id, token) ?? throw new ApiException(404, "Role not found"); var before = JsonSerializer.Serialize(Map(role));
+        await EnsureRoleWithinActorAsync(ctx, role, token);
         if (name is not null) role.Name = name; role.UpdatedAt = clock.GetUtcNow(); var result = Map(role, false); return (result, id, before, JsonSerializer.Serialize(result));
     }, ct);
     public async Task DeleteRoleAsync(Guid id, OperationContext ctx, CancellationToken ct) => await MutateAsync(ctx, "DELETE", async token =>
     {
         var role = await store.RoleAsync(id, token) ?? throw new ApiException(404, "Role not found");
+        await EnsureRoleWithinActorAsync(ctx, role, token);
         if (await store.HasRoleUsersAsync(id, token)) throw new ApiException(409, "Role is assigned to users");
         var before = JsonSerializer.Serialize(Map(role)); store.RemoveRole(role); return (true, id, before, (string?)null);
     }, ct);
     public Task<RoleResult> AssignPermissionsAsync(Guid id, IReadOnlyList<Guid> ids, OperationContext ctx, CancellationToken ct) => MutateAsync(ctx, "ASSIGN_PERMISSIONS", async token =>
     {
         var role = await store.RoleAsync(id, token) ?? throw new ApiException(404, "Role not found"); var before = JsonSerializer.Serialize(Map(role));
+        // Both the permissions being removed and the ones being granted must be within the actor's own.
+        await EnsureRoleWithinActorAsync(ctx, role, token);
+        await EnsureWithinActorAsync(ctx, ids, token);
         var permissions = new List<Permission>(); foreach (var permissionId in ids.Distinct()) permissions.Add(await store.PermissionAsync(permissionId, token) ?? throw new ApiException(400, "Permission not found"));
         role.Permissions.RemoveAll(p => !ids.Contains(p.PermissionId));
         foreach (var p in permissions.Where(p => role.Permissions.All(g => g.PermissionId != p.Id))) role.Permissions.Add(new RolePermission { RoleId = id, PermissionId = p.Id, Permission = p, Role = role });

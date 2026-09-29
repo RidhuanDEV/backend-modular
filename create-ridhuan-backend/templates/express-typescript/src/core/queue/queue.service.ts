@@ -82,7 +82,7 @@ function assertQueueName(name: string): void {
     throw new Error("Queue name must not be empty");
   }
   // Enforce queue name: lowercase, alphanumeric, dashes, 3-32 chars
-  const queueNameRegex = /^[a-z0-9\-]{3,32}$/;
+  const queueNameRegex = /^[a-z0-9-]{3,32}$/;
   if (!queueNameRegex.test(trimmed)) {
     throw new Error(
       "Queue name must be 3-32 chars, lowercase, alphanumeric or dash (a-z, 0-9, -)",

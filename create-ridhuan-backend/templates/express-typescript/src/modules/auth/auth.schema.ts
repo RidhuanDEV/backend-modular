@@ -1,12 +1,23 @@
 import { z } from "zod";
 
+// Emails are compared case-insensitively; normalize before validation and storage.
+export const emailField = (message = "Invalid email address") =>
+  z.string().trim().toLowerCase().email(message);
+
+// bcrypt ignores bytes after 72, so longer passwords would silently collide.
+export const newPasswordField = () =>
+  z
+    .string()
+    .min(6, "Password must be at least 6 characters")
+    .refine((value) => Buffer.byteLength(value, "utf8") <= 72, "Password must be at most 72 bytes");
+
 export const registerSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  email: emailField(),
+  password: newPasswordField(),
 });
 
 export const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
+  email: emailField(),
   password: z.string().min(1, "Password is required"),
 });
 

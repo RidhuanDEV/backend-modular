@@ -31,3 +31,7 @@ WHERE id = $1 AND revoked_at IS NULL;
 -- name: RevokeAuthRefreshFamily :exec
 UPDATE auth_refresh_tokens SET revoked_at = now()
 WHERE family_id = $1 AND revoked_at IS NULL;
+
+-- name: DeleteExpiredAuthRefreshTokens :exec
+DELETE FROM auth_refresh_tokens
+WHERE user_id = $1 AND expires_at < now();

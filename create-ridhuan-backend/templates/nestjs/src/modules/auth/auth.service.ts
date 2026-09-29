@@ -15,6 +15,12 @@ const REFRESH_DAYS = 30;
 class RefreshReplayError extends Error {}
 function hashToken(value: string): string { return createHash("sha256").update(value).digest("hex"); }
 function normalizeEmail(value: string): string { return value.trim().toLowerCase(); }
+// Unknown emails still pay one bcrypt comparison so response time does not reveal which accounts exist.
+let timingHash: Promise<string> | undefined;
+function dummyPasswordHash(): Promise<string> {
+  timingHash ??= bcrypt.hash(randomBytes(16).toString("hex"), 12);
+  return timingHash;
+}
 
 @Injectable()
 export class AuthService {
@@ -56,12 +62,15 @@ export class AuthService {
 
   async login(input: LoginDto, requestId?: string): Promise<AuthResponseDto> {
     const user = await this.prisma.user.findUnique({ where: { email: normalizeEmail(input.email) }, include: { role: true } });
-    if (!user || user.deletedAt || !(await bcrypt.compare(input.password, user.password))) throw new UnauthorizedException("Invalid credentials");
+    const matches = await bcrypt.compare(input.password, user?.password ?? await dummyPasswordHash());
+    if (!user || user.deletedAt || !matches) throw new UnauthorizedException("Invalid credentials");
     const policy = this.policy.for("auth.login");
     const change = { endpointId: "auth.login" as const, policy, behavior: "login",
         module: "auth", entityId: user.id, actor: { id: user.id, email: user.email, roleId: user.roleId },
         ...(requestId ? { requestId } : {}) };
     const result = await this.prisma.$transaction(async (tx) => {
+      // Keep the table bounded: drop this user's sessions that can no longer be used.
+      await tx.refreshToken.deleteMany({ where: { userId: user.id, expiresAt: { lt: new Date() } } });
       const tokens = await this.issue(user, randomUUID(), new Date(Date.now() + REFRESH_DAYS * 86400000), tx);
       if (policy.audit === "required") await this.audit.write(change, tx);
       return tokens;

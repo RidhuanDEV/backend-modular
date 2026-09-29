@@ -8,6 +8,8 @@ The 27 reference operation method/path/ID/access/audit/rate/cache/status default
 
 - Express auth queries do not filter deletedAt; .NET rejects soft-deleted accounts for login/JWT and hides them in user reads. This is an intentional correction, not a claim of identical legacy behavior.
 - .NET JWT refreshes role/email from live database during validation. User deletion uses current role and rejects self-delete.
+- Anti-escalation (all four templates, 2026-09-30): user create/update/delete and role update/delete/permission assignment require the target roles and granted permissions to be within the actor's own live permissions. The seeded `admin` root role is exempt so it can grant permissions created after seeding. This replaces the earlier admin-name-only delete check.
+- Unknown-email logins verify against a dummy hash so response time does not reveal account existence; login deletes the user's already-expired refresh tokens. Unhandled 500s log the exception server-side.
 - Refresh tokens are stored only as SHA-256 hashes, rotated in serializable database transactions, and reuse revokes the active token family. Absolute family lifetime is 90 days; each token lifetime is 30 days.
 - Required mutation audit is atomic. DB serialization/unique/FK/concurrency conflicts map to 409, preserving database internals.
 - Default .NET Identity hashing is intentionally different from bcrypt. No automatic hash/account sharing; separate PostgreSQL database and EF migration ownership are required.

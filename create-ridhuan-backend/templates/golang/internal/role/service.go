@@ -78,6 +78,9 @@ func (s *Service) Update(ctx context.Context, p audit.Policy, actor *audit.Actor
 		if err != nil {
 			return model.Role{}, audit.Change{}, fault.DB(err)
 		}
+		if err = RoleWithinActor(ctx, q, actor, id); err != nil {
+			return model.Role{}, audit.Change{}, err
+		}
 		newName := old.Name
 		if name != nil {
 			newName = strings.TrimSpace(*name)
@@ -99,6 +102,9 @@ func (s *Service) Delete(ctx context.Context, p audit.Policy, actor *audit.Actor
 		row, err := q.LockRole(ctx, id)
 		if err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)
+		}
+		if err = RoleWithinActor(ctx, q, actor, id); err != nil {
+			return struct{}{}, audit.Change{}, err
 		}
 		if err = q.DeleteRole(ctx, id); err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)
@@ -138,6 +144,13 @@ func (s *Service) Assign(ctx context.Context, p audit.Policy, actor *audit.Actor
 		old, err := q.ListRolePermissionIDs(ctx, id)
 		if err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)
+		}
+		// Both the permissions being removed and the ones being granted must be within the actor's own.
+		if err = PermissionsWithinActor(ctx, q, actor, old); err != nil {
+			return struct{}{}, audit.Change{}, err
+		}
+		if err = PermissionsWithinActor(ctx, q, actor, ids); err != nil {
+			return struct{}{}, audit.Change{}, err
 		}
 		if err = q.ClearRolePermissions(ctx, id); err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)

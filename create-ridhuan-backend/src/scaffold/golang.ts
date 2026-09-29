@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { cp, readFile, writeFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { ProjectAnswers, ScaffoldResult } from "../types.js";
+import { assertEnvKeysExist } from "./env.js";
 
 const originalGoModule = "github.com/RidhuanDEV/golang-backend";
 
@@ -81,19 +82,22 @@ export async function scaffoldGolang(
     POSTGRES_DB: answers.dbName,
     POSTGRES_USER: answers.dbUser,
     POSTGRES_PASSWORD: answers.dbPassword,
-    DATABASE_URL: `postgres://${answers.dbUser}:${answers.dbPassword}@localhost:5432/${answers.dbName}?sslmode=disable`,
+    DATABASE_URL: `postgres://${encodeURIComponent(answers.dbUser)}:${encodeURIComponent(answers.dbPassword)}@localhost:5432/${encodeURIComponent(answers.dbName)}?sslmode=disable`,
     JWT_SECRET: jwtSecret,
+    // Seeded bootstrap accounts must never keep the public placeholder passwords.
+    ADMIN_PASSWORD: randomBytes(24).toString("base64url"),
+    USER_PASSWORD: randomBytes(24).toString("base64url"),
     CACHE_ENABLED: answers.enableRedis ? "true" : "false",
     RATE_LIMIT_STORE: answers.enableRedis ? "redis" : "memory",
     UPLOAD_STORAGE: answers.uploadStorage,
     S3_ENDPOINT: answers.s3Endpoint,
-    S3_ENDPOINT_DOCKER: answers.s3DockerEndpoint,
     S3_REGION: answers.s3Region,
     S3_BUCKET: answers.s3Bucket,
-    S3_ACCESS_KEY: answers.s3AccessKey,
-    S3_SECRET_KEY: answers.s3SecretKey.length > 0 ? answers.s3SecretKey : s3Secret,
+    S3_ACCESS_KEY_ID: answers.s3AccessKey,
+    S3_SECRET_ACCESS_KEY: answers.s3SecretKey.length > 0 ? answers.s3SecretKey : s3Secret,
   };
 
+  assertEnvKeysExist(envExample, envReplacements);
   const finalEnv = replaceEnvVariables(envExample, envReplacements);
   await writeFile(join(target, ".env"), finalEnv, "utf8");
 

@@ -63,7 +63,7 @@ interface BootstrapUserConfig {
 }
 
 async function seedBootstrapUser(config: BootstrapUserConfig): Promise<void> {
-  const email = process.env[config.emailEnvKey];
+  const email = process.env[config.emailEnvKey]?.trim().toLowerCase();
   const password = process.env[config.passwordEnvKey];
 
   if (!email || !password) {
@@ -71,6 +71,16 @@ async function seedBootstrapUser(config: BootstrapUserConfig): Promise<void> {
       `Skipping bootstrap ${config.roleName} seed; ${config.emailEnvKey} or ${config.passwordEnvKey} is missing`,
     );
     return;
+  }
+
+  // Template placeholders are public; never let them become a production login.
+  if (
+    process.env["NODE_ENV"] === "production" &&
+    (password.length < 12 || /change_this|replace|example/i.test(password))
+  ) {
+    throw new Error(
+      `${config.passwordEnvKey} must be a generated password of at least 12 characters in production`,
+    );
   }
 
   const role = await prisma.role.findUniqueOrThrow({

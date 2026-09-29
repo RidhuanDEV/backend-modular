@@ -8,6 +8,7 @@ import type { Actor } from "../../common/http/request-context";
 import { pagination, type PaginationMeta } from "../../common/http/response";
 import type { PageQueryDto } from "../../common/dto/pagination.dto";
 import type { AssignPermissionsDto, CreateRoleDto, RoleResponseDto, UpdateRoleDto } from "./dto/role.dto";
+import { assertPermissionsWithinActor, assertRoleWithinActor } from "../../common/auth/privilege";
 
 const include = { permissions: { include: { permission: true } } } as const;
 type RoleRecord = Prisma.RoleGetPayload<{ include: typeof include }>;
@@ -64,6 +65,7 @@ export class RolesService {
     const value = await this.audit.transact(async (tx) => {
       const prior = await tx.role.findUnique({ where: { id }, include });
       if (!prior) throw new NotFoundException("Role not found");
+      await assertRoleWithinActor(tx, actor.roleId, id);
       const next = await tx.role.update({ where: { id }, data: { ...(dto.name !== undefined ? { name: dto.name } : {}) }, include });
       return [next, { endpointId: "role.update", policy: this.policy.for("role.update"), actor, behavior: "updated", module: "roles",
         entityId: id, before: { id, name: prior.name }, after: { id, name: next.name }, ...(requestId ? { requestId } : {}) }] as const;
@@ -76,6 +78,7 @@ export class RolesService {
     await this.audit.transact(async (tx) => {
       const prior = await tx.role.findUnique({ where: { id } });
       if (!prior) throw new NotFoundException("Role not found");
+      await assertRoleWithinActor(tx, actor.roleId, id);
       await tx.role.delete({ where: { id } });
       return [undefined, { endpointId: "role.delete", policy: this.policy.for("role.delete"), actor, behavior: "deleted",
         module: "roles", entityId: id, before: { id, name: prior.name }, ...(requestId ? { requestId } : {}) }] as const;
@@ -89,6 +92,9 @@ export class RolesService {
       if (!prior) throw new NotFoundException("Role not found");
       const count = await tx.permission.count({ where: { id: { in: dto.permissionIds } } });
       if (count !== new Set(dto.permissionIds).size) throw new NotFoundException("Permission not found");
+      // Both the permissions being removed and the ones being granted must be within the actor's own.
+      await assertRoleWithinActor(tx, actor.roleId, id);
+      await assertPermissionsWithinActor(tx, actor.roleId, dto.permissionIds);
       await tx.rolePermission.deleteMany({ where: { roleId: id } });
       await tx.rolePermission.createMany({ data: [...new Set(dto.permissionIds)].map((permissionId) => ({ roleId: id, permissionId })) });
       const next = await tx.role.findUniqueOrThrow({ where: { id }, include });

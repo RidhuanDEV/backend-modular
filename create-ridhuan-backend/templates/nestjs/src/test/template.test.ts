@@ -75,3 +75,22 @@ test("auth boundary rejects unknown request fields and missing bearer token", as
   assert.equal(bad.status, 400);
   assert.equal(me.status, 401);
 });
+
+test("passwords beyond bcrypt's 72-byte limit are rejected before hashing", async () => {
+  const response = await request(app.getHttpServer()).post("/api/auth/register")
+    .send({ email: "long@example.com", password: "é".repeat(37) });
+  assert.equal(response.status, 400);
+});
+
+test("expected Prisma and body-parser failures are not reported as 500", async () => {
+  const { HttpExceptionFilter } = await import("../common/http/http-exception.filter");
+  const { Prisma } = await import("../generated/prisma/client");
+  const captured: { status?: number } = {};
+  const response = { status(code: number) { captured.status = code; return this; }, json() { return this; } };
+  const host = { switchToHttp: () => ({ getResponse: () => response }) } as never;
+  const filter = new HttpExceptionFilter();
+  filter.catch(new Prisma.PrismaClientKnownRequestError("duplicate", { code: "P2002", clientVersion: "test" }), host);
+  assert.equal(captured.status, 409);
+  filter.catch(Object.assign(new SyntaxError("Unexpected token"), { status: 400, type: "entity.parse.failed" }), host);
+  assert.equal(captured.status, 400);
+});

@@ -9,6 +9,7 @@ import type { Actor } from "../../common/http/request-context";
 import { pagination, type PaginationMeta } from "../../common/http/response";
 import { PrismaService } from "../../platform/database/prisma.service";
 import type { CreateUserDto, UpdateUserDto, UserResponseDto } from "./dto/user.dto";
+import { assertRoleWithinActor } from "../../common/auth/privilege";
 
 const include = { role: { include: { permissions: { include: { permission: true } } } } } as const;
 type UserRecord = Prisma.UserGetPayload<{ include: typeof include }>;
@@ -63,8 +64,10 @@ export class UsersService {
     return result;
   }
   async create(dto: CreateUserDto, actor: Actor, requestId?: string): Promise<UserResponseDto> {
+    const password = await bcrypt.hash(dto.password, 12);
     const value = await this.audit.transact(async (tx) => {
-      const next = await tx.user.create({ data: { email: dto.email.trim().toLowerCase(), password: await bcrypt.hash(dto.password, 12), roleId: dto.roleId }, include });
+      await assertRoleWithinActor(tx, actor.roleId, dto.roleId);
+      const next = await tx.user.create({ data: { email: dto.email.trim().toLowerCase(), password, roleId: dto.roleId }, include });
       return [next, { endpointId: "user.create", policy: this.policy.for("user.create"), actor,
         behavior: "created", module: "user", entityId: next.id, after: { id: next.id, email: next.email, roleId: next.roleId },
         ...(requestId ? { requestId } : {}) }] as const;
@@ -76,6 +79,8 @@ export class UsersService {
     const value = await this.audit.transact(async (tx) => {
       const prior = await tx.user.findFirst({ where: { id, deletedAt: null }, include });
       if (!prior) throw new NotFoundException("User not found");
+      await assertRoleWithinActor(tx, actor.roleId, prior.roleId);
+      if (dto.roleId !== undefined) await assertRoleWithinActor(tx, actor.roleId, dto.roleId);
       const next = await tx.user.update({ where: { id }, data: {
         ...(dto.email !== undefined ? { email: dto.email.trim().toLowerCase() } : {}),
         ...(dto.roleId !== undefined ? { roleId: dto.roleId } : {}),
@@ -93,8 +98,7 @@ export class UsersService {
     await this.audit.transact(async (tx) => {
       const prior = await tx.user.findFirst({ where: { id, deletedAt: null }, include });
       if (!prior) throw new NotFoundException("User not found");
-      const requester = await tx.role.findUnique({ where: { id: actor.roleId } });
-      if (requester?.name !== "admin") throw new ForbiddenException("Only administrators can delete users");
+      await assertRoleWithinActor(tx, actor.roleId, prior.roleId);
       await tx.user.update({ where: { id }, data: { deletedAt: new Date() } });
       await tx.refreshToken.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
       return [undefined, { endpointId: "user.delete", policy: this.policy.for("user.delete"), actor,

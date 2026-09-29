@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { cp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ProjectAnswers, ScaffoldResult } from "../types.js";
+import { assertEnvKeysExist } from "./env.js";
 
 function replaceEnvVariables(templateContent: string, replacements: Record<string, string>): string {
   const lines = templateContent.split(/\r?\n/);
@@ -55,8 +56,11 @@ export async function scaffoldExpress(
     POSTGRES_DB: answers.dbName,
     POSTGRES_USER: answers.dbUser,
     POSTGRES_PASSWORD: answers.dbPassword,
-    DATABASE_URL: `postgresql://${answers.dbUser}:${answers.dbPassword}@localhost:5432/${answers.dbName}?schema=public`,
+    DATABASE_URL: `postgresql://${encodeURIComponent(answers.dbUser)}:${encodeURIComponent(answers.dbPassword)}@localhost:5432/${encodeURIComponent(answers.dbName)}?schema=public`,
     JWT_SECRET: jwtSecret,
+    // Seeded bootstrap accounts must never keep the public placeholder passwords.
+    ADMIN_PASSWORD: randomBytes(24).toString("base64url"),
+    USER_PASSWORD: randomBytes(24).toString("base64url"),
     CACHE_ENABLED: answers.enableRedis ? "true" : "false",
     RATE_LIMIT_STORE: answers.enableRedis ? "redis" : "memory",
     UPLOAD_STORAGE: answers.uploadStorage,
@@ -64,10 +68,11 @@ export async function scaffoldExpress(
     S3_ENDPOINT_DOCKER: answers.s3DockerEndpoint,
     S3_REGION: answers.s3Region,
     S3_BUCKET: answers.s3Bucket,
-    S3_ACCESS_KEY: answers.s3AccessKey,
-    S3_SECRET_KEY: answers.s3SecretKey.length > 0 ? answers.s3SecretKey : s3Secret,
+    S3_ACCESS_KEY_ID: answers.s3AccessKey,
+    S3_SECRET_ACCESS_KEY: answers.s3SecretKey.length > 0 ? answers.s3SecretKey : s3Secret,
   };
 
+  assertEnvKeysExist(envExample, envReplacements);
   const finalEnv = replaceEnvVariables(envExample, envReplacements);
   await writeFile(join(target, ".env"), finalEnv, "utf8");
 

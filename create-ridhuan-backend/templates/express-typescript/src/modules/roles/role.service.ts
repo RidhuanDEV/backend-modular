@@ -7,6 +7,7 @@ import { z } from "zod";
 import { auditService } from "../../core/audit/audit.service.js";
 import { AuditAction } from "../../constants/audit.constants.js";
 import { ROLE_MODULE } from "../../constants/modules.constants.js";
+import { assertPermissionsWithinActor, assertRoleWithinActor } from "../../core/auth/privilege.js";
 import type {
   CreateRoleDto,
   UpdateRoleDto,
@@ -78,6 +79,7 @@ export class RoleService {
     const role = await prisma.$transaction(async (tx) => {
       const existingRole = await repository.findById(id, tx);
       if (!existingRole) throw HttpError.notFound("Role not found");
+      await assertRoleWithinActor(tx, user.id, id);
       const updated = await repository.update(id, dto, tx);
       if (!updated) throw HttpError.notFound("Role not found");
 
@@ -104,6 +106,7 @@ export class RoleService {
     await prisma.$transaction(async (tx) => {
       const existingRole = await repository.findById(id, tx);
       if (!existingRole) throw HttpError.notFound("Role not found");
+      await assertRoleWithinActor(tx, user.id, id);
       const deleted = await repository.delete(id, tx);
       if (!deleted) throw HttpError.notFound("Role not found");
 
@@ -133,6 +136,9 @@ export class RoleService {
     const updatedRole = await prisma.$transaction(async (tx) => {
       const existingRole = await repository.findById(id, tx);
       if (!existingRole) throw HttpError.notFound("Role not found");
+      // Both the permissions being removed and the ones being granted must be within the actor's own.
+      await assertRoleWithinActor(tx, user.id, id);
+      await assertPermissionsWithinActor(tx, user.id, dto.permissionIds);
       await repository.setPermissions(id, dto.permissionIds, tx);
       const updated = await repository.findById(id, tx);
       if (!updated) throw HttpError.notFound("Role not found");

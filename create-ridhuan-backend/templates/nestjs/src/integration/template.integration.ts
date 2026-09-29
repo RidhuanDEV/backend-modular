@@ -194,3 +194,29 @@ test("notifications persist, stream to their recipient, mark read and report dis
   assert.equal(typeof field(field(read.body, "data"), "readAt"), "string");
   assert.equal(await prisma.activityLog.count({ where: { module: "notifications", entityId: id } }), 2);
 });
+
+test("user and role managers cannot grant privileges they do not hold", async () => {
+  const bcrypt = (await import("bcrypt")).default;
+  const suffix = randomUUID();
+  const permissions = await prisma.permission.findMany({ where: { name: { in: ["manage_users", "manage_roles", "manage_permissions"] } } });
+  const byName = new Map(permissions.map((item) => [item.name, item.id]));
+  const managerRole = await prisma.role.create({ data: { name: `priv_manager_${suffix}` } });
+  const plainRole = await prisma.role.create({ data: { name: `priv_plain_${suffix}` } });
+  await prisma.rolePermission.createMany({ data: ["manage_users", "manage_roles"].map((name) => ({ roleId: managerRole.id, permissionId: byName.get(name)! })) });
+  const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: "admin" } });
+  const password = "manager-password-123";
+  const manager = await prisma.user.create({ data: { email: `manager-${suffix}@example.com`, password: await bcrypt.hash(password, 4), roleId: managerRole.id } });
+  const plain = await prisma.user.create({ data: { email: `plain-${suffix}@example.com`, password: "unused", roleId: plainRole.id } });
+  const admin = await prisma.user.findFirstOrThrow({ where: { roleId: adminRole.id, deletedAt: null } });
+  const login = await request(app.getHttpServer()).post("/api/auth/login").send({ email: manager.email, password });
+  assert.equal(login.status, 200);
+  const token = textField(field(login.body, "data"), "token");
+  const call = (method: "patch" | "post" | "delete", path: string, body?: object) =>
+    request(app.getHttpServer())[method](path).set("Authorization", `Bearer ${token}`).send(body);
+  assert.equal((await call("patch", `/api/users/${plain.id}`, { roleId: adminRole.id })).status, 403);
+  assert.equal((await call("post", "/api/users", { email: `new-${suffix}@example.com`, password: "secret-123", roleId: adminRole.id })).status, 403);
+  assert.equal((await call("delete", `/api/users/${admin.id}`)).status, 403);
+  assert.equal((await call("post", `/api/roles/${managerRole.id}/permissions`, { permissionIds: [...byName.values()] })).status, 403);
+  assert.equal((await call("patch", `/api/users/${plain.id}`, { roleId: managerRole.id })).status, 200);
+  assert.equal((await call("delete", `/api/users/${plain.id}`)).status, 204);
+});

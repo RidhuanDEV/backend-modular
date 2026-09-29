@@ -1,11 +1,25 @@
-import { cp, mkdir, rm, readFile, writeFile } from "node:fs/promises";
-import { resolve, join, sep } from "node:path";
+import { execFileSync } from "node:child_process";
+import { cp, mkdir, rm } from "node:fs/promises";
+import { resolve, join, sep, relative } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const templatesDir = join(root, "templates");
 const onlyIndex = process.argv.indexOf("--only");
 const only = onlyIndex >= 0 ? process.argv[onlyIndex + 1] : undefined;
 if (only && !["express-typescript", "golang", "dotnet", "nestjs"].includes(only)) throw new Error(`Unknown template: ${only}`);
+// Ship only files the source repository does not ignore: local notes, build output and
+// secrets are git-ignored there and must never reach a published template.
+function notIgnored(source) {
+  const files = execFileSync("git", ["-C", source, "ls-files", "-z", "--cached", "--others", "--exclude-standard"], { encoding: "utf8" })
+    .split("\0").filter(Boolean);
+  const keep = new Set([""]);
+  for (const file of files) {
+    const parts = file.split("/");
+    for (let i = 1; i <= parts.length; i++) keep.add(parts.slice(0, i).join("/"));
+  }
+  return (src) => keep.has(relative(source, src).split(sep).join("/"));
+}
+
 async function recreateTarget(target) {
   const absolute = resolve(target);
   if (!absolute.startsWith(`${resolve(templatesDir)}${sep}`)) throw new Error(`Template target outside package: ${absolute}`);
@@ -28,6 +42,7 @@ const expressFiles = [
   "package-lock.json",
   "prisma.config.ts",
   "tsconfig.json",
+  "eslint.config.js",
   "README.md",
   "DEVELOPER-GUIDE.md",
   "src",
@@ -36,8 +51,9 @@ const expressFiles = [
 ];
 
 await recreateTarget(expressTarget);
+const expressFilter = notIgnored(expressSource);
 for (const file of expressFiles) {
-  await cp(join(expressSource, file), join(expressTarget, file), { recursive: true });
+  await cp(join(expressSource, file), join(expressTarget, file), { recursive: true, filter: expressFilter });
 }
 console.log("Copied express-typescript template files.");
 }
@@ -68,12 +84,13 @@ const goFiles = [
 ];
 
 await recreateTarget(goTarget);
+const goFilter = notIgnored(goSource);
 for (const file of goFiles) {
-  await cp(join(goSource, file), join(goTarget, file), { recursive: true });
+  await cp(join(goSource, file), join(goTarget, file), { recursive: true, filter: goFilter });
 }
 // Ship runtime commands and the documented Go initializer.
 for (const command of ["api", "migrate", "seed", "cleanup-uploads", "initproject"]) {
-  await cp(join(goSource, "cmd", command), join(goTarget, "cmd", command), { recursive: true });
+  await cp(join(goSource, "cmd", command), join(goTarget, "cmd", command), { recursive: true, filter: goFilter });
 }
 console.log("Copied golang template files.");
 }
@@ -113,20 +130,7 @@ const dotnetFiles = [
 
 await recreateTarget(dotnetTarget);
 
-function dotnetFilter(src) {
-  const normalized = src.replace(/\\/g, "/");
-  if (
-    normalized.includes("/bin/") ||
-    normalized.endsWith("/bin") ||
-    normalized.includes("/obj/") ||
-    normalized.endsWith("/obj") ||
-    normalized.includes("/TestResults") ||
-    normalized.includes("/uploads")
-  ) {
-    return false;
-  }
-  return true;
-}
+const dotnetFilter = notIgnored(dotnetSource);
 
 for (const file of dotnetFiles) {
   await cp(join(dotnetSource, file), join(dotnetTarget, file), {
@@ -147,15 +151,7 @@ const nestFiles = [
   "prisma.config.ts", "prisma", "src", "tsconfig.build.json", "tsconfig.json", "tsconfig.test.json",
 ];
 await recreateTarget(nestTarget);
-function nestFilter(src) {
-  const normalized = src.replace(/\\/g, "/");
-  const relative = normalized.slice(nestSource.replace(/\\/g, "/").length).replace(/^\/+/, "");
-  const topLevel = relative.split("/")[0];
-  return topLevel !== "node_modules" && topLevel !== ".legacy" && topLevel !== "dist" &&
-    topLevel !== "uploads" && !relative.startsWith("src/generated/") &&
-    relative !== "src/generated" && relative !== ".env" &&
-    relative !== "openapi.json" && !relative.endsWith(".tsbuildinfo");
-}
+const nestFilter = notIgnored(nestSource);
 for (const file of nestFiles) {
   await cp(join(nestSource, file), join(nestTarget, file), { recursive: true, filter: nestFilter });
 }

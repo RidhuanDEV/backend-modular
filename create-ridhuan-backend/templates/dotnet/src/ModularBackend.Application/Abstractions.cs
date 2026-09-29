@@ -18,6 +18,7 @@ public interface IBackendStore
     Task<bool> IsFileReferencedAsync(string objectKey, CancellationToken ct);
     Task<RefreshToken?> RefreshTokenAsync(string tokenHash, CancellationToken ct);
     Task RevokeRefreshFamilyAsync(Guid familyId, DateTimeOffset revokedAt, CancellationToken ct);
+    Task DeleteExpiredRefreshTokensAsync(Guid userId, DateTimeOffset now, CancellationToken ct);
     void AddUser(User user);
     void AddRole(Role role);
     void AddPermission(Permission permission);

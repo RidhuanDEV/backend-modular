@@ -24,7 +24,7 @@ export class UserRepository {
   async findAll(options: PrismaFindOptions): Promise<{ rows: UserWithRole[]; count: number }> {
     const [rows, count] = await Promise.all([
       prisma.user.findMany({
-        where: options.where,
+        where: { ...options.where, deletedAt: null },
         skip: options.skip,
         take: options.take,
         orderBy: options.orderBy,
@@ -38,15 +38,15 @@ export class UserRepository {
           },
         },
       }),
-      prisma.user.count({ where: options.where }),
+      prisma.user.count({ where: { ...options.where, deletedAt: null } }),
     ]);
     return { rows, count };
   }
 
   async findById(id: string, trx?: TransactionClient): Promise<UserWithRole | null> {
     const client = trx ?? prisma;
-    return client.user.findUnique({
-      where: { id },
+    return client.user.findFirst({
+      where: { id, deletedAt: null },
       include: {
         role: {
           include: {
@@ -77,7 +77,7 @@ export class UserRepository {
   ): Promise<User | null> {
     const client = trx ?? prisma;
 
-    const existing = await client.user.findUnique({ where: { id } });
+    const existing = await client.user.findFirst({ where: { id, deletedAt: null } });
     if (!existing) return null;
 
     const updateData: Prisma.UserUpdateInput = {};

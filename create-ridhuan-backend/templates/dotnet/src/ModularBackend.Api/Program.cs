@@ -47,7 +47,16 @@ builder.Services.AddOptions<JwtOptions>().BindConfiguration("Jwt").ValidateDataA
 builder.Services.AddOptions<CacheOptions>().BindConfiguration("Cache").ValidateDataAnnotations().ValidateOnStart();
 builder.Services.AddOptions<RedisOptions>().BindConfiguration("Redis").Validate(o => !(builder.Configuration.GetValue<bool>("Cache:Enabled") || builder.Configuration["Rate:Store"] == "redis") || !string.IsNullOrWhiteSpace(o.ConnectionString), "Redis connection string required").ValidateOnStart();
 builder.Services.AddOptions<RateOptions>().BindConfiguration("Rate").ValidateDataAnnotations().Validate(o => o.Store is "memory" or "redis" && (o.InstanceCount == 1 || o.Store == "redis") && new[] { o.Auth, o.Public, o.Internal }.All(w => w.Max > 0 && w.WindowMs > 0), "Invalid rate limiter configuration").ValidateOnStart();
-builder.Services.AddOptions<UploadOptions>().BindConfiguration("Upload").ValidateDataAnnotations().Validate(o => o.Storage is "local" or "s3" && o.AllowedMime.Length > 0 && o.AllowedMime.All(m => m is "image/png" or "image/jpeg" or "application/pdf") && (o.Storage != "s3" || !string.IsNullOrWhiteSpace(o.Bucket)) && (o.AccessKey.Length == 0) == (o.SecretKey.Length == 0) && !string.IsNullOrWhiteSpace(o.LocalRoot) && !string.IsNullOrWhiteSpace(o.Region) && (o.Endpoint.Length == 0 || Uri.TryCreate(o.Endpoint, UriKind.Absolute, out var endpoint) && endpoint.Scheme is "http" or "https"), "Invalid storage configuration").ValidateOnStart();
+// One check per rule so a misconfigured deployment names the exact setting that failed.
+builder.Services.AddOptions<UploadOptions>().BindConfiguration("Upload").ValidateDataAnnotations()
+    .Validate(o => o.Storage is "local" or "s3", "Upload:Storage must be local or s3")
+    .Validate(o => o.AllowedMime.Length > 0 && o.AllowedMime.All(m => m is "image/png" or "image/jpeg" or "application/pdf"), "Upload:AllowedMime must list image/png, image/jpeg or application/pdf")
+    .Validate(o => o.Storage != "s3" || !string.IsNullOrWhiteSpace(o.Bucket), "Upload:Bucket is required for s3 storage")
+    .Validate(o => (o.AccessKey.Length == 0) == (o.SecretKey.Length == 0), "Upload:AccessKey and Upload:SecretKey must be set together")
+    .Validate(o => !string.IsNullOrWhiteSpace(o.LocalRoot), "Upload:LocalRoot is required")
+    .Validate(o => !string.IsNullOrWhiteSpace(o.Region), "Upload:Region is required")
+    .Validate(o => o.Endpoint.Length == 0 || Uri.TryCreate(o.Endpoint, UriKind.Absolute, out var endpoint) && endpoint.Scheme is "http" or "https", "Upload:Endpoint must be an absolute http(s) URL")
+    .ValidateOnStart();
 builder.Services.AddOptions<ModularBackend.Infrastructure.Configuration.CorsOptions>().BindConfiguration("Cors").Validate(o => (!builder.Environment.IsProduction() || o.Origins.Length > 0) && o.Origins.All(ValidOrigin), "Explicit valid CORS origins required in production").ValidateOnStart();
 builder.Services.AddOptions<TelemetryOptions>().BindConfiguration("Telemetry").Validate(o => !o.Enabled || Uri.TryCreate(o.Endpoint, UriKind.Absolute, out var url) && url.Scheme is "http" or "https", "Invalid telemetry endpoint").ValidateOnStart();
 builder.Services.AddOptions<ProxyOptions>().BindConfiguration("Proxy").Validate(o => o.ForwardLimit is > 0 and <= 10 && o.KnownProxies.All(ip => System.Net.IPAddress.TryParse(ip, out _)), "Explicit valid proxy IPs required").ValidateOnStart();

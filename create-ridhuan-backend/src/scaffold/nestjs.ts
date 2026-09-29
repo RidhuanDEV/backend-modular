@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { cp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ProjectAnswers, ScaffoldResult } from "../types.js";
+import { assertEnvKeysExist } from "./env.js";
 
 function replaceEnv(template: string, replacements: Readonly<Record<string, string>>): string {
   return template.split(/\r?\n/).map((line) => {
@@ -51,6 +52,7 @@ export async function scaffoldNestjs(source: string, answers: ProjectAnswers): P
     S3_BUCKET: answers.s3Bucket, S3_ACCESS_KEY_ID: answers.s3AccessKey,
     S3_SECRET_ACCESS_KEY: answers.s3SecretKey || randomBytes(24).toString("hex"),
   };
+  assertEnvKeysExist(envExample, replacements);
   await writeFile(join(target, ".env"), replaceEnv(envExample, replacements));
   return {
     projectDirectory: target, templateId: "nestjs",

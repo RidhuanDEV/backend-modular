@@ -33,6 +33,16 @@ func (q *Queries) CreateAuthRefreshToken(ctx context.Context, arg CreateAuthRefr
 	return err
 }
 
+const deleteExpiredAuthRefreshTokens = `-- name: DeleteExpiredAuthRefreshTokens :exec
+DELETE FROM auth_refresh_tokens
+WHERE user_id = $1 AND expires_at < now()
+`
+
+func (q *Queries) DeleteExpiredAuthRefreshTokens(ctx context.Context, userID string) error {
+	_, err := q.db.Exec(ctx, deleteExpiredAuthRefreshTokens, userID)
+	return err
+}
+
 const findActiveUserByEmail = `-- name: FindActiveUserByEmail :one
 SELECT id, email, password, role_id, deleted_at, created_at, updated_at
 FROM users WHERE email = $1 AND deleted_at IS NULL

@@ -8,6 +8,16 @@ import { AuditAction } from "../../constants/audit.constants.js";
 import { NOTIFICATIONS_MODULE } from "../../constants/modules.constants.js";
 import type { z } from "zod";
 import { createNotification } from "../../core/http/endpoint-registry.js";
+import { logger } from "../../core/logger/logger.js";
+
+// Email is sent inside the request, so bound every SMTP phase well below client timeouts.
+let transporter: ReturnType<typeof createTransport> | undefined;
+function mailTransport(): ReturnType<typeof createTransport> {
+  transporter ??= createTransport({ host: env.SMTP_HOST, port: env.SMTP_PORT, secure: env.SMTP_SECURE,
+    connectionTimeout: 5_000, greetingTimeout: 5_000, socketTimeout: 10_000,
+    ...(env.SMTP_USER && env.SMTP_PASSWORD ? { auth: { user: env.SMTP_USER, pass: env.SMTP_PASSWORD } } : {}) });
+  return transporter;
+}
 
 export type CreateNotification = z.infer<typeof createNotification>;
 export interface NotificationDto {
@@ -38,11 +48,12 @@ export class NotificationService {
     let emailStatus: "SENT" | "FAILED" = "FAILED";
     if (env.SMTP_ENABLED) {
       try {
-        const transport = createTransport({ host: env.SMTP_HOST, port: env.SMTP_PORT, secure: env.SMTP_SECURE,
-          ...(env.SMTP_USER && env.SMTP_PASSWORD ? { auth: { user: env.SMTP_USER, pass: env.SMTP_PASSWORD } } : {}) });
-        await transport.sendMail({ from: env.SMTP_FROM, to: recipient.email, subject: input.title, text: input.body });
+        await mailTransport().sendMail({ from: env.SMTP_FROM, to: recipient.email, subject: input.title, text: input.body });
         emailStatus = "SENT";
-      } catch { /* A failed email must not roll back the saved notification. */ }
+      } catch (err) {
+        // A failed email must not roll back the saved notification; record why it failed.
+        logger.warn({ err, notificationId: created.id, requestId }, "Notification email failed");
+      }
     }
     return toDto(await prisma.notification.update({ where: { id: created.id }, data: { emailStatus } }));
   }

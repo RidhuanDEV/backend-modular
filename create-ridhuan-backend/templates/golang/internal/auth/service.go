@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/RidhuanDEV/golang-backend/internal/audit"
@@ -24,6 +25,14 @@ import (
 
 const accessTokenTTL = 15 * time.Minute
 const refreshTokenTTL = 30 * 24 * time.Hour
+
+// Unknown emails still pay one bcrypt comparison so response time does not reveal which accounts exist.
+var dummyPasswordHash = sync.OnceValue(func() []byte {
+	secret := make([]byte, 16)
+	_, _ = rand.Read(secret)
+	hash, _ := bcrypt.GenerateFromPassword(secret, 12)
+	return hash
+})
 
 type Actor = audit.Actor
 type Claims struct {
@@ -71,6 +80,7 @@ func (s *Service) Login(ctx context.Context, p audit.Policy, b model.Credentials
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return model.TokenPair{}, fault.DB(err)
 		}
+		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash(), []byte(b.Password))
 		return model.TokenPair{}, fault.New(fault.Unauthorized, "Invalid credentials")
 	}
 	if bcrypt.CompareHashAndPassword([]byte(row.Password), []byte(b.Password)) != nil {
@@ -78,6 +88,10 @@ func (s *Service) Login(ctx context.Context, p audit.Policy, b model.Credentials
 	}
 	actor := &Actor{ID: row.ID, Email: row.Email, RoleID: row.RoleID}
 	return audit.Mutate(ctx, s.Audit, p, actor, "LOGIN", func(q *sqlc.Queries) (model.TokenPair, audit.Change, error) {
+		// Keep the table bounded: drop this user's sessions that can no longer be used.
+		if err := q.DeleteExpiredAuthRefreshTokens(ctx, row.ID); err != nil {
+			return model.TokenPair{}, audit.Change{}, err
+		}
 		pair, tokenHash, familyID, err := s.issueTokenPair(row.ID, row.Email, row.RoleID, "", time.Now().UTC().Add(refreshTokenTTL))
 		if err != nil {
 			return model.TokenPair{}, audit.Change{}, err

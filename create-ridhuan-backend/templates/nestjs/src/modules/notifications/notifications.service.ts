@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import type { Notification } from "../../generated/prisma/client";
 import { AuditService } from "../../common/audit/audit.service";
 import { EndpointPolicyService } from "../../common/endpoint/endpoint.registry";
@@ -15,6 +15,7 @@ function publicNotification(value: Notification): NotificationResponseDto {
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
   constructor(private readonly prisma: PrismaService, private readonly audit: AuditService,
     private readonly policy: EndpointPolicyService, private readonly mail: MailService) {}
 
@@ -33,7 +34,11 @@ export class NotificationsService {
     if (!input.sendEmail) return publicNotification(created);
     let emailStatus: "SENT" | "FAILED" = "SENT";
     try { await this.mail.send({ to: recipient.email, subject: input.title, text: input.body }); }
-    catch { emailStatus = "FAILED"; }
+    catch (error) {
+      // A failed email must not roll back the saved notification; record why it failed.
+      emailStatus = "FAILED";
+      this.logger.warn(`Notification ${created.id} email failed: ${error instanceof Error ? error.message : "unknown error"}`);
+    }
     const updated = await this.prisma.notification.update({ where: { id: created.id }, data: { emailStatus } });
     return publicNotification(updated);
   }

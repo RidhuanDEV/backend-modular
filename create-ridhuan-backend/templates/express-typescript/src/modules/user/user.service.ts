@@ -66,10 +66,10 @@ export class UserService {
     user: JwtUserPayload,
     requestId?: string,
   ): Promise<UserResponseDto> {
-    userPolicy.canCreate(user);
-
+    const password = await bcrypt.hash(data.password, 12);
     const created = await prisma.$transaction(async (tx) => {
-      const record = await repository.create({ ...data, password: await bcrypt.hash(data.password, 12) }, tx);
+      await userPolicy.canCreate(user, data.roleId, tx);
+      const record = await repository.create({ ...data, password }, tx);
       await auditService.persist({
         action: AuditAction.CREATE,
         module: USER_MODULE,
@@ -98,7 +98,7 @@ export class UserService {
     const updated = await prisma.$transaction(async (tx) => {
       const existing = await repository.findById(id, tx);
       if (!existing) throw HttpError.notFound("User not found");
-      userPolicy.canUpdate(user, existing);
+      await userPolicy.canUpdate(user, existing, data.roleId, tx);
       const record = await repository.update(id, data, tx);
       if (!record) throw HttpError.notFound("User not found");
       await auditService.persist({

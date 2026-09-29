@@ -81,6 +81,30 @@ public sealed class RuntimeTests
         using var response = await client.GetAsync(path); var raw = await response.Content.ReadAsStringAsync(); Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, raw); using var json = JsonDocument.Parse(raw); return json.RootElement.Clone();
     }
     [TestMethod]
+    public async Task ManagersCannotGrantPrivilegesTheyDoNotHold()
+    {
+        var now = TimeProvider.System.GetUtcNow(); Guid managerRoleId, plainId; var allPermissionIds = new List<Guid>();
+        await using (var db = Db())
+        {
+            var permissions = await db.Permissions.Where(p => p.Name == "manage_users" || p.Name == "manage_roles" || p.Name == "manage_permissions").ToListAsync();
+            var managerRole = new Role { Name = "priv_manager", CreatedAt = now, UpdatedAt = now }; var plainRole = new Role { Name = "priv_plain", CreatedAt = now, UpdatedAt = now };
+            foreach (var p in permissions.Where(p => p.Name != "manage_permissions")) managerRole.Permissions.Add(new() { Role = managerRole, RoleId = managerRole.Id, Permission = p, PermissionId = p.Id });
+            var manager = new User { Email = "manager@example.test", PasswordHash = "", Role = managerRole, RoleId = managerRole.Id, CreatedAt = now, UpdatedAt = now }; manager.PasswordHash = new PasswordService().Hash(manager, "manager-password");
+            var plain = new User { Email = "plain@example.test", PasswordHash = "unused", Role = plainRole, RoleId = plainRole.Id, CreatedAt = now, UpdatedAt = now };
+            db.Roles.AddRange(managerRole, plainRole); db.Users.AddRange(manager, plain); await db.SaveChangesAsync();
+            managerRoleId = managerRole.Id; plainId = plain.Id; allPermissionIds.AddRange(permissions.Select(p => p.Id));
+        }
+        var login = await Send(HttpMethod.Post, "/api/auth/login", new { email = "manager@example.test", password = "manager-password" }, HttpStatusCode.OK);
+        client.DefaultRequestHeaders.Authorization = new("Bearer", login.GetProperty("data").GetProperty("accessToken").GetString());
+        await Send(HttpMethod.Patch, "/api/users/" + plainId, new { roleId = await AdminRoleIdAsync() }, HttpStatusCode.Forbidden);
+        await Send(HttpMethod.Post, "/api/users", new { email = "new-manager-user@example.test", password = "fixture-password", roleId = await AdminRoleIdAsync() }, HttpStatusCode.Forbidden);
+        await Send(HttpMethod.Delete, "/api/users/" + adminId, new { }, HttpStatusCode.Forbidden);
+        await Send(HttpMethod.Post, "/api/roles/" + managerRoleId + "/permissions", new { permissionIds = allPermissionIds }, HttpStatusCode.Forbidden);
+        await Send(HttpMethod.Patch, "/api/users/" + plainId, new { roleId = managerRoleId }, HttpStatusCode.OK);
+        await Send(HttpMethod.Delete, "/api/users/" + plainId, new { }, HttpStatusCode.NoContent);
+    }
+    private async Task<Guid> AdminRoleIdAsync() { await using var db = Db(); return await db.Roles.Where(r => r.Name == "admin").Select(r => r.Id).SingleAsync(); }
+    [TestMethod]
     public async Task NotificationsPersistStreamAndMarkRead()
     {
         var created = await Send(HttpMethod.Post, "/api/notifications",

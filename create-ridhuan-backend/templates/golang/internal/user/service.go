@@ -93,6 +93,9 @@ func (s *Service) Create(ctx context.Context, p audit.Policy, actor *audit.Actor
 		return model.User{}, fault.DB(err)
 	}
 	out, err := audit.Mutate(ctx, s.Audit, p, actor, "CREATE", func(q *sqlc.Queries) (model.User, audit.Change, error) {
+		if err := role.RoleWithinActor(ctx, q, actor, b.RoleID); err != nil {
+			return model.User{}, audit.Change{}, err
+		}
 		row, err := q.CreateUser(ctx, sqlc.CreateUserParams{Lower: b.Email, Password: string(hash), RoleID: b.RoleID})
 		if err != nil {
 			return model.User{}, audit.Change{}, fault.DB(err)
@@ -128,6 +131,14 @@ func (s *Service) Update(ctx context.Context, p audit.Policy, actor *audit.Actor
 		if err != nil {
 			return model.User{}, audit.Change{}, fault.DB(err)
 		}
+		if err = role.RoleWithinActor(ctx, q, actor, old.RoleID); err != nil {
+			return model.User{}, audit.Change{}, err
+		}
+		if b.RoleID != nil {
+			if err = role.RoleWithinActor(ctx, q, actor, *b.RoleID); err != nil {
+				return model.User{}, audit.Change{}, err
+			}
+		}
 		var email pgtype.Text
 		if b.Email != nil {
 			email = pgtype.Text{String: *b.Email, Valid: true}
@@ -153,20 +164,12 @@ func (s *Service) Delete(ctx context.Context, p audit.Policy, actor *audit.Actor
 		return fault.New(fault.Forbidden, "You cannot delete your own account.")
 	}
 	_, err := audit.Mutate(ctx, s.Audit, p, actor, "DELETE", func(q *sqlc.Queries) (struct{}, audit.Change, error) {
-		current, err := q.LockUser(ctx, actor.ID)
-		if err != nil {
-			return struct{}{}, audit.Change{}, fault.DB(err)
-		}
-		r, err := q.FindRole(ctx, current.RoleID)
-		if err != nil {
-			return struct{}{}, audit.Change{}, fault.DB(err)
-		}
-		if r.Name != "admin" {
-			return struct{}{}, audit.Change{}, fault.New(fault.Forbidden, "Only administrators are allowed to delete user accounts.")
-		}
 		row, err := q.LockUser(ctx, id)
 		if err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)
+		}
+		if err = role.RoleWithinActor(ctx, q, actor, row.RoleID); err != nil {
+			return struct{}{}, audit.Change{}, err
 		}
 		if err = q.SoftDeleteUser(ctx, id); err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)

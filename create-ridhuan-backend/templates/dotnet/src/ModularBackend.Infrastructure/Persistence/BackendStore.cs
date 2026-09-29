@@ -34,6 +34,7 @@ public sealed class BackendStore(BackendDbContext db) : IBackendStore
     public Task<bool> IsFileReferencedAsync(string objectKey, CancellationToken ct) => db.StoredFiles.AnyAsync(f => f.ObjectKey == objectKey, ct);
     public Task<RefreshToken?> RefreshTokenAsync(string tokenHash, CancellationToken ct) => db.RefreshTokens.SingleOrDefaultAsync(x => x.TokenHash == tokenHash, ct);
     public async Task RevokeRefreshFamilyAsync(Guid familyId, DateTimeOffset revokedAt, CancellationToken ct) => _ = await db.RefreshTokens.Where(x => x.FamilyId == familyId && x.RevokedAt == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, revokedAt), ct);
+    public async Task DeleteExpiredRefreshTokensAsync(Guid userId, DateTimeOffset now, CancellationToken ct) => _ = await db.RefreshTokens.Where(x => x.UserId == userId && x.ExpiresAt < now).ExecuteDeleteAsync(ct);
     public void AddUser(User user) => db.Users.Add(user);
     public void AddRole(Role role) => db.Roles.Add(role);
     public void AddPermission(Permission permission) => db.Permissions.Add(permission);

@@ -48,6 +48,10 @@ func main() {
 		if len(entry.password) < 6 {
 			log.Fatal("bootstrap password must contain at least six characters")
 		}
+		// Template placeholders are public; never let them become a production login.
+		if os.Getenv("NODE_ENV") == "production" && (len(entry.password) < 12 || strings.Contains(strings.ToLower(entry.password), "replace")) {
+			log.Fatal("bootstrap passwords must be generated values of at least 12 characters in production")
+		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(entry.password), 12)
 		if err != nil {
 			log.Fatal(err)

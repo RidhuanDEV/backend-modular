@@ -8,6 +8,13 @@ const cli = resolve(root, "dist/bin/index.js");
 
 console.log("Running CLI verification tests...");
 
+// A scaffolded .env must never keep a public template credential.
+function assertNoPlaceholderSecrets(name, env) {
+  const leaked = env.split(/\r?\n/).filter((line) =>
+    /^[A-Za-z_]+=.*(replace_|change_this|CHANGE_ME)/.test(line) || /^S3_SECRET_ACCESS_KEY=minioadmin$/.test(line));
+  if (leaked.length > 0) throw new Error(`${name} .env keeps placeholder secrets: ${leaked.map((l) => l.split("=")[0]).join(", ")}`);
+}
+
 const scratch = await mkdtemp(join(tmpdir(), "ridhuan-backend-test-"));
 
 try {
@@ -25,6 +32,7 @@ try {
   if (tsPkg.name !== "test-ts-api" || tsPkg.private !== true || !tsEnv.includes("APP_PORT=3000")) {
     throw new Error("Express TS scaffold validation failed");
   }
+  assertNoPlaceholderSecrets("Express TS", tsEnv);
   console.log("✔ Express TypeScript scaffold verified");
 
   // Test 2: Golang
@@ -49,6 +57,7 @@ try {
       !goInitializer.includes("package main")) {
     throw new Error("Golang scaffold validation failed");
   }
+  assertNoPlaceholderSecrets("Golang", goEnv);
   console.log("✔ Golang scaffold verified");
 
   // Test 3: .NET
@@ -65,6 +74,7 @@ try {
   if (!netSln.includes("TestNetApi") || !netEnv.includes("Database=testnetapi;")) {
     throw new Error(".NET scaffold validation failed");
   }
+  assertNoPlaceholderSecrets(".NET", netEnv);
   console.log("✔ .NET scaffold verified");
 
   // Test 4: NestJS
@@ -89,6 +99,7 @@ try {
   if ((await readdir(nestProject)).includes("node_modules") || (await readdir(join(nestProject, "src"))).includes("generated")) {
     throw new Error("NestJS scaffold includes generated dependencies or Prisma client");
   }
+  assertNoPlaceholderSecrets("NestJS", nestEnv);
   console.log("✔ NestJS scaffold verified");
 
   // Test 5: Overwrite protection

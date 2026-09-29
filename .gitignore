@@ -24,8 +24,9 @@ TestResults/
 **/TestResults/
 artifacts/
 **/artifacts/
-uploads/
-**/uploads/
+# Runtime upload folders only; source modules named "uploads" must stay tracked.
+/*/uploads/
+/create-ridhuan-backend/templates/*/uploads/
 .refresh-publish/
 **/.refresh-publish/
 nestjs-prototype-snapshot-*.zip
