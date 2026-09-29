@@ -32,6 +32,17 @@ type AuthRefreshToken struct {
 	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
 }
 
+type Notification struct {
+	ID          string             `json:"id"`
+	RecipientID string             `json:"recipient_id"`
+	ActorID     *string            `json:"actor_id"`
+	Title       string             `json:"title"`
+	Body        string             `json:"body"`
+	EmailStatus string             `json:"email_status"`
+	ReadAt      pgtype.Timestamptz `json:"read_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type Permission struct {
 	ID        string             `json:"id"`
 	Name      string             `json:"name"`
