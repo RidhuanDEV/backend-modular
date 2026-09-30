@@ -88,3 +88,7 @@ Build/tes lokal ini membuktikan setup dan kontrak yang diperiksa. Pengujian CI r
 | ASP.NET Core | `31b1d937905f5ea70f04140726e92a05181e5446` |
 
 Hash setiap commit framework diverifikasi terhadap remote `refs/heads/main`.
+
+## Follow-up release
+
+See [CI fixes and CLI 1.3.0](CLI-CI-FIX-1.3.0.md) for the subsequent framework CI failures, fixes, verification and updated publish command. The 1.2.0 evidence above records the initial hardening release.

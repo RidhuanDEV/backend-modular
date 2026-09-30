@@ -3,7 +3,7 @@
   "id": "golang",
   "source": {
     "repository": "https://github.com/RidhuanDEV/golang-backend.git",
-    "commit": "2fdb3ca0d4b908ea978f20e5b6de9b8625ef9a87",
+    "commit": "f628ab3f00b577c526b4821dffb0e4df7d728ff2",
     "dirty": false
   },
   "requirements": {
@@ -12,7 +12,7 @@
   "identity": "github.com/RidhuanDEV/golang-backend",
   "files": {
     ".dockerignore": "b741c6add9eedafca019d9a59df8b47fe83c9eaaa9357da876ccecd8371a2d67",
-    ".env.example": "95ee82a446f0a06012f42ee455a7ceecb893c52f3246b33bdfdeb0a601a736c6",
+    ".env.example": "92f4ebf85b94507f3244efe9d1ffdc5fae389092a1b7d8017f7f89a342db3574",
     ".gitattributes": "a0a7d068fd4921bf72c55eefa51e5b5866ed0437f409a338431ae6f2adcadfa1",
     "CHANGELOG.md": "8f9e83e077deed14b0a947167f175d671b16522308a13d024413bd856e400863",
     "cmd/api/main.go": "34829bc1f2e00a8b9bea8ad74cbdb6f1e0bac29be08ce5a9d7cf80632bc531b5",

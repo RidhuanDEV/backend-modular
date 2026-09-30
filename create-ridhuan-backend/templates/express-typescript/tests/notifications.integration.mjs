@@ -14,9 +14,10 @@ test("notifications persist, authorize recipient, stream and mark read", { skip:
   const adminRole = await prisma.role.create({ data: { name: `notify_admin_${suffix}` } });
   const userRole = await prisma.role.create({ data: { name: `notify_user_${suffix}` } });
   const userManagerRole = await prisma.role.create({ data: { name: `notify_user_manager_${suffix}` } });
-  const permission = await prisma.permission.upsert({ where: { name: "manage_notifications" }, update: {}, create: { name: "manage_notifications" } });
+  await prisma.permission.createMany({ data: [{ name: "manage_notifications" }, { name: "manage_users" }], skipDuplicates: true });
+  const permission = await prisma.permission.findUniqueOrThrow({ where: { name: "manage_notifications" } });
   await prisma.rolePermission.create({ data: { roleId: adminRole.id, permissionId: permission.id } });
-  const userPermission = await prisma.permission.upsert({ where: { name: "manage_users" }, update: {}, create: { name: "manage_users" } });
+  const userPermission = await prisma.permission.findUniqueOrThrow({ where: { name: "manage_users" } });
   await prisma.rolePermission.create({ data: { roleId: userManagerRole.id, permissionId: userPermission.id } });
   const admin = await prisma.user.create({ data: { email: `admin_${suffix}@example.test`, password: "unused", roleId: adminRole.id } });
   const recipient = await prisma.user.create({ data: { email: `recipient_${suffix}@example.test`, password: "unused", roleId: userRole.id } });

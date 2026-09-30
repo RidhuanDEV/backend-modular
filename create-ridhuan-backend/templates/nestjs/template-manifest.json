@@ -3,7 +3,7 @@
   "id": "nestjs",
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-nestjs.git",
-    "commit": "84c787a25432e6cecc05dcc2015ff93a447f0c5e",
+    "commit": "8bc3d09080ed631789dc5e26ae06536cd6b7ddc5",
     "dirty": false
   },
   "requirements": {

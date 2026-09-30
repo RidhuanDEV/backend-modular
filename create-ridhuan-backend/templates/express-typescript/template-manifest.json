@@ -3,7 +3,7 @@
   "id": "express-typescript",
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre.git",
-    "commit": "47754a699ab1147ed807971923546641a6e60aa5",
+    "commit": "afff779f7ce45ee5fa8fb1e2f8c73a4d6e7abebb",
     "dirty": false
   },
   "requirements": {
@@ -116,8 +116,8 @@
     "tests/env-policies.test.mjs": "7cf52451ad41d3a822c13292ea98e6b62828732c4c0decce02236b4bda6c2a8b",
     "tests/health-cors.test.mjs": "6ad51fbb2d4d8448f3e354f168ba5db433b337f970310e51678ecc92420f64af",
     "tests/input-errors.test.mjs": "1c83430472c9664380941ba52649ebd9fd947edcf8d645a91eac9c8dac935ec3",
-    "tests/notifications.integration.mjs": "1532f75bc63b890aaa33bafa55c18b6fc21204627c7c767c333c0e3c327bfaea",
-    "tests/privilege.integration.mjs": "8ffb9a5629d5dfe21c636d3580e3601551ab90c0cb2fe6d7fca7657e9160312e",
+    "tests/notifications.integration.mjs": "f1e18847692d2b7e17544347d50d24c9fdc3ce273d44dda6c9b529cc6427fa0b",
+    "tests/privilege.integration.mjs": "d13f0fa09f3f6af2bcaf8de72a5e0dbcfaf5135039f848170f433c66a2b0c072",
     "tests/rate-limit.test.mjs": "acef48ab0a2a4b27fe16f44dfcfd48e119e228c3d594ab6c7a5d56325811d499",
     "tests/storage.test.mjs": "2899891af2282c1430f9b4b9917632159a6bda5b119b131a5f77aa7c4a82629f",
     "tests/time-docs-audit.test.mjs": "c5c086b139b7305be3fb27a9b295f58edf47426767dc0be2b7bfc95fca753147",

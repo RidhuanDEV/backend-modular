@@ -11,8 +11,9 @@ test("user and role managers cannot grant privileges they do not hold", { skip: 
   const { signToken } = await import("../dist/core/auth/jwt.service.js");
   const suffix = randomUUID();
   const permissionNames = ["manage_users", "manage_roles", "manage_permissions"];
+  await prisma.permission.createMany({ data: permissionNames.map((name) => ({ name })), skipDuplicates: true });
   const permissions = await Promise.all(permissionNames.map((name) =>
-    prisma.permission.upsert({ where: { name }, update: {}, create: { name } })));
+    prisma.permission.findUniqueOrThrow({ where: { name } })));
   const [manageUsers, manageRoles, managePermissions] = permissions;
   const superRole = await prisma.role.create({ data: { name: `priv_super_${suffix}` } });
   const managerRole = await prisma.role.create({ data: { name: `priv_manager_${suffix}` } });
