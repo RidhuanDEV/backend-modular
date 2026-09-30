@@ -24,7 +24,9 @@
     "test:database": "tsc -p tsconfig.test.json && node --test dist-test/integration/template.integration.js",
     "test:redis": "tsc -p tsconfig.test.json && node --test dist-test/integration/redis.integration.js",
     "test:s3": "tsc -p tsconfig.test.json && node --test dist-test/integration/s3.integration.js",
-    "verify:template": "npm run build && npm run typecheck && npm run prisma:validate && npm run verify:contract && npm test"
+    "verify:template": "npm run build && npm run typecheck && npm run prisma:validate && npm run verify:contract && npm test",
+    "prestart:dev": "prisma generate",
+    "pretypecheck": "prisma generate"
   },
   "engines": {
     "node": ">=24.15 <27"

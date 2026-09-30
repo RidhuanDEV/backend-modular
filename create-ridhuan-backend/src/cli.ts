@@ -1,362 +1,123 @@
-import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { existsSync, readdirSync, lstatSync, realpathSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
+import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { verifyPostgresConnection, type PostgresCheckResult } from "./prompts/db-check.js";
+import { isIP } from "node:net";
+import passwordPrompt from "@inquirer/password";
+import { parseCliArgs, parsePort, validateProjectName, validateGoModule, helpText } from "./arguments.js";
 import { selectPrompt } from "./prompts/select.js";
 import { textPrompt } from "./prompts/text.js";
-import { colors, symbols } from "./prompts/terminal-theme.js";
+import { verifyPostgresConnection } from "./prompts/db-check.js";
 import { scaffoldExpress } from "./scaffold/express.js";
+import { scaffoldNestjs } from "./scaffold/nestjs.js";
 import { scaffoldGolang } from "./scaffold/golang.js";
 import { scaffoldDotnet } from "./scaffold/dotnet.js";
-import { scaffoldNestjs } from "./scaffold/nestjs.js";
-import type {
-  CliArguments,
-  PromptOption,
-  ProjectAnswers,
-  ScaffoldResult,
-  TemplateId,
-  UploadStorageType,
-} from "./types.js";
+import { objectRecord, readManifest, templateRegistry } from "./templates.js";
+import { command, preflight, installDependencies } from "./process.js";
+import { gettingStarted, nextSteps } from "./instructions.js";
+import { serializeEnvValue } from "./scaffold/env.js";
+import type { ProjectAnswers, SetupMode, UploadStorageType, TemplateId } from "./types.js";
 
-const templateOptions: readonly PromptOption<TemplateId>[] = [
-  {
-    label: "Express TypeScript",
-    value: "express-typescript",
-    hint: "Prisma, Zod, JWT, RBAC, PostgreSQL",
-    activeColor: colors.tsColor,
-    inactiveColor: colors.tsDim,
-  },
-  {
-    label: "NestJS",
-    value: "nestjs",
-    hint: "NestJS, Prisma, class-validator, JWT, PostgreSQL",
-    activeColor: colors.tsColor,
-    inactiveColor: colors.tsDim,
-  },
-  {
-    label: "Golang",
-    value: "golang",
-    hint: "Chi, Huma, sqlc, JWT, PostgreSQL",
-    activeColor: colors.goColor,
-    inactiveColor: colors.goDim,
-  },
-  {
-    label: ".NET 10",
-    value: "dotnet",
-    hint: "ASP.NET Core, EF Core / Npgsql, JWT, PostgreSQL",
-    activeColor: colors.dotnetColor,
-    inactiveColor: colors.dotnetDim,
-  },
-];
-
-function parseCliArgs(args: readonly string[]): CliArguments {
-  let projectName: string | undefined = undefined;
-  let template: TemplateId | undefined = undefined;
-  let yes: boolean = false;
-  let noInstall: boolean = false;
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === undefined) {
-      continue;
-    }
-
-    if (arg === "--yes" || arg === "-y") {
-      yes = true;
-    } else if (arg === "--no-install") {
-      noInstall = true;
-    } else if (arg === "--template" || arg === "-t") {
-      const next = args[i + 1];
-      if (next === "express-typescript" || next === "express" || next === "ts") {
-        template = "express-typescript";
-        i++;
-      } else if (next === "golang" || next === "go") {
-        template = "golang";
-        i++;
-      } else if (next === "dotnet" || next === "net" || next === "csharp") {
-        template = "dotnet";
-        i++;
-      } else if (next === "nestjs" || next === "nest") {
-        template = "nestjs";
-        i++;
-      }
-    } else if (!arg.startsWith("-") && projectName === undefined) {
-      projectName = arg;
-    }
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+async function secret(label: string, supplied: string | undefined, auto: boolean): Promise<string> {
+  if (supplied !== undefined) return supplied;
+  if (auto) return randomBytes(24).toString("base64url");
+  const entered = await passwordPrompt({ message: `${label} (empty generates a new secret)`, mask: "*" });
+  return entered || randomBytes(24).toString("base64url");
+}
+function emptyTarget(target: string): void {
+  if (existsSync(target) && lstatSync(target).isSymbolicLink()) throw new Error("Project target must not be a symlink or junction");
+  if (existsSync(target) && (!lstatSync(target).isDirectory() || readdirSync(target).length > 0)) throw new Error(`Target must be an empty directory: ${target}`);
+}
+function validateAnswers(answers: ProjectAnswers): void {
+  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(answers.dbName) || !/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(answers.dbUser)) throw new Error("Database name/user must be SQL identifiers (maximum 63 characters)");
+  if (!isIP(answers.dbHost) && !/^(?=.{1,253}$)[A-Za-z0-9]+(?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/.test(answers.dbHost)) throw new Error("Invalid database host");
+  for (const endpoint of [answers.s3Endpoint, answers.s3DockerEndpoint]) {
+    const url = new URL(endpoint);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) throw new Error("S3 endpoint must be an HTTP(S) URL without credentials");
   }
-
-  return {
-    projectName,
-    template,
-    yes,
-    noInstall,
-  };
-}
-
-function resolveTemplatesRoot(): string {
-  const currentFile = fileURLToPath(import.meta.url);
-  const currentDir = resolve(currentFile, "..");
-  return resolve(currentDir, "../templates");
-}
-
-function sanitizeProjectName(value: string, template: TemplateId): string {
-  if (template === "dotnet") {
-    const cleaned = value.replace(/[^A-Za-z0-9._-]/g, "");
-    return cleaned.length > 0 ? cleaned : "MyBackend";
-  }
-  const normalized = value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^[-._]+|[-._]+$/g, "");
-  return normalized.length > 0 ? normalized : "my-backend";
-}
-
-function sanitizeDbIdentifier(value: string): string {
-  const cleaned = value.toLowerCase().replace(/[^a-z0-9_]/g, "_");
-  return cleaned.length > 0 ? cleaned : "backend_db";
-}
-
-function verifyEmptyDirectory(targetPath: string): void {
-  if (existsSync(targetPath)) {
-    const files = readdirSync(targetPath);
-    if (files.length > 0) {
-      throw new Error(`Target directory is not empty: ${targetPath}`);
-    }
-  }
-}
-
-function tryGitInit(targetDir: string): void {
-  try {
-    const res = spawnSync("git", ["init"], {
-      cwd: targetDir,
-      stdio: "ignore",
-      shell: process.platform === "win32",
-    });
-    if (res.status === 0) {
-      process.stdout.write(
-        `\n${colors.brightGreen}${symbols.check}${colors.reset} Initialized Git repository\n`,
-      );
-    }
-  } catch {
-    // Gracefully pass if git is not installed or fails
-  }
-}
-
-function installDependencies(targetDir: string, template: TemplateId): void {
-  const command = template === "golang" ? "go" : template === "dotnet" ? "dotnet" : "npm";
-  const args = template === "golang" ? ["mod", "download"] : template === "dotnet" ? ["restore"] : ["ci"];
-  process.stdout.write(`\n${colors.cyan}${symbols.info}${colors.reset} Installing dependencies...\n`);
-  const result = spawnSync(command, args, { cwd: targetDir, stdio: "inherit", shell: process.platform === "win32" });
-  if (result.error || result.status !== 0) {
-    throw new Error(`${command} ${args.join(" ")} failed in ${targetDir}. Project files were created; install dependencies manually.`);
-  }
+  if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(answers.s3Bucket)) throw new Error("Invalid S3 bucket name");
+  if (!answers.dbPassword || (answers.uploadStorage === "s3" && (!answers.s3AccessKey || !answers.s3SecretKey || !answers.s3Region))) throw new Error("Database password and enabled S3 credentials must not be empty");
+  for (const value of Object.values(answers)) if (typeof value === "string") serializeEnvValue(value);
+  if (answers.goModulePath) validateGoModule(answers.goModulePath);
 }
 
 export async function runCli(): Promise<void> {
-  process.stdout.write(
-    `\n${colors.brightCyan}${colors.bold}create-ridhuan-backend${colors.reset} ${colors.dim}v1.1.1${colors.reset}\n`,
-  );
-  process.stdout.write(`${colors.gray}Modular backend starter generator${colors.reset}\n\n`);
-
-  const cliArgs = parseCliArgs(process.argv.slice(2));
-
-  let chosenTemplate: TemplateId;
-  if (cliArgs.template !== undefined) {
-    chosenTemplate = cliArgs.template;
-    process.stdout.write(
-      `${colors.green}${symbols.check}${colors.reset} ${colors.bold}Template:${colors.reset} ${colors.brightCyan}${chosenTemplate}${colors.reset}\n`,
-    );
-  } else {
-    chosenTemplate = await selectPrompt<TemplateId>(
-      "Select a backend framework / template:",
-      templateOptions,
-      0,
-    );
-  }
-
-  const defaultDir = cliArgs.projectName !== undefined ? cliArgs.projectName : chosenTemplate === "dotnet" ? "MyBackend" : "my-backend";
-  const rawProjectName = await textPrompt("Project name", defaultDir, cliArgs.yes);
-  const projectName = sanitizeProjectName(rawProjectName, chosenTemplate);
-  const targetDirectory = resolve(process.cwd(), projectName);
-
-  verifyEmptyDirectory(targetDirectory);
-
-  let defaultPort: number = 3000;
-  if (chosenTemplate === "dotnet") {
-    defaultPort = 5080;
-  }
-
-  const portStr = await textPrompt("HTTP Port", String(defaultPort), cliArgs.yes);
-  const appPort = Number.parseInt(portStr, 10) || defaultPort;
-
-  const defaultDb = sanitizeDbIdentifier(projectName);
-  const dbName = await textPrompt("PostgreSQL database name", defaultDb, cliArgs.yes);
-  let dbUser = await textPrompt(
-    "PostgreSQL username (PostgreSQL default: 'postgres', bukan 'root')",
-    "postgres",
-    cliArgs.yes,
-  );
-  let dbPassword = await textPrompt("PostgreSQL password", "postgres", cliArgs.yes);
-
-  if (!cliArgs.yes && process.stdin.isTTY) {
-    let checkPassed = false;
-    while (!checkPassed) {
-      process.stdout.write(
-        `\n${colors.cyan}${symbols.info}${colors.reset} Checking PostgreSQL connection at localhost:5432 for user '${dbUser}'...\n`,
-      );
-      const check: PostgresCheckResult = await verifyPostgresConnection(
-        "localhost",
-        5432,
-        dbUser,
-        dbName,
-      );
-
-      if (check.reachable && check.roleExists) {
-        process.stdout.write(
-          `${colors.brightGreen}${symbols.check}${colors.reset} PostgreSQL reachable and user '${dbUser}' recognized!\n`,
-        );
-        checkPassed = true;
-      } else {
-        if (!check.reachable) {
-          process.stdout.write(
-            `${colors.yellow}${symbols.cross} PostgreSQL server tidak aktif di localhost:5432 (${check.message})${colors.reset}\n`,
-          );
-        } else if (!check.roleExists) {
-          process.stdout.write(
-            `${colors.red}${symbols.cross} ${check.message}${colors.reset}\n`,
-          );
-        }
-
-        const proceedChoice = await selectPrompt<string>(
-          "Bagaimana Anda ingin melanjutkan?",
-          [
-            {
-              label: "Ketik ulang username & password yang benar",
-              value: "retry",
-              hint: "Direkomendasikan (gunakan 'postgres')",
-            },
-            {
-              label: "Tetap lanjutkan dengan kredensial ini",
-              value: "ignore",
-              hint: "Saya akan setup user & database secara manual nanti",
-            },
-          ],
-          0,
-        );
-
-        if (proceedChoice === "retry") {
-          dbUser = await textPrompt(
-            "PostgreSQL username (default: 'postgres', bukan 'root')",
-            "postgres",
-            false,
-          );
-          dbPassword = await textPrompt("PostgreSQL password", "", false);
-        } else {
-          checkPassed = true;
-        }
-      }
-    }
-  }
-
-  const redisOptions: readonly PromptOption<boolean>[] = [
-    { label: "No", value: false, hint: "In-memory rate limiting and no cache" },
-    { label: "Yes", value: true, hint: "Redis cache & distributed rate limit" },
-  ];
-
-  let enableRedis: boolean = false;
-  if (cliArgs.yes) {
-    enableRedis = false;
-  } else {
-    enableRedis = await selectPrompt<boolean>(
-      "Enable Redis cache and distributed rate limiting?",
-      redisOptions,
-      0,
-    );
-  }
-
-  const storageOptions: readonly PromptOption<UploadStorageType>[] = [
-    { label: "Local filesystem", value: "local", hint: "Store uploads on disk" },
-    { label: "S3 / MinIO", value: "s3", hint: "Store uploads in S3-compatible bucket" },
-  ];
-
-  let uploadStorage: UploadStorageType = "local";
-  if (cliArgs.yes) {
-    uploadStorage = "local";
-  } else {
-    uploadStorage = await selectPrompt<UploadStorageType>(
-      "Upload storage provider:",
-      storageOptions,
-      0,
-    );
-  }
-
-  let goModulePath: string | undefined = undefined;
-  if (chosenTemplate === "golang") {
-    goModulePath = await textPrompt(
-      "Go module path",
-      `example.com/${projectName}`,
-      cliArgs.yes,
-    );
-  }
-
+  const args = parseCliArgs(process.argv.slice(2));
+  const metadata: unknown = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+  const version = objectRecord(metadata, "package metadata").version;
+  if (typeof version !== "string") throw new Error("Missing CLI version");
+  if (args.help) { process.stdout.write(helpText); return; }
+  if (args.version) { process.stdout.write(`${version}\n`); return; }
+  const automatic = args.yes || !process.stdin.isTTY;
+  process.stdout.write(`\ncreate-ridhuan-backend v${version}\n\n`);
+  const template: TemplateId = args.template ?? (automatic ? "express-typescript" : await selectPrompt("Backend framework", Object.values(templateRegistry).map((item) => ({ label: item.label, value: item.id, hint: item.hint }))));
+  const descriptor = templateRegistry[template];
+  const source = join(root, "templates", template);
+  const manifest = await readManifest(source, template);
+  const mode: SetupMode = args.mode ?? (automatic ? "manual" : await selectPrompt<SetupMode>("Setup mode", [
+    { label: "Manual", value: "manual", hint: "Install dependencies using host tools" },
+    { label: "Docker", value: "docker", hint: "Build and run with Compose" },
+  ]));
+  const projectName = args.projectName ?? await textPrompt("Project folder", template === "dotnet" ? "MyBackend" : "my-backend", automatic);
+  validateProjectName(projectName);
+  const targetDirectory = resolve(realpathSync(process.cwd()), projectName);
+  emptyTarget(targetDirectory);
+  const appPort = args.port ?? parsePort(await textPrompt("HTTP port", String(descriptor.defaultPort), automatic), "HTTP port");
+  const dbHost = args.dbHost ?? await textPrompt("PostgreSQL host for manual startup", "127.0.0.1", automatic);
+  const dbPort = args.dbPort ?? parsePort(await textPrompt("PostgreSQL host port", String(descriptor.dbPort), automatic), "Database port");
+  const slug = projectName.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/-+$/, "");
+  const dbDefault = slug.replace(/-/g, "_");
+  const dbName = args.dbName ?? await textPrompt("PostgreSQL database", /^\d/.test(dbDefault) ? `app_${dbDefault}` : dbDefault, automatic);
+  const dbUser = args.dbUser ?? await textPrompt("PostgreSQL username", "postgres", automatic);
+  const dbPassword = await secret("PostgreSQL password", process.env.RIDHUAN_DB_PASSWORD, automatic);
+  const enableRedis = args.redis ?? (automatic ? false : await selectPrompt<boolean>("Redis cache and shared rate limiter", [
+    { label: "Disabled", value: false }, { label: "Enabled", value: true },
+  ]));
+  const uploadStorage: UploadStorageType = args.storage ?? (automatic ? "local" : await selectPrompt<UploadStorageType>("Upload storage", [
+    { label: "Local files", value: "local" }, { label: "S3 compatible", value: "s3" },
+  ]));
+  const s3Endpoint = args.s3Endpoint ?? (uploadStorage === "s3" ? await textPrompt("S3 endpoint for manual startup", `http://127.0.0.1:${descriptor.storagePort}`, automatic) : `http://127.0.0.1:${descriptor.storagePort}`);
+  const selectedS3 = new URL(s3Endpoint);
+  const isDefaultFixture = selectedS3.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(selectedS3.hostname) &&
+    selectedS3.port === String(descriptor.storagePort) && selectedS3.pathname === "/" && !selectedS3.search && !selectedS3.hash;
+  const s3DockerDefault = isDefaultFixture ? `http://${descriptor.storageHost}` : s3Endpoint;
+  const s3DockerEndpoint = args.s3DockerEndpoint ?? await textPrompt("S3 endpoint inside Compose", s3DockerDefault, automatic || uploadStorage !== "s3");
+  const namespaceParts = projectName.split(/[.-]/).map((part) => part.charAt(0).toUpperCase() + part.slice(1));
+  const namespace = namespaceParts.join("");
   const answers: ProjectAnswers = {
-    targetDirectory,
-    projectName,
-    templateId: chosenTemplate,
-    appPort,
-    dbName,
-    dbUser,
-    dbPassword,
-    enableRedis,
-    uploadStorage,
-    s3Endpoint: "http://localhost:9000",
-    s3DockerEndpoint: "http://minio:9000",
-    s3Region: "us-east-1",
-    s3Bucket: "uploads",
-    s3AccessKey: "minioadmin",
-    s3SecretKey: "",
-    goModulePath,
+    targetDirectory, projectName, packageName: slug, namespace: /^\d/.test(namespace) ? `App${namespace}` : namespace,
+    deploymentName: `${slug.slice(0, 48)}-${randomBytes(4).toString("hex")}`, templateId: template, mode, appPort,
+    dbHost, dbPort, dbName, dbUser, dbPassword, enableRedis, uploadStorage, s3Endpoint, s3DockerEndpoint,
+    s3Region: args.s3Region ?? await textPrompt("S3 region", "us-east-1", automatic || uploadStorage !== "s3"),
+    s3Bucket: args.s3Bucket ?? await textPrompt("S3 bucket", "uploads", automatic || uploadStorage !== "s3"),
+    s3AccessKey: args.s3AccessKey ?? await textPrompt("S3 access key", "development", automatic || uploadStorage !== "s3"),
+    s3SecretKey: await secret("S3 secret key", process.env.RIDHUAN_S3_SECRET_KEY, automatic || uploadStorage !== "s3"),
+    ...(template === "golang" ? { goModulePath: args.goModule ?? await textPrompt("Go module path", `example.com/${slug}`, automatic) } : {}),
   };
-
-  const templatesRoot = resolveTemplatesRoot();
-  const sourceTemplateDir = join(templatesRoot, chosenTemplate);
-
-  process.stdout.write(
-    `\n${colors.brightCyan}${symbols.info}${colors.reset} Scaffolding ${colors.bold}${projectName}${colors.reset} from ${colors.cyan}${chosenTemplate}${colors.reset}...\n`,
-  );
-
-  let result: ScaffoldResult;
-  if (chosenTemplate === "express-typescript") {
-    result = await scaffoldExpress(sourceTemplateDir, answers);
-  } else if (chosenTemplate === "golang") {
-    result = await scaffoldGolang(sourceTemplateDir, answers);
-  } else if (chosenTemplate === "dotnet") {
-    result = await scaffoldDotnet(sourceTemplateDir, answers);
-  } else {
-    result = await scaffoldNestjs(sourceTemplateDir, answers);
-  }
-
-  if (!cliArgs.noInstall) installDependencies(targetDirectory, chosenTemplate);
-
-  tryGitInit(targetDirectory);
-
-  process.stdout.write(
-    `\n${colors.brightGreen}${symbols.check}${colors.reset} ${colors.bold}Successfully created ${projectName}!${colors.reset}\n\n`,
-  );
-  process.stdout.write(`${colors.bold}Next steps:${colors.reset}\n`);
-
-  for (const [index, step] of result.instructions.entries()) {
-    process.stdout.write(`  ${colors.brightCyan}${step}${colors.reset}\n`);
-    if (index === 0 && cliArgs.noInstall && chosenTemplate === "nestjs") {
-      process.stdout.write(`  ${colors.brightCyan}npm ci${colors.reset}\n`);
+  validateAnswers(answers);
+  if (template !== "golang" && args.goModule !== undefined) throw new Error("--go-module is only valid for Go");
+  if (!args.noInstall) preflight(answers, manifest);
+  if (!automatic && mode === "manual") {
+    const check = await verifyPostgresConnection(dbHost, dbPort, dbUser, dbPassword, dbName);
+    process.stdout.write(`${check.message}\n`);
+    if (check.status !== "connected") {
+      const proceed = await selectPrompt<boolean>("Database is not ready", [
+        { label: "Generate files; configure database before migration", value: true }, { label: "Cancel setup", value: false },
+      ]);
+      if (!proceed) throw new Error("Setup cancelled before creating files");
     }
   }
-
-  process.stdout.write("\n");
-  if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
-    process.stdin.setRawMode(false);
-  }
-  process.stdin.pause();
+  process.stdout.write(`Creating ${projectName}; package ${answers.packageName}; namespace ${answers.namespace}\n`);
+  const scaffold = { "express-typescript": scaffoldExpress, nestjs: scaffoldNestjs, golang: scaffoldGolang, dotnet: scaffoldDotnet }[template];
+  emptyTarget(targetDirectory);
+  await scaffold(source, answers);
+  await writeFile(join(targetDirectory, "GETTING-STARTED.md"), gettingStarted(answers, manifest));
+  const readmePath = join(targetDirectory, "README.md");
+  await writeFile(readmePath, `> Generated project **${projectName}**: start with [GETTING-STARTED.md](GETTING-STARTED.md). API http://localhost:${appPort}.\n\n${await readFile(readmePath, "utf8")}`);
+  // Ignore materialization and secret creation precede Git, including when installation fails.
+  command("git", ["init"], targetDirectory);
+  if (!args.noInstall) installDependencies(answers);
+  process.stdout.write(`\nCreated ${projectName}. Next steps:\n${nextSteps(answers, args.noInstall).join("\n")}\n`);
 }

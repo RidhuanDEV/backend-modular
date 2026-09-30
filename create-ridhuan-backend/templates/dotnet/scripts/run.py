@@ -1,4 +1,5 @@
 """Cross-platform .env process loader; no shell evaluation or secret output."""
+import json
 import os
 import re
 import subprocess
@@ -18,7 +19,12 @@ if path.exists():
         if name.upper() in {'HOME', 'CODEX_HOME', 'PATH', 'COMSPEC', 'PSMODULEPATH'}:
             raise ValueError('Reserved environment name')
         if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            quote = value[0]
             value = value[1:-1]
-        environment[name] = value
+            if quote == "'":
+                value = value.replace("\\'", "'")
+            else:
+                value = json.loads('"' + value.replace("\\$", "$") + '"')
+        environment.setdefault(name, value)
 arguments = sys.argv[1:] or ['run', '--project', 'src/ModularBackend.Api', '--no-launch-profile']
 sys.exit(subprocess.run(['dotnet', *arguments], env=environment, check=False).returncode)

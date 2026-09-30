@@ -37,7 +37,7 @@ function createLimiter(group: RateLimitGroup): RateLimitRequestHandler {
   const store =
     env.RATE_LIMIT_STORE === "redis" && redis
       ? new RedisStore({
-          prefix: `rate:${group}:`,
+          prefix: `${env.REDIS_NAMESPACE}:rate:${group}:`,
           sendCommand: async (...args: string[]): Promise<RedisReply> => {
             if (!redis)
               throw new Error("Redis rate limit store is unavailable");

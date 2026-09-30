@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "../config/load-env";
 import { readdir, lstat, unlink } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { DeleteObjectCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";

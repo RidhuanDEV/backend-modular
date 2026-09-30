@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>RidhuanDEV.ModularBackend.Template</PackageId>
+    <PackageVersion>0.1.0</PackageVersion>
+    <PackageType>Template</PackageType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Title>Modular ASP.NET Core PostgreSQL Backend</Title>
+    <Authors>RidhuanDEV</Authors>
+    <Description>Modular backend template using officially published .NET libraries.</Description>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <!-- These are template source scripts, not NuGet install hooks. -->
+    <NoWarn>$(NoWarn);NU5110;NU5111</NoWarn>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="../src/**/*" Exclude="../**/bin/**;../**/obj/**;../**/.env;../**/.env.*;../**/uploads/**;../**/TestResults/**;../**/artifacts/**;../**/*.pem;../**/*.key;../**/*.pfx"><Pack>true</Pack><PackagePath>content/src/%(RecursiveDir)%(Filename)%(Extension)</PackagePath></Content>
+    <Content Include="../tools/**/*" Exclude="../**/bin/**;../**/obj/**;../**/.env;../**/.env.*;../**/uploads/**;../**/TestResults/**;../**/artifacts/**;../**/*.pem;../**/*.key;../**/*.pfx"><Pack>true</Pack><PackagePath>content/tools/%(RecursiveDir)%(Filename)%(Extension)</PackagePath></Content>
+    <Content Include="../tests/**/*" Exclude="../**/bin/**;../**/obj/**;../**/.env;../**/.env.*;../**/uploads/**;../**/TestResults/**;../**/artifacts/**;../**/*.pem;../**/*.key;../**/*.pfx"><Pack>true</Pack><PackagePath>content/tests/%(RecursiveDir)%(Filename)%(Extension)</PackagePath></Content>
+    <Content Include="../contracts/**/*" Exclude="../**/bin/**;../**/obj/**;../**/.env;../**/.env.*;../**/uploads/**;../**/TestResults/**;../**/artifacts/**;../**/*.pem;../**/*.key;../**/*.pfx"><Pack>true</Pack><PackagePath>content/contracts/%(RecursiveDir)%(Filename)%(Extension)</PackagePath></Content>
+    <Content Include="../docs/**/*" Exclude="../**/bin/**;../**/obj/**;../**/.env;../**/.env.*;../**/uploads/**;../**/TestResults/**;../**/artifacts/**;../**/*.pem;../**/*.key;../**/*.pfx"><Pack>true</Pack><PackagePath>content/docs/%(RecursiveDir)%(Filename)%(Extension)</PackagePath></Content>
+    <Content Include="../scripts/**/*" Exclude="../**/bin/**;../**/obj/**;../**/.env;../**/.env.*;../**/uploads/**;../**/TestResults/**;../**/artifacts/**;../**/*.pem;../**/*.key;../**/*.pfx"><Pack>true</Pack><PackagePath>content/scripts/%(RecursiveDir)%(Filename)%(Extension)</PackagePath></Content>
+    <Content Include="../.github/workflows/**/*" Exclude="../**/bin/**;../**/obj/**;../**/.env;../**/.env.*;../**/uploads/**;../**/TestResults/**;../**/artifacts/**;../**/*.pem;../**/*.key;../**/*.pfx"><Pack>true</Pack><PackagePath>content/.github/workflows/%(RecursiveDir)%(Filename)%(Extension)</PackagePath></Content>
+    <Content Include="../templates/**/*" Exclude="../**/bin/**;../**/obj/**;../**/.env;../**/.env.*;../**/uploads/**;../**/TestResults/**;../**/artifacts/**;../**/*.pem;../**/*.key;../**/*.pfx"><Pack>true</Pack><PackagePath>content/templates/%(RecursiveDir)%(Filename)%(Extension)</PackagePath></Content>
+    <Content Include="../*.md;../LICENSE;../*.slnx;../global.json;../Directory.Build.props;../Directory.Packages.props;../NuGet.Config;../dotnet-tools.json;../.gitignore;../.gitattributes;../.dockerignore;../.editorconfig;../.env.example;../Dockerfile;../compose.yaml;../compose.override.yaml.example">
+      <Pack>true</Pack><PackagePath>content/%(Filename)%(Extension)</PackagePath>
+    </Content>
+    <Content Include="../.template.config/template.json"><Pack>true</Pack><PackagePath>content/.template.config/template.json</PackagePath></Content>
+    <Content Include="../README.md"><Pack>true</Pack><PackagePath>/README.md</PackagePath></Content>
+  </ItemGroup>
+</Project>

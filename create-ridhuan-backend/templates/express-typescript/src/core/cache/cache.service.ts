@@ -11,7 +11,7 @@ export class CacheService {
     private readonly respectEndpointPolicy = true,
   ) {}
   private key(key: string): string {
-    return `${this.prefix}:${key}`;
+    return `${env.REDIS_NAMESPACE}:${this.prefix}:${key}`;
   }
   private allowed(): boolean {
     const context = currentEndpoint();

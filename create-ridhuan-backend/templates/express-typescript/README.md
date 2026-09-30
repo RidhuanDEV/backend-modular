@@ -12,16 +12,22 @@ On upgrade, run the seed explicitly to add `manage_notifications` and `manage_up
 
 ## Create a new project
 
-After the public initializer is published, run `npm create ridhuanbackendtemplate@latest my-api`. The wizard writes a fresh `.env`, generates secrets, and installs dependencies. Use `--no-install` to defer installation or `--yes` for defaults. It refuses to overwrite a nonempty directory. The npm package carries a fixed snapshot of the template, so no GitHub checkout is needed. Configure PostgreSQL, run `npx prisma generate`, `npx prisma migrate deploy`, `npm run seed`, and `npm run dev`; or use Docker Compose as below. The generated project is private by default.
+Use the unified initializer (selects this template explicitly):
+
+```sh
+npx create-ridhuan-backend@latest my-api --template express-typescript --yes
+npm create ridhuan-backend@latest my-api -- --template express-typescript --yes
+```
+
+The wizard writes `.env`, generates secrets, and installs dependencies. Use `--no-install` to defer installation or `--mode docker` to use containers without host SDK dependencies. It refuses a nonempty destination. Follow the generated `GETTING-STARTED.md` for your selected ports and services. The project is private by default. The separate `create-ridhuanbackendtemplate` package is the legacy Express-only initializer.
 
 ## Run manually
 
-Requires Node 24+, PostgreSQL 18, and a `.env` copied from `.env.example`. Redis is optional when `CACHE_ENABLED=false` and `RATE_LIMIT_STORE=memory`.
+Requires Node 24.15.0 or newer within the supported package engine range, PostgreSQL 18, and a `.env` copied from `.env.example`. Redis is optional when `CACHE_ENABLED=false` and `RATE_LIMIT_STORE=memory`.
 
 ```sh
 npm ci
-npx prisma generate
-npx prisma migrate deploy
+npm run prisma:migrate:deploy
 npm run seed
 npm run dev
 ```
@@ -34,11 +40,11 @@ Docker Compose is optional; manual startup above remains supported. `docker-comp
 
 ```sh
 cp .env.example .env
-docker compose up --build
+docker compose up --build -d --wait
 docker compose exec app npm run seed:prod
 ```
 
-The default stack is app + PostgreSQL. Compose runs the `migrate` service once and starts the app only after migration succeeds; each app replica does not run migrations. Set `CACHE_ENABLED=true` and `RATE_LIMIT_STORE=redis`, then start with `docker compose --profile redis up --build` for Redis. For MinIO, set `UPLOAD_STORAGE=s3` and start with `docker compose --profile minio up --build`; `minio-init` creates the bucket. Both profiles can be combined. For an external S3 service, set `S3_ENDPOINT_DOCKER` and skip the MinIO profile. Run seed explicitly after the first migration. Outside Compose, run `npx prisma migrate deploy` as one release job before starting new replicas.
+The default stack is app + PostgreSQL. Compose runs the `migrate` service once and starts the app only after migration succeeds; each app replica does not run migrations. Set `CACHE_ENABLED=true`, `RATE_LIMIT_STORE=redis`, and `COMPOSE_PROFILES=redis` for Redis. For MinIO, set `UPLOAD_STORAGE=s3` and include `minio` in `COMPOSE_PROFILES`; `minio-init` creates the bucket. Both profiles can be combined as `COMPOSE_PROFILES=redis,minio`. The unified CLI configures these automatically. For an external S3 service, set `S3_ENDPOINT_DOCKER` and skip the MinIO profile. Run seed explicitly after the first migration. Outside Compose, run `npx prisma migrate deploy` as one release job before starting new replicas.
 
 Set `CORS_ORIGINS` to a comma-separated list of browser origins. It is required when `NODE_ENV=production`; development defaults to `http://localhost:5173,http://localhost:3000` if omitted. No wildcard or credentialed CORS is enabled. Requests without `Origin` remain available to server-side clients.
 
@@ -81,3 +87,5 @@ npm run verify:template
 `npm run build` compiles TypeScript and writes `dist/docs/openapi.json`. Runtime docs come from the same typed registry and Zod schemas. No OpenAPI JSDoc annotations or manual schema JSON synchronization are needed. See [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md) for the controller/service pattern and rollout notes.
 
 GitHub Actions also tests fresh and upgrade migrations against PostgreSQL 18, builds the Docker image, and smoke-tests the packed npm initializer. `create-ridhuanbackendtemplate` is released by `.github/workflows/publish.yml` through npm trusted publishing after its publisher is registered in npm. Run `npm pack --dry-run` in the initializer directory to inspect the files before a release.
+
+HTTP defaults to port `3000`; `PORT` selects the manual API port and `APP_PORT` the Compose host port. The container always listens on `3000`. Set `REDIS_NAMESPACE` to a unique deployment namespace when projects share Redis; replicas of one deployment must use the same namespace. Build and dev scripts generate Prisma automatically. `verify:template` checks the standalone application; legacy initializer packaging is a repository-only check.

@@ -16,5 +16,5 @@ WORKDIR /app
 COPY --from=build /out/ /usr/local/bin/
 RUN mkdir /app/uploads && chown app:app /app/uploads
 USER app
-EXPOSE 3000
+EXPOSE 8080
 ENTRYPOINT ["api"]

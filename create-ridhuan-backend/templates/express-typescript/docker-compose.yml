@@ -1,82 +1,133 @@
 services:
   app:
     build: .
-    image: ridhuanbackendtemplate-app:local
     env_file: .env
     environment:
-      PORT: "3000"
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      PORT: '3000'
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?Set DATABASE_URL_DOCKER}
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: ${S3_ENDPOINT_DOCKER:-http://minio:9000}
       UPLOAD_LOCAL_DIR: /app/uploads
+      NODE_ENV: production
     volumes:
-      - uploads_data:/app/uploads
+    - uploads_data:/app/uploads
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+        required: false
+      minio-init:
+        condition: service_completed_successfully
+        required: false
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test:
+      - CMD
+      - node
+      - -e
+      - 'fetch(''http://127.0.0.1:3000/ready'').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))'
       interval: 10s
       timeout: 3s
       retries: 3
     restart: unless-stopped
-
+    ports:
+    - ${APP_PORT:-3000}:3000
   migrate:
-    image: ridhuanbackendtemplate-app:local
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
-    command: ["npx", "prisma", "migrate", "deploy"]
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?Set DATABASE_URL_DOCKER}
+    command:
+    - npx
+    - prisma
+    - migrate
+    - deploy
     depends_on:
       postgres:
         condition: service_healthy
-    restart: "no"
-
+    restart: 'no'
+    build: .
   postgres:
-    image: postgres:18-alpine
+    image: postgres:18.3-alpine
     env_file: .env
     environment:
       TZ: UTC
     volumes:
-      - postgres_data:/var/lib/postgresql
+    - postgres_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test:
+      - CMD-SHELL
+      - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
       interval: 5s
       timeout: 5s
       retries: 20
-
+    ports:
+    - 127.0.0.1:${POSTGRES_PORT:-5432}:5432
   redis:
-    image: redis:8.0-alpine
-    profiles: ["redis"]
+    image: redis:8.6.1-alpine
+    profiles:
+    - redis
     volumes:
-      - redis_data:/data
+    - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+      - CMD
+      - redis-cli
+      - ping
       interval: 5s
       timeout: 5s
       retries: 20
-
+    ports:
+    - 127.0.0.1:${REDIS_PORT:-6379}:6379
   minio:
-    image: minio/minio:latest
-    profiles: ["minio"]
+    profiles:
+    - minio
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-minioadmin}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-minioadmin}
     volumes:
-      - minio_data:/data
-
+    - minio_data:/data
+    build:
+      context: .
+      dockerfile: scripts/minio.Dockerfile
+      target: server
+    ports:
+    - 127.0.0.1:${MINIO_PORT:-9000}:9000
+    - 127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://localhost:9000/minio/health/live
+      interval: 5s
+      timeout: 3s
+      retries: 30
   minio-init:
-    image: minio/mc:latest
-    profiles: ["minio"]
+    build:
+      context: .
+      dockerfile: scripts/minio.Dockerfile
+      target: client
+    profiles:
+    - minio
+    entrypoint:
+    - /bin/sh
+    - /init-bucket.sh
+    environment:
+      MC_CONFIG_DIR: /tmp/mc
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-uploads}
+    volumes:
+    - ./scripts/init-bucket.sh:/init-bucket.sh:ro
     depends_on:
       minio:
-        condition: service_started
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["until mc alias set local http://minio:9000 ${S3_ACCESS_KEY_ID:-minioadmin} ${S3_SECRET_ACCESS_KEY:-minioadmin}; do sleep 2; done; mc mb --ignore-existing local/${S3_BUCKET:-uploads}"]
-
+        condition: service_healthy
+    restart: 'no'
 volumes:
-  postgres_data:
-  redis_data:
-  minio_data:
-  uploads_data:
+  postgres_data: null
+  redis_data: null
+  minio_data: null
+  uploads_data: null

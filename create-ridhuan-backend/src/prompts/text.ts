@@ -17,6 +17,7 @@ export async function textPrompt(
     input: process.stdin,
     output: process.stdout,
   });
+  rl.once("SIGINT", () => { process.stdout.write("\x1b[?25h\nAborted.\n"); process.exit(130); });
 
   const promptText = `${colors.cyan}${symbols.question}${colors.reset} ${colors.bold}${question}${colors.reset} ${colors.dim}[${defaultValue}]${colors.reset}: `;
 

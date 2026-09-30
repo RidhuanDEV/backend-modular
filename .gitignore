@@ -18,6 +18,9 @@ build/
 **/build/
 bin/
 **/bin/
+# Executable source is part of the CLI, not build output.
+!/create-ridhuan-backend/src/bin/
+!/create-ridhuan-backend/src/bin/**
 obj/
 **/obj/
 TestResults/
@@ -36,6 +39,8 @@ nestjs-prototype-snapshot-*.zip
 # ==========================================
 .env
 **/.env
+.env.*
+**/.env.*
 .env.local
 **/.env.local
 .env.*.local
@@ -69,3 +74,4 @@ pnpm-debug.log*
 **/*.user
 .DS_Store
 Thumbs.db
+*.tgz

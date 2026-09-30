@@ -1,14 +1,15 @@
-import { config } from "dotenv";
+import { loadEnvironment } from "./load-env.js";
 import { z } from "zod";
 
-config();
+loadEnvironment();
 
 const envSchema = z
   .object({
-    PORT: z.coerce.number().default(3000),
+    PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     CORS_ORIGINS: z.string().optional()
       .transform((value) => value?.split(",").map((origin) => origin.trim()).filter(Boolean) ?? []),
     DATABASE_URL: z.string().min(1),
+    REDIS_NAMESPACE: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/).default("modular-express"),
     REDIS_URL: z.string().url().optional(),
     CACHE_ENABLED: z
       .enum(["true", "false"])

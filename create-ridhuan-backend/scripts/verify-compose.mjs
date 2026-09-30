@@ -1,0 +1,157 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { resolve, join, sep } from 'node:path';
+import { createServer } from 'node:net';
+import { command } from '../dist/process.js';
+import pg from 'pg';
+import { randomUUID } from 'node:crypto';
+import { verifyPostgresConnection } from '../dist/prompts/db-check.js';
+const id=process.argv[2];
+if(!['express-typescript','nestjs','golang','dotnet'].includes(id)) throw new Error('Supply a template ID');
+const root=resolve(import.meta.dirname,'..'),scratch=await mkdtemp(join(tmpdir(),`ridhuan ${id} compose-`));
+const name=id==='dotnet'?'Acceptance.Api':'acceptance-api',project=join(scratch,name);
+const base=id==='express-typescript'?'docker-compose.yml':'compose.yaml';
+const originalDb=process.env.RIDHUAN_DB_PASSWORD;
+const dbPassword="fixture #$HOME apostrophe' quote\" back\\'slash-日本;end\\";
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function freePort(){const server=createServer();await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(18000+Math.floor(Math.random()*10000),'127.0.0.1',resolve)});const address=server.address();assert(address&&typeof address==='object');const port=address.port;await new Promise(resolve=>server.close(resolve));return port;}
+const port=await freePort(),dbPort=await freePort(),redisPort=await freePort(),storagePort=await freePort(),consolePort=await freePort();
+function run(name,args,cwd=project,inherit=true){const result=command(name,args,cwd,inherit);if(result.status!==0||result.error)throw new Error(`${name} ${args.slice(0,3).join(' ')} failed`);return result.stdout;}
+const compose=(...args)=>run('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml',...args]);
+const envValue=(text,key)=>{const value=text.split(/\r?\n/).find(line=>line.startsWith(key+'='))?.slice(key.length+1);assert(value!==undefined,`Missing ${key}`);return value.startsWith("'")&&value.endsWith("'")?value.slice(1,-1).replaceAll("\\'","'"):value;};
+const baseURL=`http://127.0.0.1:${port}`;
+async function request(path,{method='GET',body,token,status=200}={}) {const response=await fetch(baseURL+path,{method,headers:{connection:'close',...(body?{'content-type':'application/json'}:{}),...(token?{authorization:`Bearer ${token}`}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(15000)});assert.equal(response.status,status,`${method} ${path}: unexpected status`);return status===204?null:await response.json();}
+async function health(path,expected){for(let attempt=0;attempt<30;attempt++){try{const response=await fetch(baseURL+path,{headers:{connection:'close'},signal:AbortSignal.timeout(5000)});if(response.status===expected)return;}catch{}await pause(1000);}throw new Error(`${path} did not reach ${expected}`);}
+let started=false;
+try{
+ let tarball=process.env.CLI_TARBALL;
+ if(!tarball){const pack=command('npm',['pack','--ignore-scripts','--json','--pack-destination',scratch],root);assert.equal(pack.status,0);tarball=join(scratch,JSON.parse(pack.stdout)[0].filename);}
+ await writeFile(join(scratch,'package.json'),'{"name":"compose-consumer","private":true}\n');run('npm',['install','--ignore-scripts','--no-audit','--no-fund',resolve(tarball)],scratch);
+ process.env.RIDHUAN_DB_PASSWORD=dbPassword;
+ run(process.execPath,[join(scratch,'node_modules/create-ridhuan-backend/dist/bin/index.js'),name,'--template',id,'--mode','docker','--port',String(port),'--db-port',String(dbPort),'--storage','s3','--redis','--yes'],scratch);
+ if(originalDb===undefined)delete process.env.RIDHUAN_DB_PASSWORD;else process.env.RIDHUAN_DB_PASSWORD=originalDb;
+ const fixtureStorage=id==='dotnet'?'s3mock':'minio';
+ await writeFile(join(project,'.tmp-consumer-ports.yaml'),`services:\n  redis:\n    ports: !override ["127.0.0.1:${redisPort}:6379"]\n  ${fixtureStorage}:\n    ports: !override ["127.0.0.1:${storagePort}:${id==='dotnet'?9090:9000}"${id==='dotnet'?'':`, "127.0.0.1:${consolePort}:9001"`}]\n`);
+ const config=JSON.parse(run('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','config','--format','json'],project,false));
+ assert.equal(String(config.services.app.environment.PORT??config.services.app.environment.ASPNETCORE_URLS),id==='dotnet'?'http://+:8080':id==='golang'?'8080':'3000');
+ assert(config.services.redis&&config.services[fixtureStorage]);
+ // Actual database startup verifies Compose quoting and URI/Npgsql credentials, including punctuation and Unicode.
+ started=true;
+ // Prove a failed release migration blocks the API before applying any schema.
+ await writeFile(join(project,'.tmp-migration-failure.yaml'),'services:\n  migrate:\n    entrypoint: ["sh", "-c", "exit 23"]\n    command: []\n');
+ const blocked=command('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','-f','.tmp-migration-failure.yaml','up','--build','-d','app'],project);
+ assert.notEqual(blocked.status,0,'Failed migration must prevent startup');
+ const blockedApp=run('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','ps','-a','-q','app'],project,false).trim();
+ assert.equal(run('docker',['inspect','--format','{{.State.Status}}',blockedApp],project,false).trim(),'created');
+ const blockedMigration=run('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','ps','-a','-q','migrate'],project,false).trim();
+ assert.equal(run('docker',['inspect','--format','{{.State.ExitCode}}',blockedMigration],project,false).trim(),'23');
+ compose('down','-v','--remove-orphans');
+ compose('up','--build','-d','--wait','--wait-timeout','240');
+ const env=await readFile(join(project,'.env'),'utf8');
+ const dbCheck=await verifyPostgresConnection('127.0.0.1',dbPort,envValue(env,'POSTGRES_USER'),dbPassword,envValue(env,'POSTGRES_DB'));assert.equal(dbCheck.status,'connected');
+ assert.equal((await verifyPostgresConnection('127.0.0.1',dbPort,envValue(env,'POSTGRES_USER'),'wrong-password',envValue(env,'POSTGRES_DB'))).status,'authentication_failed');
+ assert.equal((await verifyPostgresConnection('127.0.0.1',dbPort,envValue(env,'POSTGRES_USER'),dbPassword,'missing_database')).status,'database_missing');
+ if(id==='express-typescript'||id==='nestjs') {
+  const admin=new pg.Client({host:'127.0.0.1',port:dbPort,user:envValue(env,'POSTGRES_USER'),password:dbPassword,database:'postgres'});await admin.connect();
+  const upgradeName='consumer_upgrade_'+randomUUID().replaceAll('-','');let upgrade;
+  try {
+   await admin.query('CREATE DATABASE "'+upgradeName+'"');
+   upgrade=new pg.Client({host:'127.0.0.1',port:dbPort,user:envValue(env,'POSTGRES_USER'),password:dbPassword,database:upgradeName});await upgrade.connect();
+   const initial=id==='nestjs'?'20260929000000_init':'20260524120000_init';
+   await upgrade.query(await readFile(join(project,'prisma/migrations',initial,'migration.sql'),'utf8'));
+   const roles=id==='nestjs'?'roles':'Role';const fixtureID=randomUUID();
+   await upgrade.query('INSERT INTO "'+roles+'" (id,name,"createdAt","updatedAt") VALUES ($1,$2,$3,$3)',[fixtureID,'upgrade-fixture','2026-01-01T00:00:00Z']);
+   const url=new URL(envValue(env,'DATABASE_URL_DOCKER'));url.pathname='/'+upgradeName;
+   for(const action of [['resolve','--applied',initial],['deploy']]) {
+    // Capture output: URLs carry synthetic fixture passwords and must not enter logs.
+    run('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','run','--rm','--no-deps','-e','DATABASE_URL='+url.toString(),'--entrypoint','node','migrate','node_modules/prisma/build/index.js','migrate',...action],project,false);
+   }
+   const preserved=await upgrade.query('SELECT "createdAt" FROM "'+roles+'" WHERE id=$1',[fixtureID]);assert.equal(preserved.rows[0].createdAt.toISOString(),'2026-01-01T00:00:00.000Z');
+   await upgrade.query('SELECT id FROM "'+(id==='nestjs'?'notifications':'Notification')+'" LIMIT 0');
+  } finally {await upgrade?.end();await admin.query('DROP DATABASE IF EXISTS "'+upgradeName+'" WITH (FORCE)');await admin.end();}
+ } else {
+  const verifyService=id==='golang'?`  upgradeverify:\n    profiles: [verification]\n    build: {context: ., target: build}\n    environment:\n      DATABASE_URL: \${DATABASE_URL_DOCKER}\n    command: ["go", "test", "-p", "1", "./internal/db", "-run", "TestFreshDatabaseUpgradePreservesExistingData", "-count=1"]\n` : `  upgradeverify:\n    profiles: [verification]\n    build: {context: ., target: build}\n    environment:\n      Database__ConnectionString: \${Database__ConnectionString_DOCKER}\n    command: ["dotnet", "test", "tests/AcceptanceApi.IntegrationTests", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~UpgradePreservesExistingDataAndSeedNeverResetsPassword"]\n`;
+  await writeFile(join(project,'.tmp-consumer-ports.yaml'),await readFile(join(project,'.tmp-consumer-ports.yaml'),'utf8')+verifyService);
+  compose('run','--build','--rm','--no-deps','upgradeverify');
+ }
+
+ if(id==='dotnet')compose('--profile','seed','run','--rm','seeder');else if(id==='golang')compose('run','--rm','--entrypoint','seed','app');else compose('exec','-T','app','npm','run',id==='nestjs'?'seed':'seed:prod');
+ // Seed is explicit and idempotent.
+ if(id==='dotnet')compose('--profile','seed','run','--rm','seeder');else if(id==='golang')compose('run','--rm','--entrypoint','seed','app');else compose('exec','-T','app','npm','run',id==='nestjs'?'seed':'seed:prod');
+ await health('/ready',200);await health('/live',200);
+ const docs=await request('/docs/openapi.json');assert(docs.paths['/api/auth/login']);
+ const credentials={email:envValue(env,id==='dotnet'?'Bootstrap__Email':'ADMIN_EMAIL'),password:envValue(env,id==='dotnet'?'Bootstrap__Password':'ADMIN_PASSWORD')};
+ const login=await request('/api/auth/login',{method:'POST',body:credentials});assert.equal(typeof login.data[id==='dotnet'?'accessToken':'token'],'string');assert.equal(typeof login.data.refreshToken,'string');
+ const jwt=JSON.parse(Buffer.from(login.data[id==='dotnet'?'accessToken':'token'].split('.')[1],'base64url').toString());assert(jwt.exp - (id==='dotnet'?jwt.nbf:jwt.iat) <= 900);
+ const token=login.data[id==='dotnet'?'accessToken':'token'];
+ const me=(await request('/api/auth/me',{token})).data;assert(me.id);assert(!('password'in me));assert(!('passwordHash'in me));
+ const created=(await request('/api/notifications',{method:'POST',token,body:{recipientId:me.id,title:'Consumer acceptance',body:'Persist and stream',sendEmail:true},status:201})).data;assert.equal(created.emailStatus,'FAILED');
+ const streamAbort=new AbortController();const timer=setTimeout(()=>streamAbort.abort(),12000);
+ try{const stream=await fetch(baseURL+'/api/notifications/stream',{headers:{connection:'close',authorization:`Bearer ${token}`},signal:streamAbort.signal});assert.equal(stream.status,200);assert.match(stream.headers.get('content-type'),/text\/event-stream/);const reader=stream.body.getReader();let text='';while(!text.includes(created.id)){const chunk=await reader.read();assert(!chunk.done);text+=new TextDecoder().decode(chunk.value);}await reader.cancel();}finally{clearTimeout(timer);streamAbort.abort();}
+ assert((await request('/api/notifications',{token})).data.some(item=>item.id===created.id));
+ assert((await request(`/api/notifications/${created.id}/read`,{method:'PATCH',token})).data.readAt);
+ const strangerCredentials={email:'stranger@example.test',password:'Synthetic-fixture-password-43'};
+ await request('/api/auth/register',{method:'POST',body:strangerCredentials,status:201});
+ const strangerLogin=(await request('/api/auth/login',{method:'POST',body:strangerCredentials})).data;
+ const strangerToken=strangerLogin[id==='dotnet'?'accessToken':'token'];
+ assert(!(await request('/api/notifications',{token:strangerToken})).data.some(item=>item.id===created.id));
+ await request(`/api/notifications/${created.id}/read`,{method:'PATCH',token:strangerToken,status:404});
+ await request('/api/notifications',{method:'POST',token:strangerToken,body:{recipientId:me.id,title:'Forbidden',body:'No permission'},status:403});
+ await request('/api/users/'+me.id,{token}); // warm the configured cache example.
+
+ const form=new FormData();form.append('file',new Blob(['%PDF-1.4\nfixture'],{type:'application/pdf'}),'fixture.pdf');const upload=await fetch(baseURL+'/api/upload',{method:'POST',headers:{connection:'close',authorization:`Bearer ${token}`},body:form,signal:AbortSignal.timeout(15000)});assert.equal(upload.status,201);const uploaded=(await upload.json()).data;assert(uploaded.id);assert((await request(`/api/upload/${uploaded.id}`,{token})).data.id===uploaded.id);
+ const rotated=(await request('/api/auth/refresh',{method:'POST',body:{refreshToken:login.data.refreshToken}})).data;assert.notEqual(rotated.refreshToken,login.data.refreshToken);
+ if(docs.paths['/api/auth/logout'])await request('/api/auth/logout',{method:'POST',body:{refreshToken:rotated.refreshToken},status:204});
+
+ // Real SMTP transport and local uploads after a configuration redeploy.
+ const fixtureDir=join(project,'consumer-fixtures');await mkdir(fixtureDir);
+ await writeFile(join(fixtureDir,'smtp.mjs'),await readFile(join(root,'scripts/fixtures/smtp-tls.mjs')));
+ await writeFile(join(fixtureDir,'Dockerfile'),`FROM node:24.15.0-alpine
+WORKDIR /fixture
+RUN apk add --no-cache openssl && mkdir certs && openssl req -x509 -newkey rsa:2048 -nodes -keyout certs/key.pem -out certs/cert.pem -days 2 -subj /CN=mailfixture -addext subjectAltName=DNS:mailfixture > /dev/null 2>&1 && chmod 644 certs/key.pem
+COPY smtp.mjs .
+USER node
+CMD ["node", "smtp.mjs"]
+`);
+ const smtpPort=await freePort(),replicaPort=await freePort();
+ const flags=id==='dotnet'? { Smtp__Enabled:'true',Smtp__Host:'mailfixture',Smtp__Port:'1025',Smtp__Secure:'false',Smtp__From:'sender@example.test',Upload__Storage:'local'} : {SMTP_ENABLED:'true',SMTP_HOST:'mailfixture',SMTP_PORT:'1025',SMTP_SECURE:'false',SMTP_FROM:'sender@example.test',UPLOAD_STORAGE:'local'};
+ let override=await readFile(join(project,'.tmp-consumer-ports.yaml'),'utf8');
+ override+='  mailfixture:\n    build: ./consumer-fixtures\n    ports: ["127.0.0.1:'+smtpPort+':1080"]\n  app:\n    volumes:\n      - ./consumer-fixtures/ca.pem:/fixture-ca.pem:ro\n    environment:\n      SSL_CERT_FILE: /fixture-ca.pem\n      NODE_EXTRA_CA_CERTS: /fixture-ca.pem\n'+Object.entries(flags).map(([key,value])=>'      '+key+': '+JSON.stringify(value)+'\n').join('');
+ await writeFile(join(project,'.tmp-consumer-ports.yaml'),override);
+ compose('build','mailfixture');
+ await writeFile(join(fixtureDir,'ca.pem'),run('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','run','--rm','--no-deps','--entrypoint','cat','mailfixture','/fixture/certs/cert.pem'],project,false));
+ compose('up','--build','-d','--wait','mailfixture','app');await health('/ready',200);
+ const mailed=(await request('/api/notifications',{method:'POST',token,body:{recipientId:me.id,title:'SMTP fixture',body:'Delivery check',sendEmail:true},status:201})).data;assert.equal(mailed.emailStatus,'SENT');
+ assert.equal((await (await fetch(`http://127.0.0.1:${smtpPort}`,{signal:AbortSignal.timeout(3000)})).json()).messages,1);
+ const smtpPortKey=id==='dotnet'?'Smtp__Port':'SMTP_PORT',smtpSecureKey=id==='dotnet'?'Smtp__Secure':'SMTP_SECURE';
+ override=override.replace('      '+smtpPortKey+': "1025"','      '+smtpPortKey+': "1465"').replace('      '+smtpSecureKey+': "false"','      '+smtpSecureKey+': "true"');
+ await writeFile(join(project,'.tmp-consumer-ports.yaml'),override);compose('up','-d','--no-deps','--wait','app');
+ const implicit=(await request('/api/notifications',{method:'POST',token,body:{recipientId:me.id,title:'Implicit TLS',body:'TLS delivery check',sendEmail:true},status:201})).data;assert.equal(implicit.emailStatus,'SENT');
+ assert.equal((await (await fetch(`http://127.0.0.1:${smtpPort}`)).json()).messages,2);
+
+ const localForm=new FormData();localForm.append('file',new Blob(['%PDF-1.4\nlocal fixture'],{type:'application/pdf'}),'local.pdf');assert.equal((await fetch(baseURL+'/api/upload',{method:'POST',headers:{connection:'close',authorization:`Bearer ${token}`},body:localForm})).status,201);
+ // Two replicas must enforce one shared Redis login quota.
+ const limitKey=id==='dotnet'?'Rate__Auth__Max':'RATE_LIMIT_AUTH_MAX';
+ override+='      '+limitKey+': "2"\n  replica:\n    extends: {file: '+base+', service: app}\n    environment:\n      '+limitKey+': \"2\"\n    ports: !override ["127.0.0.1:'+replicaPort+':'+(id==='golang'?8080:id==='dotnet'?8080:3000)+'"]\n';
+ await writeFile(join(project,'.tmp-consumer-ports.yaml'),override);compose('up','-d','--wait','app','replica');await health('/ready',200);
+ for(let attempt=0;attempt<30;attempt++){try{if((await fetch(`http://127.0.0.1:${replicaPort}/ready`,{headers:{connection:'close'}})).ok)break;}catch{}if(attempt===29)throw new Error('Replica failed readiness');await pause(1000);}
+ compose('exec','-T','redis','redis-cli','FLUSHDB');
+ for(const [index,target] of [baseURL,`http://127.0.0.1:${replicaPort}`,baseURL].entries()) {const response=await fetch(target+'/api/auth/login',{method:'POST',headers:{connection:'close','content-type':'application/json'},body:JSON.stringify(credentials)});assert.equal(response.status,index<2?200:429,'Shared login rate limit failed');}
+ // Cache-only Redis outage cannot fail readiness. Rate-limit Redis outage must.
+ compose('stop','redis');await health('/ready',503);await health('/live',200);
+ const rateStore=id==='dotnet'?'Rate__Store':'RATE_LIMIT_STORE';
+ override=override.replace('      '+limitKey+': "2"','      '+limitKey+': "20"\n      '+rateStore+': "memory"');
+ await writeFile(join(project,'.tmp-consumer-ports.yaml'),override);compose('up','-d','--no-deps','app');await health('/ready',200);
+ await request('/api/users/'+me.id,{token}); // cached endpoint still works without Redis.
+ compose('stop','postgres');await health('/live',200);await health('/ready',503);
+
+ console.log(`${id}: Compose migration failure gate, fresh/upgrade database, quoted credentials, seed, auth, refresh, public DTO, Redis/S3/local uploads, SMTP, shared limiter, notifications/SSE and readiness passed`);
+}catch(error){
+ if(started) {const state=command('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','logs','--tail','15','mailfixture'],project);if(state.status===0)console.error(state.stdout);}throw error;
+}finally{
+ if(originalDb===undefined)delete process.env.RIDHUAN_DB_PASSWORD;else process.env.RIDHUAN_DB_PASSWORD=originalDb;
+ if(started){const result=command('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','down','-v','--remove-orphans'],project);if(result.status!==0)console.error('Fixture cleanup failed; project retained:',project);}
+ if(process.argv.includes('--keep'))console.log(`Consumer fixture: ${project}`);
+ else{if(!resolve(scratch).startsWith(resolve(tmpdir())+sep))throw new Error('Invalid cleanup scope');await rm(scratch,{recursive:true,force:true});}
+}

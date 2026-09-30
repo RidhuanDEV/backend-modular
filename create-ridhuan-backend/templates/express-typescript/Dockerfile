@@ -1,4 +1,4 @@
-FROM node:24-alpine AS builder
+FROM node:24.15.0-alpine AS builder
 WORKDIR /app
 ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable
 ENV JWT_SECRET=build_only_secret_do_not_use_at_runtime_1234567890
@@ -11,7 +11,7 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
-FROM node:24-alpine
+FROM node:24.15.0-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable

@@ -1,7 +1,5 @@
 services:
   app:
-    ports:
-      - "${APP_PORT:-3001}:${PORT:-3000}"
+    ports: !override ["127.0.0.1:5180:8080"]
   postgres:
-    ports:
-      - "${POSTGRES_PORT:-5433}:5432"
+    ports: !override ["127.0.0.1:55433:5432"]

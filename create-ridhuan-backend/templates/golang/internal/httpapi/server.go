@@ -83,12 +83,12 @@ func NewServer(c config.Config, pool *pgxpool.Pool, client *redis.Client, servic
 	docsCfg.SchemasPath = ""
 	docsCfg.CreateHooks = nil
 	docsCfg.Components.SecuritySchemes = map[string]*huma.SecurityScheme{"bearer": {Type: "http", Scheme: "bearer", BearerFormat: "JWT"}}
-	s := &Server{Config: c, DB: pool, Redis: client, Services: services, Cache: cache.New(client, c.CacheEnabled), Limiter: ratelimit.New(func() *redis.Client {
+	s := &Server{Config: c, DB: pool, Redis: client, Services: services, Cache: cache.New(client, c.CacheEnabled, c.RedisNamespace), Limiter: ratelimit.New(func() *redis.Client {
 		if c.RateStore == "redis" {
 			return client
 		}
 		return nil
-	}()), Policies: policies, Router: r, Docs: humachi.New(r, docsCfg), registered: map[EndpointID]struct{}{}, Logger: logger}
+	}(), c.RedisNamespace), Policies: policies, Router: r, Docs: humachi.New(r, docsCfg), registered: map[EndpointID]struct{}{}, Logger: logger}
 	s.Notifications = &notification.Service{Pool: pool, Audit: services.Audit, SMTP: c}
 	r.Use(s.middleware)
 	s.mount()

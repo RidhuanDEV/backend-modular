@@ -1,0 +1,142 @@
+name: CLI template consumers
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the tested artifact (requires npm trusted publisher)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: cli-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    working-directory: create-ridhuan-backend
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          cache: npm
+          cache-dependency-path: create-ridhuan-backend/package-lock.json
+      - run: npm ci
+      - run: npm run prepare:templates
+      - run: npm run build
+      - run: npm test
+      - run: npm pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-package
+          path: create-ridhuan-backend/*.tgz
+          if-no-files-found: error
+  consumer:
+    needs: package
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        template: [express-typescript, nestjs, golang, dotnet]
+    runs-on: ${{ matrix.os }}
+    env:
+      CLI_RUNTIME_TEST: ${{ matrix.os == 'ubuntu-latest' && 'true' || 'false' }}
+      GOWORK: "off"
+      GOMAXPROCS: "2"
+      GOMEMLIMIT: 512MiB
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+      - uses: actions/setup-go@v5
+        if: matrix.template == 'golang'
+        with:
+          go-version-file: modular-golang/go.mod
+          cache: false
+      - uses: actions/setup-dotnet@v4
+        if: matrix.template == 'dotnet'
+        with:
+          global-json-file: modular-NET/global.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-package
+          path: create-ridhuan-backend/artifact
+      - run: npm ci
+      - run: npm run build
+      - name: Test the release artifact
+        shell: pwsh
+        run: |
+          $env:CLI_TARBALL = (Get-ChildItem artifact/*.tgz).FullName
+          node scripts/verify-consumer.mjs '${{ matrix.template }}'
+  macos-smoke:
+    needs: package
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-package
+          path: create-ridhuan-backend/artifact
+      - run: npm ci
+      - run: npm run build
+      - run: CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)" npm test
+  compose:
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        template: [express-typescript, nestjs, golang, dotnet]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-package
+          path: create-ridhuan-backend/artifact
+      - run: npm ci
+      - run: npm run build
+      - run: CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)" node scripts/verify-compose.mjs '${{ matrix.template }}'
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: [package, consumer, macos-smoke, compose]
+    runs-on: ubuntu-latest
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-package
+          path: artifact
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          registry-url: https://registry.npmjs.org
+      - name: Publish the artifact tested by all jobs
+        working-directory: .
+        run: npm publish artifact/*.tgz --access public --provenance

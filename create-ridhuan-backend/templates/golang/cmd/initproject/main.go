@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -45,16 +46,19 @@ func run() error {
 	if strings.ContainsAny(module, " \t\r\n") || !strings.Contains(module, "/") || strings.Contains(module, "..") {
 		return errors.New("invalid Go module path")
 	}
-	port := ask(reader, "HTTP port", "3000")
+	port := ask(reader, "HTTP port", "8080")
 	portNumber, err := strconv.Atoi(port)
 	if err != nil || portNumber < 1 || portNumber > 65535 {
 		return errors.New("invalid HTTP port")
 	}
 	dbName := ask(reader, "PostgreSQL database name", strings.ReplaceAll(filepath.Base(name), "-", "_"))
 	dbUser := ask(reader, "PostgreSQL username", "backend")
-	dbPassword := ask(reader, "PostgreSQL password", "backend")
-	if !sqlIdentifier.MatchString(dbName) || !sqlIdentifier.MatchString(dbUser) || strings.ContainsAny(dbPassword, "\r\n$") {
-		return errors.New("database name/user must be SQL identifiers; password cannot contain newline or dollar sign")
+	dbPassword := os.Getenv("RIDHUAN_DB_PASSWORD")
+	if dbPassword == "" {
+		dbPassword = randomSecret()
+	}
+	if !sqlIdentifier.MatchString(dbName) || !sqlIdentifier.MatchString(dbUser) || strings.ContainsAny(dbPassword, "\r\n\x00") {
+		return errors.New("database name/user must be SQL identifiers; password cannot contain newline or NUL")
 	}
 	redisChoice := strings.ToLower(ask(reader, "Enable Redis cache and rate store? (y/N)", "n"))
 	storageChoice := strings.ToLower(ask(reader, "Upload storage (local/s3)", "local"))
@@ -101,28 +105,6 @@ func run() error {
 	if redisEnabled {
 		rateStore = "redis"
 	}
-	env := fmt.Sprintf(`NODE_ENV=development
-PORT=%s
-APP_PORT=%s
-CORS_ORIGINS=http://localhost:5173,http://localhost:3000
-DATABASE_URL=postgres://%s:%s@localhost:5432/%s?sslmode=disable
-JWT_SECRET=%s
-POSTGRES_USER=%s
-POSTGRES_PASSWORD=%s
-POSTGRES_DB=%s
-POSTGRES_PORT=5432
-CACHE_ENABLED=%t
-RATE_LIMIT_STORE=%s
-REDIS_URL=redis://localhost:6379
-APP_INSTANCE_COUNT=1
-TRUST_PROXY_HOPS=0
-ENDPOINT_POLICIES_JSON={}
-UPLOAD_ENABLED=true
-UPLOAD_STORAGE=%s
-UPLOAD_LOCAL_DIR=./uploads
-UPLOAD_MAX_BYTES=10485760
-UPLOAD_ALLOWED_MIME=image/png,image/jpeg,application/pdf
-`, port, port, url.QueryEscape(dbUser), url.QueryEscape(dbPassword), url.PathEscape(dbName), base64.RawURLEncoding.EncodeToString(secret), dbUser, dbPassword, dbName, redisEnabled, rateStore, storageChoice)
 	profiles := []string{}
 	if redisEnabled {
 		profiles = append(profiles, "redis")
@@ -130,16 +112,34 @@ UPLOAD_ALLOWED_MIME=image/png,image/jpeg,application/pdf
 	if storageChoice == "s3" {
 		profiles = append(profiles, "minio")
 	}
-	env += "COMPOSE_PROFILES=" + strings.Join(profiles, ",") + "\n"
-	if storageChoice == "s3" {
-		env += `S3_ENDPOINT=http://localhost:9000
-S3_REGION=us-east-1
-S3_BUCKET=uploads
-S3_ACCESS_KEY_ID=minioadmin
-S3_SECRET_ACCESS_KEY=minioadmin
-S3_FORCE_PATH_STYLE=true
-`
+	makeURL := func(host string) string {
+		connection := &url.URL{Scheme: "postgresql", User: url.UserPassword(dbUser, dbPassword), Host: host + ":5432", Path: "/" + dbName, RawQuery: "sslmode=disable"}
+		return connection.String()
 	}
+	replacements := map[string]string{
+		"PORT": port, "APP_PORT": port, "POSTGRES_DB": dbName, "POSTGRES_USER": dbUser, "POSTGRES_PASSWORD": dbPassword,
+		"DATABASE_URL": makeURL("127.0.0.1"), "DATABASE_URL_DOCKER": makeURL("postgres"),
+		"JWT_SECRET": base64.RawURLEncoding.EncodeToString(secret), "ADMIN_PASSWORD": randomSecret(), "USER_PASSWORD": randomSecret(),
+		"REDIS_NAMESPACE": strings.ToLower(filepath.Base(name)), "CACHE_ENABLED": strconv.FormatBool(redisEnabled), "RATE_LIMIT_STORE": rateStore, "UPLOAD_STORAGE": storageChoice,
+		"COMPOSE_PROFILES": strings.Join(profiles, ","), "COMPOSE_PROJECT_NAME": strings.ToLower(filepath.Base(name)),
+		"S3_ACCESS_KEY_ID": "development", "S3_SECRET_ACCESS_KEY": randomSecret(),
+	}
+	originalEnv, err := os.ReadFile(filepath.Join(source, ".env.example"))
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(originalEnv), "\n")
+	for i, line := range lines {
+		key, _, exists := strings.Cut(line, "=")
+		if value, found := replacements[key]; exists && found {
+			lines[i] = key + "=" + serializeEnv(value)
+			delete(replacements, key)
+		}
+	}
+	if len(replacements) != 0 {
+		return errors.New("template env is incomplete")
+	}
+	env := strings.Join(lines, "\n")
 	if err = os.WriteFile(filepath.Join(destination, ".env"), []byte(env), 0600); err != nil {
 		return err
 	}
@@ -181,7 +181,7 @@ func findRoot() (string, error) {
 	}
 }
 func copyTemplate(source, destination, module string) error {
-	allowed := map[string]struct{}{".github": {}, "cmd": {}, "contracts": {}, "internal": {}, ".dockerignore": {}, ".env.example": {}, ".gitignore": {}, "Dockerfile": {}, "compose.yaml": {}, "compose.override.yaml.example": {}, "go.mod": {}, "go.sum": {}, "README.md": {}, "sqlc.yaml": {}, "CONTRIBUTING.md": {}, "SECURITY.md": {}, "CHANGELOG.md": {}}
+	allowed := map[string]struct{}{"LICENSE": {}, ".gitattributes": {}, ".github": {}, "cmd": {}, "contracts": {}, "internal": {}, ".dockerignore": {}, ".env.example": {}, ".gitignore": {}, "Dockerfile": {}, "compose.yaml": {}, "compose.override.yaml.example": {}, "go.mod": {}, "go.sum": {}, "README.md": {}, "sqlc.yaml": {}, "CONTRIBUTING.md": {}, "SECURITY.md": {}, "CHANGELOG.md": {}}
 	allowed["scripts"] = struct{}{}
 	allowed["Makefile"] = struct{}{}
 	allowed["docs"] = struct{}{}
@@ -247,4 +247,19 @@ func copyTemplate(source, destination, module string) error {
 		}
 		return closeErr
 	})
+}
+
+func randomSecret() string {
+	data := make([]byte, 24)
+	if _, err := rand.Read(data); err != nil {
+		panic(err)
+	}
+	return base64.RawURLEncoding.EncodeToString(data)
+}
+func serializeEnv(value string) string {
+	if strings.Contains(value, "\\") {
+		encoded, _ := json.Marshal(value)
+		return strings.ReplaceAll(string(encoded), "$", "\\$")
+	}
+	return "'" + strings.ReplaceAll(value, "'", "\\'") + "'"
 }

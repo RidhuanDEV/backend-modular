@@ -176,3 +176,11 @@ Read [Contributing](CONTRIBUTING.md) before opening a change. Report suspected v
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+### Unified npm setup
+
+```sh
+npx create-ridhuan-backend@latest MyBackend --template dotnet --yes
+```
+
+The generated `GETTING-STARTED.md` includes the required env loader, migrations, explicit seed, and chosen port. Defaults are `5080` on the host/manual API and `8080` in containers. `COMPOSE_PROFILES` enables selected development services; run `docker compose up --build -d --wait` to verify service readiness. Custom S3 provider endpoint, region, access key and bucket are retained. All four tool projects are included; renamed projects restore in locked mode without changing lockfile policy.

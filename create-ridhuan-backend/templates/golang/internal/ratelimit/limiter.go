@@ -15,19 +15,22 @@ type bucket struct {
 	Expires time.Time
 }
 type Limiter struct {
-	redis  *redis.Client
-	mu     sync.Mutex
-	memory map[string]bucket
+	redis     *redis.Client
+	namespace string
+	mu        sync.Mutex
+	memory    map[string]bucket
 }
 
-func New(client *redis.Client) *Limiter { return &Limiter{redis: client, memory: map[string]bucket{}} }
+func New(client *redis.Client, namespace string) *Limiter {
+	return &Limiter{redis: client, namespace: namespace, memory: map[string]bucket{}}
+}
 
 var fixedWindow = redis.NewScript(`local count=redis.call('INCR', KEYS[1]); if count == 1 then redis.call('PEXPIRE',KEYS[1],ARGV[1]) end; return count`)
 
 func (l *Limiter) Allow(ctx context.Context, group, key string, rate config.Rate) (bool, error) {
 	window := time.Duration(rate.WindowMS) * time.Millisecond
 	windowID := time.Now().UnixMilli() / rate.WindowMS
-	fullKey := fmt.Sprintf("ratelimit:%s:%s:%d", group, key, windowID)
+	fullKey := fmt.Sprintf("%s:ratelimit:%s:%s:%d", l.namespace, group, key, windowID)
 	if l.redis != nil {
 		count, err := fixedWindow.Run(ctx, l.redis, []string{fullKey}, rate.WindowMS).Int64()
 		if err != nil {

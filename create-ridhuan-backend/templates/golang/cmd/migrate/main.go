@@ -1,15 +1,17 @@
 package main
 
 import (
+	"github.com/RidhuanDEV/golang-backend/internal/config"
 	"log"
 	"os"
 
 	"github.com/RidhuanDEV/golang-backend/internal/db"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	_ = godotenv.Load()
+	if err := config.LoadEnvironment(".env"); err != nil {
+		log.Fatal(err)
+	}
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {
 		log.Fatal("DATABASE_URL is required")

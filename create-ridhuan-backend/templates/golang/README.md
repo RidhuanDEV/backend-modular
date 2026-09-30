@@ -58,27 +58,27 @@ docker compose up --build -d
 docker compose run --rm --entrypoint seed app
 ```
 
-Compose menjalankan migrasi satu kali sebelum API dimulai. Seed tetap perintah eksplisit. API tersedia di `http://localhost:3000`, OpenAPI JSON di `/docs/openapi.json`, dan viewer di `/docs`.
+Compose menjalankan migrasi satu kali sebelum API dimulai. Seed tetap perintah eksplisit. API tersedia di `http://localhost:8080`, OpenAPI JSON di `/docs/openapi.json`, dan viewer di `/docs`.
 
 Untuk mengecek register dan login, jalankan setelah seed. Ganti email dan password dengan milik Anda:
 
 ```sh
-curl -sS http://localhost:3000/api/auth/register -H 'Content-Type: application/json' -d '{"email":"dev@example.com","password":"change-this-password"}'
-curl -sS http://localhost:3000/api/auth/login -H 'Content-Type: application/json' -d '{"email":"dev@example.com","password":"change-this-password"}'
+curl -sS http://localhost:8080/api/auth/register -H 'Content-Type: application/json' -d '{"email":"dev@example.com","password":"change-this-password"}'
+curl -sS http://localhost:8080/api/auth/login -H 'Content-Type: application/json' -d '{"email":"dev@example.com","password":"change-this-password"}'
 # Salin token dari data.token pada response login.
-curl -sS http://localhost:3000/api/auth/me -H 'Authorization: Bearer <token>'
+curl -sS http://localhost:8080/api/auth/me -H 'Authorization: Bearer <token>'
 # Saat access token kedaluwarsa, rotasi refresh token dan simpan nilai baru dari data.refreshToken.
-curl -sS http://localhost:3000/api/auth/refresh -H 'Content-Type: application/json' -d '{"refreshToken":"<refresh-token>"}'
+curl -sS http://localhost:8080/api/auth/refresh -H 'Content-Type: application/json' -d '{"refreshToken":"<refresh-token>"}'
 ```
 
 PowerShell juga dapat memakai `Invoke-RestMethod`:
 
 ```powershell
 $body = @{ email = 'dev@example.com'; password = 'change-this-password' } | ConvertTo-Json
-Invoke-RestMethod http://localhost:3000/api/auth/register -Method Post -ContentType 'application/json' -Body $body
-$login = Invoke-RestMethod http://localhost:3000/api/auth/login -Method Post -ContentType 'application/json' -Body $body
+Invoke-RestMethod http://localhost:8080/api/auth/register -Method Post -ContentType 'application/json' -Body $body
+$login = Invoke-RestMethod http://localhost:8080/api/auth/login -Method Post -ContentType 'application/json' -Body $body
 $token = $login.data.token
-Invoke-RestMethod http://localhost:3000/api/auth/me -Headers @{ Authorization = "Bearer $token" }
+Invoke-RestMethod http://localhost:8080/api/auth/me -Headers @{ Authorization = "Bearer $token" }
 ```
 
 Untuk mencoba endpoint admin, set `ADMIN_EMAIL` dan `ADMIN_PASSWORD` sebelum seed, login memakai nilai tersebut, lalu panggil `GET /api/users` dengan bearer token. Login mengembalikan access token 15 menit di `data.token` dan refresh token opaque 30 hari di `data.refreshToken`. Kirim refresh token ke `POST /api/auth/refresh` untuk rotasi; token lama hanya dapat dipakai sekali. Endpoint protected menerima `Authorization: Bearer <token>`.
@@ -126,7 +126,7 @@ Ikuti [panduan membuat modul](docs/module-guide.md) untuk langkah lengkap: migra
 
 | Variable | Default | Kegunaan |
 | --- | --- | --- |
-| `PORT` / `APP_PORT` | `3000` | Port aplikasi di container / port host Compose |
+| `PORT` / `APP_PORT` | `8080` | Port manual / port host Compose; container tetap 8080 |
 | `DATABASE_URL` | local PostgreSQL | PostgreSQL milik aplikasi ini |
 | `JWT_SECRET` | placeholder | Wajib, minimal 32 karakter; initializer menghasilkan nilai acak |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | kosong | Opsional; membuat akun admin saat seed |
@@ -175,3 +175,13 @@ Access JWT berlaku 15 menit dan refresh token opaque berlaku sampai 30 hari seja
 ## Lisensi dan kontribusi
 
 Repository ini belum menyertakan file lisensi. Hak penggunaan ulang belum diberikan secara eksplisit; tentukan dan tambahkan lisensi sebelum mendistribusikan template. Panduan kontribusi ada di [CONTRIBUTING.md](CONTRIBUTING.md); pelaporan kerentanan dijelaskan di [SECURITY.md](SECURITY.md).
+
+Untuk initializer Go, password database dibuat acak atau diambil dari `RIDHUAN_DB_PASSWORD`; nilainya tidak dicetak. CLI npm menyediakan prompt password tersamarkan. Port default Go adalah 8080; gunakan override host bila port telah digunakan.
+
+## Unified npm initializer
+
+```sh
+npx create-ridhuan-backend@latest my-api --template golang --yes
+```
+
+Follow the generated `GETTING-STARTED.md` for manual migrations, explicit seed, and hybrid or Docker setup. `--port` changes the manual and Compose host port (default `8080`); the container remains on `8080`. The selected optional services are activated by `COMPOSE_PROFILES`. `REDIS_NAMESPACE` must be unique per deployment and shared by its replicas when using a common Redis server.

@@ -17,10 +17,13 @@
     "api-docs": "tsx src/scripts/generate-openapi.ts",
     "api-docs:check": "tsx src/scripts/generate-openapi.ts --check",
     "uploads:cleanup": "node dist/scripts/cleanup-orphan-uploads.js",
-    "test": "npm run build && node --test tests/time-docs-audit.test.mjs tests/rate-limit.test.mjs tests/env-policies.test.mjs tests/storage.test.mjs tests/health-cors.test.mjs tests/input-errors.test.mjs",
+    "test": "npm run build && node --test tests/time-docs-audit.test.mjs tests/rate-limit.test.mjs tests/env-policies.test.mjs tests/storage.test.mjs tests/health-cors.test.mjs tests/input-errors.test.mjs tests/env-loader.test.mjs",
     "test:database": "npm run build && node --test tests/notifications.integration.mjs tests/privilege.integration.mjs",
     "lint": "eslint .",
-    "verify:template": "npm run lint && npm run test && npm run api-docs:check && npx prisma validate && node scripts/verify-package.mjs"
+    "verify:template": "npm run lint && npm run test && npm run api-docs:check && npx prisma validate",
+    "prebuild": "prisma generate",
+    "predev": "prisma generate",
+    "prisma:migrate:deploy": "prisma migrate deploy"
   },
   "keywords": [
     "express",
@@ -80,5 +83,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.71.0"
+  },
+  "engines": {
+    "node": ">=24.15.0 <27"
   }
 }

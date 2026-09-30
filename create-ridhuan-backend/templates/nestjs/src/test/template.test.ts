@@ -29,6 +29,15 @@ test("Redis namespace is explicit and safe for shared servers", () => {
     JWT_SECRET: "local_secret_0123456789_abcdefghijklmnop", REDIS_NAMESPACE: "other project:" }), /REDIS_NAMESPACE/);
 });
 
+test("SMTP supports explicit TLS and validates enabled credentials", () => {
+  const base = { DATABASE_URL: "postgresql://localhost/example", JWT_SECRET: "local_secret_0123456789_abcdefghijklmnop" };
+  assert.equal(validateEnvironment({ ...base, SMTP_SECURE: "true" }).SMTP_SECURE, true);
+  assert.equal(validateEnvironment(base).SMTP_SECURE, false);
+  assert.throws(() => validateEnvironment({ ...base, SMTP_ENABLED: "true" }), /SMTP/);
+  assert.throws(() => validateEnvironment({ ...base, SMTP_ENABLED: "true", SMTP_HOST: "mail.example.com", SMTP_FROM: "sender@example.com", SMTP_USER: "user" }), /SMTP/);
+  assert.throws(() => validateEnvironment({ ...base, SMTP_PORT: "65536" }), /SMTP/);
+});
+
 test("UTC and IANA time zones represent the same instant", () => {
   const time = new TimeService();
   const instant = time.parseInstant("2026-09-29T00:00:00Z");

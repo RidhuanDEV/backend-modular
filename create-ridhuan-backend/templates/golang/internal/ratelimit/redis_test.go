@@ -31,8 +31,8 @@ func TestRedisLimitSharedAcrossInstances(t *testing.T) {
 	}
 	key := uuid.NewString()
 	rate := config.Rate{WindowMS: 60000, Max: 2}
-	first := New(client)
-	second := New(client)
+	first := New(client, "test-rate")
+	second := New(client, "test-rate")
 	for index, limiter := range []*Limiter{first, second, first} {
 		allowed, e := limiter.Allow(ctx, "auth", key, rate)
 		if e != nil {
@@ -54,7 +54,7 @@ func TestRedisConcurrentLimitsAndExpiry(t *testing.T) {
 	}
 	client := redis.NewClient(options)
 	defer client.Close()
-	first, second := New(client), New(client)
+	first, second := New(client, "test-rate"), New(client, "test-rate")
 	key := uuid.NewString()
 	rate := config.Rate{WindowMS: 1000, Max: 7}
 	var accepted atomic.Int32

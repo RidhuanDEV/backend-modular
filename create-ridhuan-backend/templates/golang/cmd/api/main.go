@@ -17,7 +17,6 @@ import (
 	"github.com/RidhuanDEV/golang-backend/internal/httpapi"
 	"github.com/RidhuanDEV/golang-backend/internal/storage"
 	"github.com/RidhuanDEV/golang-backend/internal/telemetry"
-	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -29,7 +28,9 @@ func main() {
 	}
 }
 func run() error {
-	_ = godotenv.Load()
+	if err := config.LoadEnvironment(".env"); err != nil {
+		return err
+	}
 	c, err := config.Load()
 	if err != nil {
 		return err
@@ -62,6 +63,11 @@ func run() error {
 		if err != nil {
 			return err
 		}
+		options.ContextTimeoutEnabled = true
+		options.DialTimeout = 500 * time.Millisecond
+		options.ReadTimeout = 500 * time.Millisecond
+		options.WriteTimeout = 500 * time.Millisecond
+		options.MaxRetries = -1
 		redisClient = redis.NewClient(options)
 		defer redisClient.Close()
 		if c.RateStore == "redis" {

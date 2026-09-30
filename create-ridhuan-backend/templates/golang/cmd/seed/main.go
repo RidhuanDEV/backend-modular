@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/RidhuanDEV/golang-backend/internal/config"
 	"log"
 	"os"
 	"strings"
@@ -9,12 +10,13 @@ import (
 
 	"github.com/RidhuanDEV/golang-backend/internal/db"
 	"github.com/RidhuanDEV/golang-backend/internal/db/sqlc"
-	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
-	_ = godotenv.Load()
+	if err := config.LoadEnvironment(".env"); err != nil {
+		log.Fatal(err)
+	}
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {
 		log.Fatal("DATABASE_URL is required")

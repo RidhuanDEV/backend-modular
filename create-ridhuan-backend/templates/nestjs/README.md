@@ -103,3 +103,11 @@ See `.env.example` for all keys and defaults. Store actual secrets in deployment
 Back up PostgreSQL and the upload object store together. To restore, stop writes, restore the matching database dump and local upload volume or S3 bucket, then run `prisma migrate deploy` before replicas restart. Verify a sampled upload and an authenticated request after restoration. Do not treat `/live`, a successful build, or CI alone as evidence of production capacity, backup recovery, and high availability in a particular VPS.
 
 The prior MySQL prototype and its logs are in the ignored `.legacy` folder; it is not part of this template's runtime. This template does not migrate data from that prototype automatically.
+
+### SMTP transport
+
+`SMTP_SECURE=false` uses plaintext with STARTTLS when offered (typically port 587). For implicit TLS (typically port 465), set `SMTP_SECURE=true`. When enabled, configure `SMTP_HOST` and `SMTP_FROM`; supply both username/password together when authentication is needed. Notifications remain stored if sending email fails.
+
+### Generated setup defaults
+
+The unified CLI sets host/manual HTTP to `3000` by default and keeps the container on `3000`. `--port` updates `.env` and the generated guide. `COMPOSE_PROFILES` starts selected Redis/S3 dependencies with `docker compose up --build -d --wait`; MinIO bucket provisioning is explicit and idempotent. Seed with `docker compose exec app npm run seed` after migrations complete. For a manual API with Compose dependencies, follow `GETTING-STARTED.md`. `REDIS_NAMESPACE` isolates independent deployments sharing Redis; replicas share one namespace.

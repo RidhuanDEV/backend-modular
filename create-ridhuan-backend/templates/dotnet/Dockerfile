@@ -11,6 +11,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0.12 AS runtime
 WORKDIR /app
 COPY --from=build /out /app
 USER root
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 RUN mkdir /app/uploads && chown app:app /app/uploads
 USER app
 ENV ASPNETCORE_HTTP_PORTS=8080

@@ -1,6 +1,6 @@
 {
   "name": "create-ridhuan-backend",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Multi-template CLI for Express TypeScript, NestJS, Golang, and .NET backends",
   "type": "module",
   "bin": {
@@ -13,7 +13,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=20"
+    "node": "^22.13.0 || >=24.0.0 <27"
   },
   "keywords": [
     "cli",
@@ -34,19 +34,33 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/RidhuanDEV/create-ridhuan-backend.git"
+    "url": "git+https://github.com/RidhuanDEV/backend-modular.git",
+    "directory": "create-ridhuan-backend"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "prepare:templates": "node ./scripts/prepare-templates.mjs",
-    "build": "tsc",
+    "build": "node scripts/clean-build.mjs && tsc",
     "prepack": "npm run prepare:templates && npm run build",
-    "test": "node ./scripts/verify-cli.mjs"
+    "test": "node ./scripts/verify-cli.mjs",
+    "test:consumer": "node scripts/verify-consumer.mjs",
+    "test:compose": "node scripts/verify-compose.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
+    "@types/pg": "^8.23.1",
+    "@types/semver": "^7.8.0",
     "typescript": "^5.7.3"
-  }
+  },
+  "dependencies": {
+    "@inquirer/password": "^5.2.2",
+    "pg": "^8.23.0",
+    "semver": "^7.8.5"
+  },
+  "bugs": {
+    "url": "https://github.com/RidhuanDEV/backend-modular/issues"
+  },
+  "homepage": "https://github.com/RidhuanDEV/backend-modular/tree/main/create-ridhuan-backend#readme"
 }

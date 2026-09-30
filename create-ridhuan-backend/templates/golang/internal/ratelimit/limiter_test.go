@@ -8,7 +8,7 @@ import (
 )
 
 func TestMemoryLimitPerKey(t *testing.T) {
-	limiter := New(nil)
+	limiter := New(nil, "test-rate")
 	rate := config.Rate{WindowMS: 60000, Max: 2}
 	for i := 0; i < 3; i++ {
 		allowed, err := limiter.Allow(context.Background(), "auth", "client-a", rate)

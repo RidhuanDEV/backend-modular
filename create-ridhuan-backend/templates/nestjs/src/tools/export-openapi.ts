@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "../config/load-env";
 import { writeFile } from "node:fs/promises";
 import { createApp } from "../main";
 import { DocsService } from "../modules/docs/docs.service";

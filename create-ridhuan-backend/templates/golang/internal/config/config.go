@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -29,6 +30,7 @@ type Config struct {
 	JWTAudience            string
 	CORSOrigins            map[string]struct{}
 	RedisURL               string
+	RedisNamespace         string
 	CacheEnabled           bool
 	RateStore              string
 	Rates                  map[string]Rate
@@ -80,13 +82,14 @@ func boolean(key string, fallback bool) (bool, error) {
 func Load() (Config, error) {
 	c := Config{
 		Environment:       getenv("NODE_ENV", "development"),
-		Port:              3000,
+		Port:              8080,
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		JWTSecret:         os.Getenv("JWT_SECRET"),
 		JWTIssuer:         os.Getenv("JWT_ISSUER"),
 		JWTAudience:       os.Getenv("JWT_AUDIENCE"),
 		CORSOrigins:       map[string]struct{}{},
 		RedisURL:          os.Getenv("REDIS_URL"),
+		RedisNamespace:    getenv("REDIS_NAMESPACE", "modular-golang"),
 		RateStore:         getenv("RATE_LIMIT_STORE", "memory"),
 		Rates:             map[string]Rate{},
 		Policies:          map[string]PolicyOverride{},
@@ -106,7 +109,7 @@ func Load() (Config, error) {
 		SMTPFrom:          os.Getenv("SMTP_FROM"),
 	}
 	var err error
-	if c.Port, err = integer("PORT", 3000); err != nil {
+	if c.Port, err = integer("PORT", 8080); err != nil {
 		return c, err
 	}
 	if c.SMTPPort, err = integer("SMTP_PORT", 587); err != nil {
@@ -206,6 +209,9 @@ func Load() (Config, error) {
 	}
 	if c.Environment == "production" && len(c.CORSOrigins) == 0 {
 		return c, errors.New("CORS_ORIGINS is required in production")
+	}
+	if !regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`).MatchString(c.RedisNamespace) {
+		return c, errors.New("invalid REDIS_NAMESPACE")
 	}
 	if c.RateStore != "memory" && c.RateStore != "redis" {
 		return c, errors.New("RATE_LIMIT_STORE must be memory or redis")

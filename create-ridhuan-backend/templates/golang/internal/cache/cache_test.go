@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestDisabledCacheNeverUsesRedis(t *testing.T) {
-	key, err := New(nil, false).Key(context.Background(), "user.get", "actor", "/api/users/1")
+	key, err := New(nil, false, "test-cache").Key(context.Background(), "user.get", "actor", "/api/users/1")
 	if err != nil || key != "" {
 		t.Fatalf("disabled cache key %q: %v", key, err)
 	}
@@ -32,7 +33,7 @@ func TestRedisCacheInvalidation(t *testing.T) {
 	if err = client.Ping(ctx).Err(); err != nil {
 		t.Fatal(err)
 	}
-	cache := New(client, true)
+	cache := New(client, true, "test-cache")
 	endpoint := uuid.NewString()
 	key, err := cache.Key(ctx, endpoint, "actor", "/resource")
 	if err != nil {
@@ -54,5 +55,32 @@ func TestRedisCacheInvalidation(t *testing.T) {
 	}
 	if next == key {
 		t.Fatal("cache version unchanged after mutation")
+	}
+}
+
+func TestUnresponsiveRedisHasBoundedCacheWait(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	finished := make(chan struct{})
+	defer close(finished)
+	go func() {
+		connection, e := listener.Accept()
+		if e == nil {
+			defer connection.Close()
+			<-finished
+		}
+	}()
+	client := redis.NewClient(&redis.Options{Addr: listener.Addr().String(), ContextTimeoutEnabled: true, ReadTimeout: time.Minute, WriteTimeout: time.Minute, MaxRetries: -1})
+	defer client.Close()
+	start := time.Now()
+	_, err = New(client, true, "bounded-cache").Key(t.Context(), "user.get", "actor", "/resource")
+	if err == nil {
+		t.Fatal("unresponsive cache unexpectedly succeeded")
+	}
+	if time.Since(start) > time.Second {
+		t.Fatal("optional Redis cache exceeded fallback deadline")
 	}
 }

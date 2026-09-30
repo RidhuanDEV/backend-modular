@@ -72,7 +72,7 @@ export function selectPrompt<T>(
           process.stdin.setRawMode(false);
         }
         process.stdout.write("\nAborted.\n");
-        process.exit(0);
+        process.exit(130);
       }
 
       if (key === "\u001b[A" || key === "k" || key === "w") {

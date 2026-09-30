@@ -13,7 +13,6 @@ import (
 	"github.com/RidhuanDEV/golang-backend/internal/db"
 	"github.com/RidhuanDEV/golang-backend/internal/db/sqlc"
 	"github.com/RidhuanDEV/golang-backend/internal/storage"
-	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -24,7 +23,9 @@ func main() {
 func run() error {
 	apply := flag.Bool("apply", false, "delete orphan objects; default only lists them")
 	flag.Parse()
-	_ = godotenv.Load()
+	if err := config.LoadEnvironment(".env"); err != nil {
+		return err
+	}
 	c, err := config.Load()
 	if err != nil {
 		return err

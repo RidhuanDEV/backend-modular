@@ -1,6 +1,7 @@
 import { plainToInstance, Type } from "class-transformer";
 import {
   IsIn,
+  isEmail,
   IsInt,
   IsOptional,
   IsString,
@@ -97,6 +98,7 @@ class EnvironmentInput {
 
   @IsIn(["true", "false"])
   SMTP_ENABLED!: string;
+  @IsIn(["true", "false"]) SMTP_SECURE!: string;
   @IsString() @IsOptional() SMTP_HOST?: string;
   @Type(() => Number) @IsInt() @Min(1) SMTP_PORT!: number;
   @IsString() @IsOptional() SMTP_USER?: string;
@@ -138,6 +140,7 @@ export interface AppConfig {
   S3_SECRET_ACCESS_KEY?: string;
   S3_FORCE_PATH_STYLE: boolean;
   SMTP_ENABLED: boolean;
+  SMTP_SECURE: boolean;
   SMTP_HOST?: string;
   SMTP_PORT: number;
   SMTP_USER?: string;
@@ -156,7 +159,7 @@ const defaults: Record<string, string> = {
   UPLOAD_ENABLED: "true", UPLOAD_STORAGE: "local", UPLOAD_LOCAL_DIR: "./uploads",
   UPLOAD_MAX_BYTES: "10485760", UPLOAD_ALLOWED_MIME: "image/png,image/jpeg,application/pdf",
   UPLOAD_ORPHAN_GRACE_HOURS: "24", S3_FORCE_PATH_STYLE: "true",
-  SMTP_ENABLED: "false", SMTP_PORT: "587",
+  SMTP_ENABLED: "false", SMTP_SECURE: "false", SMTP_PORT: "587",
 };
 
 function parseOrigins(value: string): string[] {
@@ -202,8 +205,9 @@ export function validateEnvironment(raw: Record<string, unknown>): AppConfig {
       (!input.S3_REGION || !input.S3_BUCKET || !input.S3_ACCESS_KEY_ID || !input.S3_SECRET_ACCESS_KEY)) {
     throw new Error("S3 region, bucket and credentials are required");
   }
-  if (input.SMTP_ENABLED === "true" && (!input.SMTP_HOST || !input.SMTP_FROM)) {
-    throw new Error("SMTP_HOST and SMTP_FROM are required when SMTP is enabled");
+  if (input.SMTP_PORT > 65535 || input.SMTP_ENABLED === "true" &&
+      (!input.SMTP_HOST || !input.SMTP_FROM || !isEmail(input.SMTP_FROM) || Boolean(input.SMTP_USER) !== Boolean(input.SMTP_PASSWORD))) {
+    throw new Error("SMTP requires a valid port, host, sender and matching username/password");
   }
   return {
     NODE_ENV: input.NODE_ENV, PORT: input.PORT, CORS_ORIGINS: origins, DATABASE_URL: input.DATABASE_URL,
@@ -225,7 +229,7 @@ export function validateEnvironment(raw: Record<string, unknown>): AppConfig {
     ...(input.S3_ACCESS_KEY_ID ? { S3_ACCESS_KEY_ID: input.S3_ACCESS_KEY_ID } : {}),
     ...(input.S3_SECRET_ACCESS_KEY ? { S3_SECRET_ACCESS_KEY: input.S3_SECRET_ACCESS_KEY } : {}),
     S3_FORCE_PATH_STYLE: input.S3_FORCE_PATH_STYLE === "true",
-    SMTP_ENABLED: input.SMTP_ENABLED === "true", SMTP_PORT: input.SMTP_PORT,
+    SMTP_ENABLED: input.SMTP_ENABLED === "true", SMTP_SECURE: input.SMTP_SECURE === "true", SMTP_PORT: input.SMTP_PORT,
     ...(input.SMTP_HOST ? { SMTP_HOST: input.SMTP_HOST } : {}),
     ...(input.SMTP_USER ? { SMTP_USER: input.SMTP_USER } : {}),
     ...(input.SMTP_PASSWORD ? { SMTP_PASSWORD: input.SMTP_PASSWORD } : {}),

@@ -1,3 +1,4 @@
+import "./config/load-env";
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
@@ -20,7 +21,7 @@ import { MailModule } from "./platform/mail/mail.module";
 import { SseModule } from "./platform/sse/sse.module";
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }), CommonModule,
+  imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true, validate: validateEnvironment }), CommonModule,
     DatabaseModule, RedisModule, MailModule, SseModule, SystemModule, DocsModule, AuthModule, UsersModule,
     RolesModule, PermissionsModule, UploadsModule, NotificationsModule],
   providers: [

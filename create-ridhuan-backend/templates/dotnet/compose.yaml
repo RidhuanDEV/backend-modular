@@ -1,4 +1,3 @@
-name: modular-net
 services:
   postgres:
     image: postgres:18.3-alpine
@@ -6,66 +5,110 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-modular_net}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-modular_net}
-    ports: ["127.0.0.1:${POSTGRES_PORT:-55432}:5432"]
-    volumes: ["postgres_data:/var/lib/postgresql"]
+    ports:
+    - 127.0.0.1:${POSTGRES_PORT:-55432}:5432
+    volumes:
+    - postgres_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test:
+      - CMD-SHELL
+      - pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB
       interval: 3s
       timeout: 3s
       retries: 20
   migrate:
     build: .
-    entrypoint: ["dotnet", "/app/migrator/ModularBackend.Migrator.dll"]
+    entrypoint:
+    - dotnet
+    - /app/migrator/ModularBackend.Migrator.dll
     environment:
-      Database__ConnectionString: Host=postgres;Database=${POSTGRES_DB:-modular_net};Username=${POSTGRES_USER:-modular_net};Password=${POSTGRES_PASSWORD}
+      Database__ConnectionString: ${Database__ConnectionString_DOCKER:?Set Database__ConnectionString_DOCKER}
     depends_on:
-      postgres: {condition: service_healthy}
-    restart: "no"
+      postgres:
+        condition: service_healthy
+    restart: 'no'
   app:
     build: .
     env_file: .env
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
-      Database__ConnectionString: Host=postgres;Database=${POSTGRES_DB:-modular_net};Username=${POSTGRES_USER:-modular_net};Password=${POSTGRES_PASSWORD}
+      Database__ConnectionString: ${Database__ConnectionString_DOCKER:?Set Database__ConnectionString_DOCKER}
       Redis__ConnectionString: redis:6379
       Upload__LocalRoot: /app/uploads
       Upload__Endpoint: ${S3_ENDPOINT_DOCKER-http://s3mock:9090}
-    ports: ["${APP_PORT:-5080}:8080"]
-    volumes: ["uploads_data:/app/uploads"]
+    ports:
+    - ${APP_PORT:-5080}:8080
+    volumes:
+    - uploads_data:/app/uploads
     depends_on:
-      migrate: {condition: service_completed_successfully}
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+        required: false
+      s3mock:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - --fail
+      - --silent
+      - --max-time
+      - '2'
+      - http://localhost:8080/ready
+      interval: 10s
+      timeout: 3s
+      retries: 12
     restart: unless-stopped
   seeder:
     build: .
-    profiles: [seed]
-    entrypoint: ["dotnet", "/app/seeder/ModularBackend.Seeder.dll"]
+    profiles:
+    - seed
+    entrypoint:
+    - dotnet
+    - /app/seeder/ModularBackend.Seeder.dll
     env_file: .env
     environment:
-      Database__ConnectionString: Host=postgres;Database=${POSTGRES_DB:-modular_net};Username=${POSTGRES_USER:-modular_net};Password=${POSTGRES_PASSWORD}
+      Database__ConnectionString: ${Database__ConnectionString_DOCKER:?Set Database__ConnectionString_DOCKER}
     depends_on:
-      migrate: {condition: service_completed_successfully}
-    restart: "no"
+      migrate:
+        condition: service_completed_successfully
+    restart: 'no'
   redis:
     image: redis:8.6.1-alpine
-    profiles: [redis]
-    ports: ["127.0.0.1:${REDIS_PORT:-56379}:6379"]
+    profiles:
+    - redis
+    ports:
+    - 127.0.0.1:${REDIS_PORT:-56379}:6379
     healthcheck:
-      test: [CMD, redis-cli, ping]
+      test:
+      - CMD
+      - redis-cli
+      - ping
       interval: 3s
       timeout: 3s
       retries: 20
   s3mock:
-    image: adobe/s3mock:5.1.0
-    profiles: [s3]
+    image: adobe/s3mock:5.2.2
+    profiles:
+    - s3
     environment:
       COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: ${Upload__Bucket:-uploads}
-    ports: ["127.0.0.1:${S3_PORT:-19000}:9090"]
+    ports:
+    - 127.0.0.1:${S3_PORT:-19000}:9090
     healthcheck:
-      test: [CMD, wget, --spider, -q, http://localhost:9090/favicon.ico]
+      test:
+      - CMD
+      - wget
+      - --spider
+      - -q
+      - http://localhost:9090/favicon.ico
       interval: 3s
       timeout: 3s
       retries: 20
 volumes:
-  postgres_data:
-  uploads_data:
+  postgres_data: null
+  uploads_data: null
