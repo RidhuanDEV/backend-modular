@@ -156,7 +156,7 @@ function installDependencies(targetDir: string, template: TemplateId): void {
 
 export async function runCli(): Promise<void> {
   process.stdout.write(
-    `\n${colors.brightCyan}${colors.bold}create-ridhuan-backend${colors.reset} ${colors.dim}v1.1.0${colors.reset}\n`,
+    `\n${colors.brightCyan}${colors.bold}create-ridhuan-backend${colors.reset} ${colors.dim}v1.1.1${colors.reset}\n`,
   );
   process.stdout.write(`${colors.gray}Modular backend starter generator${colors.reset}\n\n`);
 
