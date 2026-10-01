@@ -1,6 +1,6 @@
 # Status implementasi FastAPI dan PostgreSQL/MySQL
 
-Tanggal: 1 Oktober 2026. Status: source tersedia dan sepuluh kombinasi Compose lokal lulus; belum dirilis.
+Tanggal: 1 Oktober 2026. Status: source di-push ke main; build lokal, CI kelima source dan CI root lulus. CLI `1.4.0` belum dipublikasikan oleh pekerjaan ini.
 
 ## Perubahan yang tersedia
 
@@ -42,33 +42,44 @@ Log pengujian bersifat lokal dan diabaikan Git. Hasil ini tidak membuktikan load
 - Paket pengembangan terakhir setelah pembaruan dokumentasi memiliki SHA-256 `b757aa5bac26c7ef6e32054f0bbae2c97e0547fee8150032f6d45b007f9286ab`. Ini bukan artifact clean untuk publikasi. Required CI harus menguji satu artifact clean yang sama sebelum rilis.
 - Go scanner tidak menemukan vulnerability yang reachable. Advisory module-only `GO-2026-5932` berada pada `golang.org/x/crypto/openpgp` yang tidak diimpor aplikasi; tidak berarti seluruh dependency bebas advisory.
 
-## Gate yang masih terbuka
+## Status CI dan rilis
 
-- CI source kelima framework pada commit fitur awal lulus. Root CI menemukan hook bootstrap MySQL yang mengubah shell entrypoint saat hook di-source di Linux; fix subshell sudah di-push ke kelima source dan snapshot CLI. Putaran CI terbaru sedang diverifikasi.
+- CI source kelima framework pada commit terbaru lulus. Root CI sempat menemukan hook bootstrap MySQL yang mengubah shell entrypoint saat hook di-source di Linux; fix subshell sudah di-push ke kelima source dan snapshot CLI, lalu seluruh matrix lulus ulang.
 - Source kelima framework sudah di-commit dan di-push ke main atas instruksi pengguna. FastAPI sudah diregistrasikan sebagai submodule; snapshot CLI dibangun ulang dari source clean tanpa `--allow-dirty`.
-- CLI `1.4.0` belum dipublikasikan oleh pekerjaan ini. Tidak ada deploy atau acceptance `npx @latest` untuk fitur baru ini. Publikasi tetap menunggu required CI terhadap satu artifact clean yang sama.
+- CLI `1.4.0` belum dipublikasikan oleh pekerjaan ini. Tidak ada deploy atau acceptance `npx @latest` untuk fitur baru ini. Required CI artifact sudah lulus; publikasi npm tetap langkah terpisah.
 
 ## Commit source dan build lokal sebelum push
 
-| Source | Commit main | Gate lokal terakhir |
-| --- | --- | --- |
-| Express | `bd806af` | verify:template, build, test, API docs, Prisma validate |
-| NestJS | `a0c0b72` | verify:template, build, 10 tests |
-| Go | `2125414` | build, vet, test |
-| .NET | `69db010` | Release build, format, 4 unit + 3 contract tests |
-| FastAPI | `0cdab5d` | Ruff, strict Pyright, 8 unit tests, OpenAPI |
+| Source | Commit main | Gate lokal terakhir | CI source |
+| --- | --- | --- | --- |
+| Express | `bd806af` | verify:template, build, test, API docs, Prisma validate | [Lulus](https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre/actions/runs/36836225422) |
+| NestJS | `a0c0b72` | verify:template, build, 10 tests | [Lulus](https://github.com/RidhuanDEV/modular-nestjs/actions/runs/36836230961) |
+| Go | `2125414` | build, vet, test | [Lulus](https://github.com/RidhuanDEV/golang-backend/actions/runs/36836233910) |
+| .NET | `69db010` | Release build, format, 4 unit + 3 contract tests | [Lulus](https://github.com/RidhuanDEV/NET-backend/actions/runs/36836238667) |
+| FastAPI | `0cdab5d` | Ruff, strict Pyright, 8 unit tests, OpenAPI | [Lulus](https://github.com/RidhuanDEV/modular-fastapi/actions/runs/36836242772) |
 
 Build aplikasi dilakukan pada commit fitur sebelum fix hook; source aplikasi tidak berubah pada fix tersebut. Regresi hook MySQL terbaru diuji terhadap image resmi dengan mode Linux `0644` (sourced) dan `0755` (executable): keduanya berhasil startup dan mengautentikasi password kutip/backslash/Unicode. Pengujian CLI clean sepuluh pasangan juga lulus kembali.
 
-GitHub Actions source dan root akan dicatat setelah hasil run terbaru tersedia.
+Kelima CI source di atas lulus pada commit main terbaru. Build CLI dari clean recursive clone juga lulus dan mereproduksi snapshot committed tanpa diff.
+
+## CI root dan artifact yang diuji
+
+[Root CI run 36836468349](https://github.com/RidhuanDEV/backend-modular/actions/runs/36836468349) lulus pada commit kode `fe83636`:
+
+- 32 job lulus: packaging, 20 consumer Windows/Linux, smoke macOS, dan 10 Compose combinations.
+- Consumer Linux memverifikasi startup manual dan database nyata; Windows memverifikasi native install/build/test/generator. macOS memverifikasi generation CLI dan native FastAPI kedua engine.
+- Seluruh consumer dan Compose memakai artifact clean yang sama: `create-ridhuan-backend-1.4.0.tgz`, SHA-256 `52d9c916f38ede6e01fc7920382745277419ce0bef0e2fe83b52876dfb0c2a8b`.
+- Job publish dilewati karena run berasal dari push, bukan dispatch publikasi. CI/CD publikasi tetap melalui dispatch eksplisit setelah otorisasi rilis.
+- Workflow membatasi tiga Compose job pada runner terpisah dan dua consumer job. Perubahan laporan root saja tidak memicu ulang matrix release; kode CLI, workflow, submodule dan snapshot tetap menjadi trigger.
+- Commit laporan setelah run ini hanya memperbarui dokumentasi; source/snapshot dan artifact yang diuji tidak berubah.
 
 ## Reproduksi
 
-Di folder `create-ridhuan-backend`, untuk verifikasi pengembangan:
+Di folder `create-ridhuan-backend`, untuk verifikasi source clean:
 
 ```sh
 npm ci
-npm run prepare:templates -- --allow-dirty
+npm run prepare:templates
 npm run build
 npm test
 node scripts/verify-consumer.mjs fastapi mysql --runtime

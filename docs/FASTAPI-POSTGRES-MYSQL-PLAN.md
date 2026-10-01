@@ -1,7 +1,7 @@
 # Rencana FastAPI dan PostgreSQL/MySQL untuk Lima Template
 
 Tanggal: 1 Oktober 2026.
-Status: implementasi source dan CLI tersedia; sepuluh kombinasi Compose dan consumer Windows lulus lokal. Lihat `FASTAPI-POSTGRES-MYSQL-IMPLEMENTATION-STATUS.md` untuk bukti, artifact dan gate rilis yang masih terbuka. Versi npm publik belum diperbarui.
+Status: implementasi source dan CLI di-push ke main; build lokal serta CI source/root lulus, termasuk 20 consumer Windows/Linux, smoke macOS dan 10 Compose combinations pada satu artifact clean. Lihat `FASTAPI-POSTGRES-MYSQL-IMPLEMENTATION-STATUS.md` untuk bukti dan batas verifikasi. Publikasi npm belum dilakukan oleh pekerjaan ini.
 
 ## 1. Keputusan dan tujuan
 
@@ -324,7 +324,7 @@ Required matrix: lima framework x dua engine = sepuluh pasangan. Windows/Linux m
 - [ ] DB/required Redis outage mempengaruhi readiness; liveness tetap 200; cache-only tidak menjatuhkan readiness.
 - [ ] Migration exit 23 menahan API Compose untuk kedua engine.
 - [ ] Package bebas .env/.venv/cache/dependencies/uploads/local output/credentials.
-- [ ] Clean recursive checkout menghasilkan artifact lengkap; required source/root workflows hijau.
+- [x] Clean recursive checkout menghasilkan artifact lengkap; required source/root workflows hijau.
 - [ ] Sesudah publish, registry version/integrity dan fresh npx generation/build sepuluh pasangan lulus.
 
 SQLite tidak menggantikan acceptance PostgreSQL/MySQL. Unit/contract fixtures berasal dari DTO/registry; migration/model drift dan generated feature compile menjadi gate. Build sukses tidak sama dengan load/production/deployment acceptance.
