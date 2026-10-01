@@ -26,11 +26,13 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
-if (System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider")
+var isDocumentGeneration = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
+if (isDocumentGeneration)
 {
     builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
     builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     {
+        ["Database:Provider"] = "postgresql",
         ["Database:ConnectionString"] = "Host=127.0.0.1;Port=1;Database=openapi_only;Username=design;Password=design-only",
         ["Jwt:Secret"] = new string('g', 64),
         ["Cache:Enabled"] = "false",
@@ -42,7 +44,7 @@ if (System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name == "GetDocumen
     });
 }
 builder.Logging.ClearProviders(); builder.Logging.AddJsonConsole();
-builder.Services.AddOptions<DatabaseOptions>().BindConfiguration("Database").ValidateDataAnnotations().Validate(o => ValidDatabase(o.ConnectionString), "Invalid PostgreSQL connection string").ValidateOnStart();
+builder.Services.AddOptions<DatabaseOptions>().BindConfiguration("Database").ValidateDataAnnotations().Validate(o => DatabaseProvider.IsValid(o.Provider, o.ConnectionString), "Invalid database provider/connection string").ValidateOnStart();
 builder.Services.AddOptions<JwtOptions>().BindConfiguration("Jwt").ValidateDataAnnotations().Validate(o => !o.Secret.Contains("CHANGE_ME", StringComparison.OrdinalIgnoreCase) && Encoding.UTF8.GetByteCount(o.Secret) >= 32, "JWT secret must be generated").ValidateOnStart();
 builder.Services.AddOptions<CacheOptions>().BindConfiguration("Cache").ValidateDataAnnotations().ValidateOnStart();
 builder.Services.AddOptions<RedisOptions>().BindConfiguration("Redis").Validate(o => !(builder.Configuration.GetValue<bool>("Cache:Enabled") || builder.Configuration["Rate:Store"] == "redis") || !string.IsNullOrWhiteSpace(o.ConnectionString), "Redis connection string required").ValidateOnStart();
@@ -71,7 +73,14 @@ builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>
 });
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<EndpointRegistry>(); builder.Services.AddSingleton<RedisConnection>(); builder.Services.AddSingleton<EndpointLimiter>();
-builder.Services.AddDbContext<BackendDbContext>((services, options) => options.UseNpgsql(services.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString, npgsql => npgsql.CommandTimeout(10)));
+var databaseProvider = builder.Configuration["Database:Provider"] ?? "postgresql";
+if (!isDocumentGeneration) DatabaseProvider.ValidateGeneratedProvider(databaseProvider);
+if (databaseProvider == "mysql")
+{
+    builder.Services.AddDbContext<MySqlBackendDbContext>((services, options) => options.UseMySQL(services.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString, mysql => mysql.CommandTimeout(10)).AddInterceptors(new MySqlUtcInterceptor()));
+    builder.Services.AddScoped<BackendDbContext>(services => services.GetRequiredService<MySqlBackendDbContext>());
+}
+else builder.Services.AddDbContext<BackendDbContext>((services, options) => options.UseNpgsql(services.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString, npgsql => npgsql.CommandTimeout(10)));
 builder.Services.AddScoped<IBackendStore, BackendStore>(); builder.Services.AddScoped<BackendService>(); builder.Services.AddScoped<UploadService>();
 builder.Services.AddScoped<INotificationStore, NotificationStore>(); builder.Services.AddScoped<NotificationService>(); builder.Services.AddSingleton<INotificationMailSender, SmtpNotificationSender>();
 builder.Services.AddSingleton<IPasswordService, PasswordService>(); builder.Services.AddSingleton<ITokenService, TokenService>();
@@ -131,7 +140,6 @@ app.MapControllers();
 app.Services.GetRequiredService<EndpointRegistry>().Validate(app.Services.GetRequiredService<IActionDescriptorCollectionProvider>());
 app.Run();
 
-static bool ValidDatabase(string connection) { try { return !string.IsNullOrWhiteSpace(new Npgsql.NpgsqlConnectionStringBuilder(connection).Database); } catch (ArgumentException) { return false; } }
 static bool ValidOrigin(string origin) => Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && uri.AbsolutePath == "/" && uri.Query.Length == 0 && uri.Fragment.Length == 0 && uri.UserInfo.Length == 0 && origin == uri.GetLeftPart(UriPartial.Authority);
 static string Module(EndpointId id) => id.ToString() switch { var name when name.StartsWith("User", StringComparison.Ordinal) => "user", var name when name.StartsWith("Role", StringComparison.Ordinal) => "roles", var name when name.StartsWith("Permission", StringComparison.Ordinal) => "permissions", var name when name.StartsWith("Auth", StringComparison.Ordinal) => "auth", var name when name.StartsWith("Upload", StringComparison.Ordinal) => "upload", var name when name.StartsWith("Notification", StringComparison.Ordinal) => "notifications", var name when name.StartsWith("Docs", StringComparison.Ordinal) => "docs", _ => "system" };
 public partial class Program;

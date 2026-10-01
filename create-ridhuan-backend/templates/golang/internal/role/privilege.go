@@ -17,7 +17,7 @@ const RootRole = "admin"
 // grant, assign or manage permissions it already holds. Route permissions
 // (manage_users, manage_roles) decide who may call an endpoint; this decides
 // what they may hand out through it.
-func PermissionsWithinActor(ctx context.Context, q *sqlc.Queries, actor *audit.Actor, permissionIDs []string) error {
+func PermissionsWithinActor(ctx context.Context, q sqlc.Querier, actor *audit.Actor, permissionIDs []string) error {
 	if len(permissionIDs) == 0 {
 		return nil
 	}
@@ -44,7 +44,7 @@ func PermissionsWithinActor(ctx context.Context, q *sqlc.Queries, actor *audit.A
 }
 
 // RoleWithinActor applies PermissionsWithinActor to every permission of roleID.
-func RoleWithinActor(ctx context.Context, q *sqlc.Queries, actor *audit.Actor, roleID string) error {
+func RoleWithinActor(ctx context.Context, q sqlc.Querier, actor *audit.Actor, roleID string) error {
 	if actor != nil && actor.RoleID == roleID {
 		return nil
 	}

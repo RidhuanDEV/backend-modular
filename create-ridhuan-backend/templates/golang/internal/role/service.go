@@ -13,7 +13,7 @@ import (
 )
 
 type Service struct {
-	Queries *sqlc.Queries
+	Queries sqlc.Querier
 	Audit   *audit.Writer
 }
 
@@ -54,7 +54,7 @@ func (s *Service) Create(ctx context.Context, p audit.Policy, actor *audit.Actor
 	if err := fault.Name(name, 64); err != nil {
 		return model.Role{}, err
 	}
-	return audit.Mutate(ctx, s.Audit, p, actor, "CREATE", func(q *sqlc.Queries) (model.Role, audit.Change, error) {
+	return audit.Mutate(ctx, s.Audit, p, actor, "CREATE", func(q sqlc.Querier) (model.Role, audit.Change, error) {
 		row, err := q.CreateRole(ctx, strings.TrimSpace(name))
 		if err != nil {
 			return model.Role{}, audit.Change{}, fault.DB(err)
@@ -73,7 +73,7 @@ func (s *Service) Update(ctx context.Context, p audit.Policy, actor *audit.Actor
 			return model.Role{}, err
 		}
 	}
-	return audit.Mutate(ctx, s.Audit, p, actor, "UPDATE", func(q *sqlc.Queries) (model.Role, audit.Change, error) {
+	return audit.Mutate(ctx, s.Audit, p, actor, "UPDATE", func(q sqlc.Querier) (model.Role, audit.Change, error) {
 		old, err := q.LockRole(ctx, id)
 		if err != nil {
 			return model.Role{}, audit.Change{}, fault.DB(err)
@@ -98,7 +98,7 @@ func (s *Service) Delete(ctx context.Context, p audit.Policy, actor *audit.Actor
 	if err := fault.UUID(id); err != nil {
 		return err
 	}
-	_, err := audit.Mutate(ctx, s.Audit, p, actor, "DELETE", func(q *sqlc.Queries) (struct{}, audit.Change, error) {
+	_, err := audit.Mutate(ctx, s.Audit, p, actor, "DELETE", func(q sqlc.Querier) (struct{}, audit.Change, error) {
 		row, err := q.LockRole(ctx, id)
 		if err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)
@@ -136,7 +136,7 @@ func (s *Service) Assign(ctx context.Context, p audit.Policy, actor *audit.Actor
 	ids = slices.Clone(ids)
 	slices.Sort(ids)
 	ids = slices.Compact(ids)
-	_, err := audit.Mutate(ctx, s.Audit, p, actor, "UPDATE", func(q *sqlc.Queries) (struct{}, audit.Change, error) {
+	_, err := audit.Mutate(ctx, s.Audit, p, actor, "UPDATE", func(q sqlc.Querier) (struct{}, audit.Change, error) {
 		row, err := q.LockRole(ctx, id)
 		if err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)

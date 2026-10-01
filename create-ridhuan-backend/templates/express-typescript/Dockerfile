@@ -1,6 +1,8 @@
 FROM node:24.15.0-alpine AS builder
 WORKDIR /app
-ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable
+ARG DB_PROVIDER=postgresql
+ENV DB_PROVIDER=$DB_PROVIDER
+ENV DATABASE_URL=${DB_PROVIDER}://build:build@localhost/build
 ENV JWT_SECRET=build_only_secret_do_not_use_at_runtime_1234567890
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -13,13 +15,14 @@ RUN npm run build
 
 FROM node:24.15.0-alpine
 WORKDIR /app
+ARG DB_PROVIDER=postgresql
+ENV DB_PROVIDER=$DB_PROVIDER
 ENV NODE_ENV=production
-ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-RUN npx prisma generate
+RUN DATABASE_URL="${DB_PROVIDER}://build:build@localhost/build" npx prisma generate
 COPY --from=builder /app/dist ./dist
 RUN mkdir -p /app/uploads && chown node:node /app/uploads
 EXPOSE 3000

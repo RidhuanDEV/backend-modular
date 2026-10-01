@@ -18,7 +18,7 @@ public sealed class ErrorMiddleware(RequestDelegate next, ILogger<ErrorMiddlewar
         {
             if (context.Response.HasStarted) { context.Abort(); return; }
             context.Response.Clear(); context.Response.Headers["X-Request-ID"] = context.TraceIdentifier;
-            context.Response.StatusCode = ex switch { ApiException api => api.Status, BadHttpRequestException bad => bad.StatusCode, Npgsql.NpgsqlException => 503, InvalidDataException => 400, _ => 500 };
+            context.Response.StatusCode = ex switch { ApiException api => api.Status, BadHttpRequestException bad => bad.StatusCode, Npgsql.NpgsqlException => 503, MySql.Data.MySqlClient.MySqlException => 503, InvalidDataException => 400, _ => 500 };
             // Log the exception itself: a type name alone makes production failures undiagnosable. Logs are server-side only.
             if (context.Response.StatusCode >= 500) logger.LogError(ex, "Request failed: {ErrorType}", ex.GetType().Name);
             var message = ex is ApiException known && known.Status < 500 ? known.Message : context.Response.StatusCode switch { 413 => "Request body too large", 400 => "Invalid request", 503 => "Service unavailable", _ => "Internal server error" };

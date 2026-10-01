@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "template": "dotnet",
+  "databaseProvider": "__DATABASE_PROVIDER__"
+}

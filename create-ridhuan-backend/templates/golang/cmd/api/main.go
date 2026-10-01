@@ -52,7 +52,7 @@ func run() error {
 			logger.Warn("OpenTelemetry shutdown failed", "error", err)
 		}
 	}()
-	pool, err := db.Connect(initCtx, c.DatabaseURL)
+	pool, err := db.ConnectProvider(initCtx, c.DatabaseProvider, c.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("database connection: %w", err)
 	}

@@ -1,3 +1,4 @@
+param([ValidateSet('postgresql','mysql')][string]$Database = 'postgresql')
 $ErrorActionPreference = 'Stop'
 $templateRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $artifactRoot = Join-Path $templateRoot 'artifacts'
@@ -8,8 +9,11 @@ $dotnetCommand = if ($installedSdk -and (Test-Path -LiteralPath $installedSdk)) 
 if ($dotnetCommand -ne 'dotnet') { $env:DOTNET_ROOT = Split-Path $dotnetCommand; $env:PATH = "$env:DOTNET_ROOT;$env:PATH" }
 Push-Location $templateRoot
 try {
-    & $dotnetCommand run --project tools/ModularBackend.Initializer -- --yes $newProjectPath
+    & $dotnetCommand run --project tools/ModularBackend.Initializer -- "--database=$Database" --yes $newProjectPath
     if ($LASTEXITCODE) { throw 'Initializer failed' }
+    $marker = Get-Content -LiteralPath (Join-Path $newProjectPath 'backend-template.json') -Raw | ConvertFrom-Json
+    if ($marker.databaseProvider -ne $Database) { throw 'Generated provider marker is incorrect' }
+    if ($Database -eq 'mysql' -and (Get-Content -LiteralPath (Join-Path $newProjectPath 'compose.yaml') -Raw) -notmatch 'MYSQL_DATABASE') { throw 'Generated Compose provider is incorrect' }
     foreach ($forbidden in @('.git','uploads','TestResults')) { if (Test-Path -LiteralPath (Join-Path $newProjectPath $forbidden)) { throw 'Forbidden template content' } }
     & $dotnetCommand build (Join-Path $newProjectPath "$newProjectName.slnx") -c Release --no-restore -warnaserror
     if ($LASTEXITCODE) { throw 'Generated build failed' }

@@ -2,13 +2,11 @@ package audit
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"github.com/RidhuanDEV/golang-backend/internal/db"
 	"github.com/RidhuanDEV/golang-backend/internal/db/sqlc"
 	"github.com/RidhuanDEV/golang-backend/internal/fault"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"log/slog"
 	"strings"
 	"time"
@@ -35,7 +33,7 @@ type Change struct {
 	Before, After json.RawMessage
 }
 type Writer struct {
-	Pool *pgxpool.Pool
+	Pool db.Connection
 	Log  *slog.Logger
 }
 
@@ -101,8 +99,8 @@ func redact(raw json.RawMessage) (json.RawMessage, error) {
 	}
 	return raw, nil
 }
-func text(value string) pgtype.Text { return pgtype.Text{String: value, Valid: value != ""} }
-func (w *Writer) Write(ctx context.Context, q *sqlc.Queries, p Policy, actor *Actor, behavior string, c Change) error {
+func text(value string) sql.NullString { return sql.NullString{String: value, Valid: value != ""} }
+func (w *Writer) Write(ctx context.Context, q sqlc.Querier, p Policy, actor *Actor, behavior string, c Change) error {
 	if p.Mode == None {
 		return nil
 	}
@@ -122,17 +120,17 @@ func (w *Writer) Write(ctx context.Context, q *sqlc.Queries, p Policy, actor *Ac
 	}
 	return q.InsertAudit(ctx, sqlc.InsertAuditParams{Behavior: behavior, Module: p.Module, EntityID: text(c.EntityID), UserID: userID, ActorIDSnapshot: text(snapshot), Before: c.Before, After: c.After, RequestID: text(p.RequestID), EndpointID: text(p.ID)})
 }
-func Mutate[T any](ctx context.Context, w *Writer, p Policy, actor *Actor, behavior string, fn func(*sqlc.Queries) (T, Change, error)) (T, error) {
+func Mutate[T any](ctx context.Context, w *Writer, p Policy, actor *Actor, behavior string, fn func(sqlc.Querier) (T, Change, error)) (T, error) {
 	var result T
 	var change Change
-	err := db.InTx(ctx, w.Pool, func(tx pgx.Tx) error {
+	err := w.Pool.Transaction(ctx, func(q sqlc.Querier) error {
 		var err error
-		result, change, err = fn(sqlc.New(w.Pool).WithTx(tx))
+		result, change, err = fn(q)
 		if err != nil {
 			return err
 		}
 		if p.Mode == Required {
-			return w.Write(ctx, sqlc.New(w.Pool).WithTx(tx), p, actor, behavior, change)
+			return w.Write(ctx, q, p, actor, behavior, change)
 		}
 		return nil
 	})
@@ -143,7 +141,7 @@ func Mutate[T any](ctx context.Context, w *Writer, p Policy, actor *Actor, behav
 	if p.Mode == Optional {
 		detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 		defer cancel()
-		if err = w.Write(detached, sqlc.New(w.Pool), p, actor, behavior, change); err != nil {
+		if err = w.Write(detached, w.Pool.Queries(), p, actor, behavior, change); err != nil {
 			w.Log.Warn("optional audit failed", "endpoint", p.ID, "error", err)
 		}
 	}
@@ -162,7 +160,7 @@ func (w *Writer) Read(ctx context.Context, p Policy, actor *Actor, id string) {
 	if err == nil {
 		detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 		defer cancel()
-		err = w.Write(detached, sqlc.New(w.Pool), p, actor, "READ", change)
+		err = w.Write(detached, w.Pool.Queries(), p, actor, "READ", change)
 	}
 	if err != nil {
 		w.Log.Warn("optional read audit failed", "endpoint", p.ID, "error", err)

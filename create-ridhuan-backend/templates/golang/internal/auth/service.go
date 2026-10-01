@@ -10,16 +10,14 @@ import (
 	"sync"
 	"time"
 
+	"database/sql"
 	"github.com/RidhuanDEV/golang-backend/internal/audit"
-	"github.com/RidhuanDEV/golang-backend/internal/db"
 	"github.com/RidhuanDEV/golang-backend/internal/db/projection"
 	"github.com/RidhuanDEV/golang-backend/internal/db/sqlc"
 	"github.com/RidhuanDEV/golang-backend/internal/fault"
 	"github.com/RidhuanDEV/golang-backend/internal/model"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -43,7 +41,7 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 type Service struct {
-	Queries          *sqlc.Queries
+	Queries          sqlc.Querier
 	Audit            *audit.Writer
 	Secret           []byte
 	Issuer, Audience string
@@ -60,7 +58,7 @@ func (s *Service) Register(ctx context.Context, p audit.Policy, b model.Credenti
 	if err != nil {
 		return model.AuthUser{}, fault.DB(err)
 	}
-	return audit.Mutate(ctx, s.Audit, p, nil, "CREATE", func(q *sqlc.Queries) (model.AuthUser, audit.Change, error) {
+	return audit.Mutate(ctx, s.Audit, p, nil, "CREATE", func(q sqlc.Querier) (model.AuthUser, audit.Change, error) {
 		r, err := q.FindRoleByName(ctx, "user")
 		if err != nil {
 			return model.AuthUser{}, audit.Change{}, fault.DB(err)
@@ -77,7 +75,7 @@ func (s *Service) Register(ctx context.Context, p audit.Policy, b model.Credenti
 func (s *Service) Login(ctx context.Context, p audit.Policy, b model.Credentials) (model.TokenPair, error) {
 	row, err := s.Queries.FindActiveUserByEmail(ctx, strings.ToLower(b.Email))
 	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return model.TokenPair{}, fault.DB(err)
 		}
 		_ = bcrypt.CompareHashAndPassword(dummyPasswordHash(), []byte(b.Password))
@@ -87,7 +85,7 @@ func (s *Service) Login(ctx context.Context, p audit.Policy, b model.Credentials
 		return model.TokenPair{}, fault.New(fault.Unauthorized, "Invalid credentials")
 	}
 	actor := &Actor{ID: row.ID, Email: row.Email, RoleID: row.RoleID}
-	return audit.Mutate(ctx, s.Audit, p, actor, "LOGIN", func(q *sqlc.Queries) (model.TokenPair, audit.Change, error) {
+	return audit.Mutate(ctx, s.Audit, p, actor, "LOGIN", func(q sqlc.Querier) (model.TokenPair, audit.Change, error) {
 		// Keep the table bounded: drop this user's sessions that can no longer be used.
 		if err := q.DeleteExpiredAuthRefreshTokens(ctx, row.ID); err != nil {
 			return model.TokenPair{}, audit.Change{}, err
@@ -96,7 +94,7 @@ func (s *Service) Login(ctx context.Context, p audit.Policy, b model.Credentials
 		if err != nil {
 			return model.TokenPair{}, audit.Change{}, err
 		}
-		err = q.CreateAuthRefreshToken(ctx, sqlc.CreateAuthRefreshTokenParams{FamilyID: familyID, UserID: row.ID, TokenHash: tokenHash, ExpiresAt: pgtype.Timestamptz{Time: pair.RefreshTokenExpiresAt, Valid: true}})
+		err = q.CreateAuthRefreshToken(ctx, sqlc.CreateAuthRefreshTokenParams{FamilyID: familyID, UserID: row.ID, TokenHash: tokenHash, ExpiresAt: sql.NullTime{Time: pair.RefreshTokenExpiresAt, Valid: true}})
 		return pair, audit.Change{EntityID: row.ID}, err
 	})
 }
@@ -132,10 +130,9 @@ func (s *Service) Refresh(ctx context.Context, p audit.Policy, rawRefreshToken s
 	var actor *Actor
 	var entityID string
 	invalid := false
-	err := db.InTx(ctx, s.Audit.Pool, func(tx pgx.Tx) error {
-		q := s.Queries.WithTx(tx)
+	err := s.Audit.Pool.Transaction(ctx, func(q sqlc.Querier) error {
 		stored, err := q.FindAuthRefreshTokenByHash(ctx, hash[:])
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			invalid = true
 			return nil
 		}
@@ -161,7 +158,7 @@ func (s *Service) Refresh(ctx context.Context, p audit.Policy, rawRefreshToken s
 			return nil
 		}
 		user, err := q.FindActiveUserByID(ctx, stored.UserID)
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			if err = q.RevokeAuthRefreshFamily(ctx, stored.FamilyID); err != nil {
 				return err
 			}
@@ -226,7 +223,7 @@ func (s *Service) Authenticate(ctx context.Context, raw string) (*Actor, error) 
 	}
 	row, err := s.Queries.FindActiveUserByID(ctx, claims.ID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return deny()
 		}
 		return nil, fault.DB(err)

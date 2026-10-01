@@ -40,6 +40,13 @@ export function preflight(answers: ProjectAnswers, manifest: TemplateManifest): 
   if (manifest.requirements.node && !semver.satisfies(process.versions.node, manifest.requirements.node)) {
     throw new Error(`${templateRegistry[answers.templateId].label} requires Node ${manifest.requirements.node}; current version is ${process.versions.node}. Use a supported Node version or --mode docker.`);
   }
+  if (manifest.requirements.python) {
+    const version = command("uv", ["--version"], process.cwd());
+    if (version.status !== 0 || version.error || !semver.gte(semver.coerce(version.stdout)?.version ?? "0.0.0", manifest.requirements.uv ?? "0.12.21")) throw new Error(`FastAPI requires uv ${manifest.requirements.uv ?? "0.12.21"} or newer. Install it or use --mode docker.`);
+    const python = command("uv", ["python", "find", "--system", "--no-python-downloads", manifest.requirements.python], process.cwd());
+    if (python.status !== 0 || python.error) throw new Error(`Python ${manifest.requirements.python} is required. Install it before setup, or use --mode docker.`);
+    return;
+  }
   const requirement = manifest.requirements.go ?? manifest.requirements.dotnet;
   const executable = manifest.requirements.go ? "go" : manifest.requirements.dotnet ? "dotnet" : "npm";
   const goPolicy = executable === "go" ? (command("go", ["env", "GOTOOLCHAIN"], process.cwd()).stdout ?? "").trim() : "";
@@ -61,8 +68,10 @@ export function preflight(answers: ProjectAnswers, manifest: TemplateManifest): 
 export function installDependencies(answers: ProjectAnswers): void {
   if (answers.mode === "docker") return;
   const install = templateRegistry[answers.templateId].install;
-  const result = command(install.command, install.args, answers.targetDirectory, true);
+  const args = answers.templateId === "fastapi" ? [...install.args, "--extra", answers.databaseProvider] : install.args;
+  const environment = answers.templateId === "dotnet" ? { Database__Provider: answers.databaseProvider } : { DB_PROVIDER: answers.databaseProvider };
+  const result = command(install.command, args, answers.targetDirectory, true, environment);
   if (result.error || result.status !== 0) {
-    throw new Error(`Dependency installation failed. Project files and secrets are preserved. In the project directory run: ${install.command} ${install.args.join(" ")}. See GETTING-STARTED.md for remaining steps.`);
+    throw new Error(`Dependency installation failed. Project files and secrets are preserved. In the project directory run: ${install.command} ${args.join(" ")}. See GETTING-STARTED.md for remaining steps.`);
   }
 }

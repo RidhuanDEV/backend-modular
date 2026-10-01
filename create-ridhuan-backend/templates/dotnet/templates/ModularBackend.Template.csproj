@@ -25,9 +25,10 @@
     <Content Include="../scripts/**/*" Exclude="../**/bin/**;../**/obj/**;../**/.env;../**/.env.*;../**/uploads/**;../**/TestResults/**;../**/artifacts/**;../**/*.pem;../**/*.key;../**/*.pfx"><Pack>true</Pack><PackagePath>content/scripts/%(RecursiveDir)%(Filename)%(Extension)</PackagePath></Content>
     <Content Include="../.github/workflows/**/*" Exclude="../**/bin/**;../**/obj/**;../**/.env;../**/.env.*;../**/uploads/**;../**/TestResults/**;../**/artifacts/**;../**/*.pem;../**/*.key;../**/*.pfx"><Pack>true</Pack><PackagePath>content/.github/workflows/%(RecursiveDir)%(Filename)%(Extension)</PackagePath></Content>
     <Content Include="../templates/**/*" Exclude="../**/bin/**;../**/obj/**;../**/.env;../**/.env.*;../**/uploads/**;../**/TestResults/**;../**/artifacts/**;../**/*.pem;../**/*.key;../**/*.pfx"><Pack>true</Pack><PackagePath>content/templates/%(RecursiveDir)%(Filename)%(Extension)</PackagePath></Content>
-    <Content Include="../*.md;../LICENSE;../*.slnx;../global.json;../Directory.Build.props;../Directory.Packages.props;../NuGet.Config;../dotnet-tools.json;../.gitignore;../.gitattributes;../.dockerignore;../.editorconfig;../.env.example;../Dockerfile;../compose.yaml;../compose.override.yaml.example">
+    <Content Include="../*.md;../LICENSE;../*.slnx;../global.json;../Directory.Build.props;../Directory.Packages.props;../NuGet.Config;../dotnet-tools.json;../.gitignore;../.gitattributes;../.dockerignore;../.editorconfig;../.env.example;../.env.mysql.example;../Dockerfile;../compose.yaml;../compose.mysql.yaml;../compose.override.yaml.example">
       <Pack>true</Pack><PackagePath>content/%(Filename)%(Extension)</PackagePath>
     </Content>
+    <Content Include="../.template.config/backend-template.json"><Pack>true</Pack><PackagePath>content/.template.config/backend-template.json</PackagePath></Content>
     <Content Include="../.template.config/template.json"><Pack>true</Pack><PackagePath>content/.template.config/template.json</PackagePath></Content>
     <Content Include="../README.md"><Pack>true</Pack><PackagePath>/README.md</PackagePath></Content>
   </ItemGroup>

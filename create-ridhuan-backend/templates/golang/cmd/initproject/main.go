@@ -29,9 +29,13 @@ func main() {
 	}
 }
 func run() error {
+	provider := flag.String("database", "postgresql", "database engine: postgresql or mysql")
 	noInstall := flag.Bool("no-install", false, "skip go mod download")
 	sourceFlag := flag.String("source", "", "template source directory (default current repository)")
 	flag.Parse()
+	if *provider != "postgresql" && *provider != "mysql" {
+		return errors.New("database must be postgresql or mysql")
+	}
 	reader := bufio.NewReader(os.Stdin)
 	name := ""
 	if flag.NArg() > 0 {
@@ -51,8 +55,8 @@ func run() error {
 	if err != nil || portNumber < 1 || portNumber > 65535 {
 		return errors.New("invalid HTTP port")
 	}
-	dbName := ask(reader, "PostgreSQL database name", strings.ReplaceAll(filepath.Base(name), "-", "_"))
-	dbUser := ask(reader, "PostgreSQL username", "backend")
+	dbName := ask(reader, *provider+" database name", strings.ReplaceAll(filepath.Base(name), "-", "_"))
+	dbUser := ask(reader, *provider+" username", "backend")
 	dbPassword := os.Getenv("RIDHUAN_DB_PASSWORD")
 	if dbPassword == "" {
 		dbPassword = randomSecret()
@@ -64,6 +68,9 @@ func run() error {
 	storageChoice := strings.ToLower(ask(reader, "Upload storage (local/s3)", "local"))
 	if storageChoice != "local" && storageChoice != "s3" {
 		return errors.New("upload storage must be local or s3")
+	}
+	if *provider == "mysql" && strings.EqualFold(dbUser, "root") {
+		return errors.New("use a dedicated MySQL application user")
 	}
 	source := *sourceFlag
 	if source == "" {
@@ -96,6 +103,17 @@ func run() error {
 	if err = copyTemplate(source, destination, module); err != nil {
 		return err
 	}
+	if *provider == "mysql" {
+		for _, pair := range [][2]string{{"compose.mysql.yaml", "compose.yaml"}, {".env.mysql.example", ".env.example"}} {
+			data, readErr := os.ReadFile(filepath.Join(source, pair[0]))
+			if readErr != nil {
+				return readErr
+			}
+			if err = os.WriteFile(filepath.Join(destination, pair[1]), data, 0644); err != nil {
+				return err
+			}
+		}
+	}
 	secret := make([]byte, 48)
 	if _, err = rand.Read(secret); err != nil {
 		return err
@@ -113,18 +131,28 @@ func run() error {
 		profiles = append(profiles, "minio")
 	}
 	makeURL := func(host string) string {
-		connection := &url.URL{Scheme: "postgresql", User: url.UserPassword(dbUser, dbPassword), Host: host + ":5432", Path: "/" + dbName, RawQuery: "sslmode=disable"}
+		connection := &url.URL{Scheme: *provider, User: url.UserPassword(dbUser, dbPassword), Host: host + ":" + map[string]string{"postgresql": "5432", "mysql": "3306"}[*provider], Path: "/" + dbName, RawQuery: "sslmode=disable"}
 		return connection.String()
 	}
 	replacements := map[string]string{
 		"PORT": port, "APP_PORT": port, "POSTGRES_DB": dbName, "POSTGRES_USER": dbUser, "POSTGRES_PASSWORD": dbPassword,
-		"DATABASE_URL": makeURL("127.0.0.1"), "DATABASE_URL_DOCKER": makeURL("postgres"),
+		"DATABASE_URL": makeURL("127.0.0.1"), "DATABASE_URL_DOCKER": makeURL(map[string]string{"postgresql": "postgres", "mysql": "mysql"}[*provider]),
 		"JWT_SECRET": base64.RawURLEncoding.EncodeToString(secret), "ADMIN_PASSWORD": randomSecret(), "USER_PASSWORD": randomSecret(),
 		"REDIS_NAMESPACE": strings.ToLower(filepath.Base(name)), "CACHE_ENABLED": strconv.FormatBool(redisEnabled), "RATE_LIMIT_STORE": rateStore, "UPLOAD_STORAGE": storageChoice,
 		"COMPOSE_PROFILES": strings.Join(profiles, ","), "COMPOSE_PROJECT_NAME": strings.ToLower(filepath.Base(name)),
 		"S3_ACCESS_KEY_ID": "development", "S3_SECRET_ACCESS_KEY": randomSecret(),
 	}
-	originalEnv, err := os.ReadFile(filepath.Join(source, ".env.example"))
+	replacements["DB_PROVIDER"] = *provider
+	if *provider == "mysql" {
+		delete(replacements, "POSTGRES_DB")
+		delete(replacements, "POSTGRES_USER")
+		delete(replacements, "POSTGRES_PASSWORD")
+		replacements["MYSQL_DATABASE"] = dbName
+		replacements["MYSQL_USER"] = dbUser
+		replacements["MYSQL_PASSWORD"] = dbPassword
+		replacements["MYSQL_ROOT_PASSWORD"] = randomSecret()
+	}
+	originalEnv, err := os.ReadFile(filepath.Join(destination, ".env.example"))
 	if err != nil {
 		return err
 	}
@@ -141,6 +169,17 @@ func run() error {
 	}
 	env := strings.Join(lines, "\n")
 	if err = os.WriteFile(filepath.Join(destination, ".env"), []byte(env), 0600); err != nil {
+		return err
+	}
+	marker, err := json.Marshal(struct {
+		SchemaVersion    int    `json:"schemaVersion"`
+		Template         string `json:"template"`
+		DatabaseProvider string `json:"databaseProvider"`
+	}{1, "golang", *provider})
+	if err != nil {
+		return err
+	}
+	if err = os.WriteFile(filepath.Join(destination, "backend-template.json"), marker, 0644); err != nil {
 		return err
 	}
 	if !*noInstall {
@@ -181,7 +220,7 @@ func findRoot() (string, error) {
 	}
 }
 func copyTemplate(source, destination, module string) error {
-	allowed := map[string]struct{}{"LICENSE": {}, ".gitattributes": {}, ".github": {}, "cmd": {}, "contracts": {}, "internal": {}, ".dockerignore": {}, ".env.example": {}, ".gitignore": {}, "Dockerfile": {}, "compose.yaml": {}, "compose.override.yaml.example": {}, "go.mod": {}, "go.sum": {}, "README.md": {}, "sqlc.yaml": {}, "CONTRIBUTING.md": {}, "SECURITY.md": {}, "CHANGELOG.md": {}}
+	allowed := map[string]struct{}{"LICENSE": {}, ".gitattributes": {}, ".github": {}, "cmd": {}, "contracts": {}, "internal": {}, ".dockerignore": {}, ".env.example": {}, ".env.mysql.example": {}, "compose.mysql.yaml": {}, ".gitignore": {}, "Dockerfile": {}, "compose.yaml": {}, "compose.override.yaml.example": {}, "go.mod": {}, "go.sum": {}, "README.md": {}, "sqlc.yaml": {}, "CONTRIBUTING.md": {}, "SECURITY.md": {}, "CHANGELOG.md": {}}
 	allowed["scripts"] = struct{}{}
 	allowed["Makefile"] = struct{}{}
 	allowed["docs"] = struct{}{}
@@ -210,7 +249,7 @@ func copyTemplate(source, destination, module string) error {
 		if entry.IsDir() && (name == ".git" || name == "uploads" || name == "bin") {
 			return filepath.SkipDir
 		}
-		if name == ".env" || strings.HasPrefix(name, ".env.") && name != ".env.example" || name == "coverage.out" {
+		if name == ".env" || strings.HasPrefix(name, ".env.") && name != ".env.example" && name != ".env.mysql.example" || name == "coverage.out" {
 			return nil
 		}
 		target := filepath.Join(destination, relative)

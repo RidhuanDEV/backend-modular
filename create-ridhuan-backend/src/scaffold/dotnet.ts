@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { readFile, writeFile, readdir, rename } from "node:fs/promises";
 import { join } from "node:path";
 import type { ProjectAnswers, ScaffoldResult } from "../types.js";
-import { composeProfiles, npgsqlConnection, replaceEnv } from "./env.js";
+import { composeProfiles, databaseEnv, environmentFile, npgsqlConnection, replaceEnv } from "./env.js";
 import { copyTemplate, transformText } from "./files.js";
 import { templateRegistry } from "../templates.js";
 async function renameEntries(dir: string, oldPrefix: string, newPrefix: string): Promise<void> {
@@ -13,9 +13,9 @@ async function renameEntries(dir: string, oldPrefix: string, newPrefix: string):
   }
 }
 export async function scaffoldDotnet(source: string, answers: ProjectAnswers): Promise<ScaffoldResult> {
-  const env = replaceEnv(await readFile(join(source, ".env.example"), "utf8"), {
+  const env = replaceEnv(await readFile(join(source, environmentFile(answers)), "utf8"), {
     APP_PORT: String(answers.appPort), ASPNETCORE_URLS: `http://localhost:${answers.appPort}`,
-    POSTGRES_PORT: String(answers.dbPort), POSTGRES_DB: answers.dbName, POSTGRES_USER: answers.dbUser, POSTGRES_PASSWORD: answers.dbPassword,
+    ...databaseEnv(answers), Database__Provider: answers.databaseProvider,
     Database__ConnectionString: npgsqlConnection(answers), Database__ConnectionString_DOCKER: npgsqlConnection(answers, true),
     Jwt__Secret: randomBytes(48).toString("hex"), Bootstrap__Password: randomBytes(24).toString("base64url"),
     Rate__Store: answers.enableRedis ? "redis" : "memory", Cache__Enabled: String(answers.enableRedis),

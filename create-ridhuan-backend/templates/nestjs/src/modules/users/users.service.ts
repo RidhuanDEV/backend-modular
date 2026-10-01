@@ -1,3 +1,4 @@
+import { textSearchPage } from "../../platform/database/text-search";
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import bcrypt from "bcrypt";
 import type { Prisma } from "../../generated/prisma/client";
@@ -41,12 +42,14 @@ export class UsersService {
       const cached = await this.cache.get<{ data: Partial<UserResponseDto>[]; meta: PaginationMeta }>(key);
       if (cached) return cached;
     }
-    const where: Prisma.UserWhereInput = { deletedAt: null, ...(query.search ? { email: { contains: query.search, mode: "insensitive" } } : {}) };
+    const matches = query.search ? await textSearchPage(this.prisma, "users", query) : undefined;
+    const where: Prisma.UserWhereInput = { deletedAt: null, ...(matches ? { id: { in: matches.ids } } : {}) };
     const sortBy = ["createdAt", "updatedAt", "email"].includes(query.sortBy) ? query.sortBy : "createdAt";
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.user.findMany({ where, include, skip: (query.page - 1) * query.limit, take: query.limit,
-        orderBy: { [sortBy]: query.orderBy } }), this.prisma.user.count({ where }),
+    const [items, pageCount] = await this.prisma.$transaction([
+      this.prisma.user.findMany({ where, include, skip: matches ? 0 : (query.page - 1) * query.limit, take: query.limit,
+        orderBy: [{ [sortBy]: query.orderBy }, { id: "asc" }] }), this.prisma.user.count({ where }),
     ]);
+    const total = matches?.total ?? pageCount;
     const result = { data: items.map((item) => project(mapUser(item), fields)), meta: pagination(query.page, query.limit, total) };
     if (version && this.policy.for("user.list").cache === "read") await this.cache.set(key, result);
     return result;

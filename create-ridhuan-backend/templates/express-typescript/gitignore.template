@@ -25,3 +25,5 @@ pnpm-debug.log*
 *.key
 *.p12
 *.pfx
+
+!.env.mysql.example

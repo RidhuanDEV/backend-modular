@@ -9,6 +9,7 @@ const envSchema = z
     CORS_ORIGINS: z.string().optional()
       .transform((value) => value?.split(",").map((origin) => origin.trim()).filter(Boolean) ?? []),
     DATABASE_URL: z.string().min(1),
+    DB_PROVIDER: z.enum(["postgresql", "mysql"]).default("postgresql"),
     REDIS_NAMESPACE: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/).default("modular-express"),
     REDIS_URL: z.string().url().optional(),
     CACHE_ENABLED: z
@@ -77,6 +78,12 @@ const envSchema = z
       .default("development"),
   })
   .superRefine((value, ctx) => {
+    try {
+      const url = new URL(value.DATABASE_URL);
+      if (!(value.DB_PROVIDER === "mysql" ? ["mysql:"] : ["postgres:", "postgresql:"]).includes(url.protocol)) throw new Error("provider mismatch");
+    } catch {
+      ctx.addIssue({ code: "custom", path: ["DATABASE_URL"], message: "DATABASE_URL does not match DB_PROVIDER" });
+    }
     if (value.SMTP_ENABLED && (!value.SMTP_HOST || !value.SMTP_FROM || Boolean(value.SMTP_USER) !== Boolean(value.SMTP_PASSWORD))) {
       ctx.addIssue({ code: "custom", path: ["SMTP_ENABLED"], message: "SMTP requires host, sender, and matching username/password" });
     }

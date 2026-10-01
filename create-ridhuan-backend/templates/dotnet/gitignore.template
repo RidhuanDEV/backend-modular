@@ -30,3 +30,5 @@ compose.override.yaml
 docker-compose.override.yml
 appsettings.Local.json
 appsettings.*.Local.json
+
+!.env.mysql.example

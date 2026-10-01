@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import "dotenv/config";
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import request from "supertest";
@@ -9,7 +10,9 @@ import { TimeService } from "../platform/time/time.service";
 
 let app: INestApplication;
 before(async () => {
-  process.env.DATABASE_URL = "postgresql://backend:backend@127.0.0.1:65432/backend?schema=public";
+  process.env.DATABASE_URL = process.env.DB_PROVIDER === "mysql"
+    ? "mysql://backend:backend@127.0.0.1:65432/backend"
+    : "postgresql://backend:backend@127.0.0.1:65432/backend?schema=public";
   process.env.JWT_SECRET = "unit_test_secret_0123456789_abcdefghijklmnop";
   process.env.CORS_ORIGINS = "http://localhost:5173";
   process.env.RATE_LIMIT_STORE = "memory";

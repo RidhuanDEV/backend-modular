@@ -5,10 +5,13 @@ import { resolve, join, sep } from 'node:path';
 import { createServer } from 'node:net';
 import { command } from '../dist/process.js';
 import pg from 'pg';
+import { verifyProviderUpgrade } from './verify-upgrade.mjs';
 import { randomUUID } from 'node:crypto';
-import { verifyPostgresConnection } from '../dist/prompts/db-check.js';
+import { verifyDatabaseConnection } from '../dist/prompts/db-check.js';
 const id=process.argv[2];
-if(!['express-typescript','nestjs','golang','dotnet'].includes(id)) throw new Error('Supply a template ID');
+if(!['express-typescript','nestjs','golang','dotnet','fastapi'].includes(id)) throw new Error('Supply a template ID');
+const database=process.argv[3] ?? 'postgresql';
+if(!['postgresql','mysql'].includes(database)) throw new Error('Supply postgresql or mysql');
 const root=resolve(import.meta.dirname,'..'),scratch=await mkdtemp(join(tmpdir(),`ridhuan ${id} compose-`));
 const name=id==='dotnet'?'Acceptance.Api':'acceptance-api',project=join(scratch,name);
 const base=id==='express-typescript'?'docker-compose.yml':'compose.yaml';
@@ -29,12 +32,12 @@ try{
  if(!tarball){const pack=command('npm',['pack','--ignore-scripts','--json','--pack-destination',scratch],root);assert.equal(pack.status,0);tarball=join(scratch,JSON.parse(pack.stdout)[0].filename);}
  await writeFile(join(scratch,'package.json'),'{"name":"compose-consumer","private":true}\n');run('npm',['install','--ignore-scripts','--no-audit','--no-fund',resolve(tarball)],scratch);
  process.env.RIDHUAN_DB_PASSWORD=dbPassword;
- run(process.execPath,[join(scratch,'node_modules/create-ridhuan-backend/dist/bin/index.js'),name,'--template',id,'--mode','docker','--port',String(port),'--db-port',String(dbPort),'--storage','s3','--redis','--yes'],scratch);
+ run(process.execPath,[join(scratch,'node_modules/create-ridhuan-backend/dist/bin/index.js'),name,'--template',id,'--database',database,'--mode','docker','--port',String(port),'--db-port',String(dbPort),'--storage','s3','--redis','--yes'],scratch);
  if(originalDb===undefined)delete process.env.RIDHUAN_DB_PASSWORD;else process.env.RIDHUAN_DB_PASSWORD=originalDb;
  const fixtureStorage=id==='dotnet'?'s3mock':'minio';
  await writeFile(join(project,'.tmp-consumer-ports.yaml'),`services:\n  redis:\n    ports: !override ["127.0.0.1:${redisPort}:6379"]\n  ${fixtureStorage}:\n    ports: !override ["127.0.0.1:${storagePort}:${id==='dotnet'?9090:9000}"${id==='dotnet'?'':`, "127.0.0.1:${consolePort}:9001"`}]\n`);
  const config=JSON.parse(run('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','config','--format','json'],project,false));
- assert.equal(String(config.services.app.environment.PORT??config.services.app.environment.ASPNETCORE_URLS),id==='dotnet'?'http://+:8080':id==='golang'?'8080':'3000');
+ assert.equal(String(config.services.app.environment.PORT??config.services.app.environment.ASPNETCORE_URLS),id==='dotnet'?'http://+:8080':id==='golang'?'8080':id==='fastapi'?'8000':'3000');
  assert(config.services.redis&&config.services[fixtureStorage]);
  // Actual database startup verifies Compose quoting and URI/Npgsql credentials, including punctuation and Unicode.
  started=true;
@@ -43,16 +46,27 @@ try{
  const blocked=command('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','-f','.tmp-migration-failure.yaml','up','--build','-d','app'],project);
  assert.notEqual(blocked.status,0,'Failed migration must prevent startup');
  const blockedApp=run('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','ps','-a','-q','app'],project,false).trim();
+ if (!blockedApp) {
+  console.error((blocked.stdout ?? '').replaceAll(dbPassword,'[fixture-password]').replaceAll(encodeURIComponent(dbPassword),'[fixture-password]'));
+  console.error((blocked.stderr ?? '').replaceAll(dbPassword,'[fixture-password]').replaceAll(encodeURIComponent(dbPassword),'[fixture-password]'));
+  throw new Error('Compose failed before creating the application; migration failure gate was not reached');
+ }
  assert.equal(run('docker',['inspect','--format','{{.State.Status}}',blockedApp],project,false).trim(),'created');
  const blockedMigration=run('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','ps','-a','-q','migrate'],project,false).trim();
- assert.equal(run('docker',['inspect','--format','{{.State.ExitCode}}',blockedMigration],project,false).trim(),'23');
+ const migrationExit=run('docker',['inspect','--format','{{.State.ExitCode}}',blockedMigration],project,false).trim();
+ if(migrationExit!=='23') {
+   console.error(command('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','ps','-a'],project).stdout);
+   console.error(command('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','logs','--tail','20',database==='mysql'?'mysql':'postgres'],project).stdout);
+ }
+ assert.equal(migrationExit,'23');
  compose('down','-v','--remove-orphans');
  compose('up','--build','-d','--wait','--wait-timeout','240');
  const env=await readFile(join(project,'.env'),'utf8');
- const dbCheck=await verifyPostgresConnection('127.0.0.1',dbPort,envValue(env,'POSTGRES_USER'),dbPassword,envValue(env,'POSTGRES_DB'));assert.equal(dbCheck.status,'connected');
- assert.equal((await verifyPostgresConnection('127.0.0.1',dbPort,envValue(env,'POSTGRES_USER'),'wrong-password',envValue(env,'POSTGRES_DB'))).status,'authentication_failed');
- assert.equal((await verifyPostgresConnection('127.0.0.1',dbPort,envValue(env,'POSTGRES_USER'),dbPassword,'missing_database')).status,'database_missing');
- if(id==='express-typescript'||id==='nestjs') {
+ const dbCheck=await verifyDatabaseConnection(database,'127.0.0.1',dbPort,envValue(env,database==='mysql'?'MYSQL_USER':'POSTGRES_USER'),dbPassword,envValue(env,database==='mysql'?'MYSQL_DATABASE':'POSTGRES_DB'));assert.equal(dbCheck.status,'connected');
+ assert.equal((await verifyDatabaseConnection(database,'127.0.0.1',dbPort,envValue(env,database==='mysql'?'MYSQL_USER':'POSTGRES_USER'),'wrong-password',envValue(env,database==='mysql'?'MYSQL_DATABASE':'POSTGRES_DB'))).status,'authentication_failed');
+ assert.equal((await verifyDatabaseConnection(database,'127.0.0.1',dbPort,envValue(env,database==='mysql'?'MYSQL_USER':'POSTGRES_USER'),dbPassword,'missing_database')).status,database==='mysql'?'database_access_denied':'database_missing');
+ if(database==='mysql') assert.equal((await verifyDatabaseConnection(database,'127.0.0.1',dbPort,'root',envValue(env,'MYSQL_ROOT_PASSWORD'),'missing_database')).status,'database_missing');
+ if(database==='postgresql' && (id==='express-typescript'||id==='nestjs')) {
   const admin=new pg.Client({host:'127.0.0.1',port:dbPort,user:envValue(env,'POSTGRES_USER'),password:dbPassword,database:'postgres'});await admin.connect();
   const upgradeName='consumer_upgrade_'+randomUUID().replaceAll('-','');let upgrade;
   try {
@@ -70,15 +84,16 @@ try{
    const preserved=await upgrade.query('SELECT "createdAt" FROM "'+roles+'" WHERE id=$1',[fixtureID]);assert.equal(preserved.rows[0].createdAt.toISOString(),'2026-01-01T00:00:00.000Z');
    await upgrade.query('SELECT id FROM "'+(id==='nestjs'?'notifications':'Notification')+'" LIMIT 0');
   } finally {await upgrade?.end();await admin.query('DROP DATABASE IF EXISTS "'+upgradeName+'" WITH (FORCE)');await admin.end();}
- } else {
-  const verifyService=id==='golang'?`  upgradeverify:\n    profiles: [verification]\n    build: {context: ., target: build}\n    environment:\n      DATABASE_URL: \${DATABASE_URL_DOCKER}\n    command: ["go", "test", "-p", "1", "./internal/db", "-run", "TestFreshDatabaseUpgradePreservesExistingData", "-count=1"]\n` : `  upgradeverify:\n    profiles: [verification]\n    build: {context: ., target: build}\n    environment:\n      Database__ConnectionString: \${Database__ConnectionString_DOCKER}\n    command: ["dotnet", "test", "tests/AcceptanceApi.IntegrationTests", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~UpgradePreservesExistingDataAndSeedNeverResetsPassword"]\n`;
+ } else if(id==='golang' && database==='postgresql' || id==='dotnet') {
+  const verifyService=id==='golang'?`  upgradeverify:\n    profiles: [verification]\n    build: {context: ., target: build}\n    environment:\n      DATABASE_URL: \${DATABASE_URL_DOCKER}\n    command: ["go", "test", "-p", "1", "./internal/db", "-run", "TestFreshDatabaseUpgradePreservesExistingData", "-count=1"]\n` : `  upgradeverify:\n    profiles: [verification]\n    build: {context: ., target: build}\n    environment:\n      Database__Provider: ${database}\n      Database__ConnectionString: ${database==='mysql'?'Server=mysql;Database=mysql;User ID=root;Password='+envValue(env,'MYSQL_ROOT_PASSWORD')+';SslMode=Preferred':'\${Database__ConnectionString_DOCKER}'}\n    command: ["dotnet", "test", "tests/AcceptanceApi.IntegrationTests", "-c", "Release", "--no-restore", "--filter", "FullyQualifiedName~UpgradePreservesExistingDataAndSeedNeverResetsPassword"]\n`;
   await writeFile(join(project,'.tmp-consumer-ports.yaml'),await readFile(join(project,'.tmp-consumer-ports.yaml'),'utf8')+verifyService);
   compose('run','--build','--rm','--no-deps','upgradeverify');
  }
+ if(id==='fastapi' || database==='mysql' && id!=='dotnet') await verifyProviderUpgrade({project,id,database,env,dbPort,dbPassword,run,compose});
 
- if(id==='dotnet')compose('--profile','seed','run','--rm','seeder');else if(id==='golang')compose('run','--rm','--entrypoint','seed','app');else compose('exec','-T','app','npm','run',id==='nestjs'?'seed':'seed:prod');
+ if(id==='dotnet')compose('--profile','seed','run','--rm','seeder');else if(id==='golang')compose('run','--rm','--entrypoint','seed','app');else if(id==='fastapi')compose('exec','-T','app','backend','seed');else compose('exec','-T','app','npm','run',id==='nestjs'?'seed':'seed:prod');
  // Seed is explicit and idempotent.
- if(id==='dotnet')compose('--profile','seed','run','--rm','seeder');else if(id==='golang')compose('run','--rm','--entrypoint','seed','app');else compose('exec','-T','app','npm','run',id==='nestjs'?'seed':'seed:prod');
+ if(id==='dotnet')compose('--profile','seed','run','--rm','seeder');else if(id==='golang')compose('run','--rm','--entrypoint','seed','app');else if(id==='fastapi')compose('exec','-T','app','backend','seed');else compose('exec','-T','app','npm','run',id==='nestjs'?'seed':'seed:prod');
  await health('/ready',200);await health('/live',200);
  const docs=await request('/docs/openapi.json');assert(docs.paths['/api/auth/login']);
  const credentials={email:envValue(env,id==='dotnet'?'Bootstrap__Email':'ADMIN_EMAIL'),password:envValue(env,id==='dotnet'?'Bootstrap__Password':'ADMIN_PASSWORD')};
@@ -133,7 +148,7 @@ CMD ["node", "smtp.mjs"]
  const localForm=new FormData();localForm.append('file',new Blob(['%PDF-1.4\nlocal fixture'],{type:'application/pdf'}),'local.pdf');assert.equal((await fetch(baseURL+'/api/upload',{method:'POST',headers:{connection:'close',authorization:`Bearer ${token}`},body:localForm})).status,201);
  // Two replicas must enforce one shared Redis login quota.
  const limitKey=id==='dotnet'?'Rate__Auth__Max':'RATE_LIMIT_AUTH_MAX';
- override+='      '+limitKey+': "2"\n  replica:\n    extends: {file: '+base+', service: app}\n    environment:\n      '+limitKey+': \"2\"\n    ports: !override ["127.0.0.1:'+replicaPort+':'+(id==='golang'?8080:id==='dotnet'?8080:3000)+'"]\n';
+ override+='      '+limitKey+': "2"\n  replica:\n    extends: {file: '+base+', service: app}\n    environment:\n      '+limitKey+': \"2\"\n    ports: !override ["127.0.0.1:'+replicaPort+':'+(id==='golang'?8080:id==='dotnet'?8080:id==='fastapi'?8000:3000)+'"]\n';
  await writeFile(join(project,'.tmp-consumer-ports.yaml'),override);compose('up','-d','--wait','app','replica');await health('/ready',200);
  for(let attempt=0;attempt<30;attempt++){try{if((await fetch(`http://127.0.0.1:${replicaPort}/ready`,{headers:{connection:'close'}})).ok)break;}catch{}if(attempt===29)throw new Error('Replica failed readiness');await pause(1000);}
  compose('exec','-T','redis','redis-cli','FLUSHDB');
@@ -144,11 +159,11 @@ CMD ["node", "smtp.mjs"]
  override=override.replace('      '+limitKey+': "2"','      '+limitKey+': "20"\n      '+rateStore+': "memory"');
  await writeFile(join(project,'.tmp-consumer-ports.yaml'),override);compose('up','-d','--no-deps','app');await health('/ready',200);
  await request('/api/users/'+me.id,{token}); // cached endpoint still works without Redis.
- compose('stop','postgres');await health('/live',200);await health('/ready',503);
+ compose('stop',database==='mysql'?'mysql':'postgres');await health('/live',200);await health('/ready',503);
 
- console.log(`${id}: Compose migration failure gate, fresh/upgrade database, quoted credentials, seed, auth, refresh, public DTO, Redis/S3/local uploads, SMTP, shared limiter, notifications/SSE and readiness passed`);
+ console.log(`${id}/${database}: Compose migration failure gate, fresh/upgrade database, quoted credentials, seed, auth, refresh, public DTO, Redis/S3/local uploads, SMTP, shared limiter, notifications/SSE and readiness passed`);
 }catch(error){
- if(started) {const state=command('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','logs','--tail','15','mailfixture'],project);if(state.status===0)console.error(state.stdout);}throw error;
+ if(started) {const state=command('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','logs','--tail','35','app','migrate'],project);if(state.status===0)console.error(state.stdout.replaceAll(dbPassword,'[fixture-password]').replaceAll(encodeURIComponent(dbPassword),'[fixture-password]'));}throw error;
 }finally{
  if(originalDb===undefined)delete process.env.RIDHUAN_DB_PASSWORD;else process.env.RIDHUAN_DB_PASSWORD=originalDb;
  if(started){const result=command('docker',['compose','-f',base,'-f','.tmp-consumer-ports.yaml','down','-v','--remove-orphans'],project);if(result.status!==0)console.error('Fixture cleanup failed; project retained:',project);}

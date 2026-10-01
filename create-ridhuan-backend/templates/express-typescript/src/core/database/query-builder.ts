@@ -1,4 +1,5 @@
 import { parseInstant } from "../time/time.js";
+import { databaseProvider } from "../../config/database-adapter.js";
 
 // ─── Public Interfaces ───────────────────────────────────────────────────────
 
@@ -120,7 +121,9 @@ export function buildFindOptions<Q extends BaseSearchQuery>(
   // Full-text search across configured fields
   if (search != null && search.length > 0 && config.searchFields?.length) {
     for (const col of config.searchFields) {
-      orConditions.push({ [col]: { contains: search, mode: "insensitive" } });
+      orConditions.push({ [col]: databaseProvider() === "postgresql"
+        ? { contains: search, mode: "insensitive" }
+        : { contains: search.toLowerCase() } });
     }
   }
 

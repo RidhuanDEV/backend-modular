@@ -1,10 +1,11 @@
 package fault
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"regexp"
 	"strings"
@@ -41,8 +42,19 @@ func DB(err error) error {
 	if errors.As(err, &known) {
 		return err
 	}
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return New(Missing, "Not found")
+	}
+	var my *mysql.MySQLError
+	if errors.As(err, &my) {
+		switch my.Number {
+		case 1062:
+			return New(Duplicate, "Record already exists")
+		case 1451, 1452:
+			return New(Invalid, "Referenced record does not exist or is in use")
+		case 1205, 1213:
+			return New(Duplicate, "Concurrent change; retry the request")
+		}
 	}
 	var pg *pgconn.PgError
 	if errors.As(err, &pg) {

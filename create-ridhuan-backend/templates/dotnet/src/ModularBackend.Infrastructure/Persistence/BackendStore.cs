@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using ModularBackend.Application;
 using ModularBackend.Domain;
+using MySql.Data.MySqlClient;
 using Npgsql;
 
 namespace ModularBackend.Infrastructure.Persistence;
@@ -49,7 +50,9 @@ public sealed class BackendStore(BackendDbContext db) : IBackendStore
         await SaveAsync(ct);
         if (transaction is null) throw new InvalidOperationException("No transaction");
         if (invalidateCache) await db.CacheGenerations.Where(x => x.Id == 1).ExecuteUpdateAsync(s => s.SetProperty(x => x.Version, x => x.Version + 1), ct);
-        try { await transaction.CommitAsync(ct); } catch (PostgresException ex) when (ex.SqlState == "40001") { throw new ApiException(409, "Concurrent change; retry request"); }
+        try { await transaction.CommitAsync(ct); }
+        catch (PostgresException ex) when (ex.SqlState == "40001") { throw new ApiException(409, "Concurrent change; retry request"); }
+        catch (MySqlException ex) when (ex.Number is 1205 or 1213) { throw new ApiException(409, "Concurrent change; retry request"); }
         await transaction.DisposeAsync(); transaction = null;
     }
     public async Task RollbackAsync(CancellationToken ct)
@@ -64,5 +67,8 @@ public sealed class BackendStore(BackendDbContext db) : IBackendStore
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" }) { throw new ApiException(409, "Resource already exists"); }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23503" }) { throw new ApiException(409, "Resource is referenced or missing"); }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "40001" }) { throw new ApiException(409, "Concurrent change; retry request"); }
+        catch (DbUpdateException ex) when (ex.InnerException is MySqlException { Number: 1062 }) { throw new ApiException(409, "Resource already exists"); }
+        catch (DbUpdateException ex) when (ex.InnerException is MySqlException { Number: 1451 or 1452 }) { throw new ApiException(409, "Resource is referenced or missing"); }
+        catch (DbUpdateException ex) when (ex.InnerException is MySqlException { Number: 1205 or 1213 }) { throw new ApiException(409, "Concurrent change; retry request"); }
     }
 }

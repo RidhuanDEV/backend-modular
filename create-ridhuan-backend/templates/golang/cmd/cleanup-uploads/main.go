@@ -12,6 +12,7 @@ import (
 	"github.com/RidhuanDEV/golang-backend/internal/config"
 	"github.com/RidhuanDEV/golang-backend/internal/db"
 	"github.com/RidhuanDEV/golang-backend/internal/db/sqlc"
+
 	"github.com/RidhuanDEV/golang-backend/internal/storage"
 )
 
@@ -32,7 +33,7 @@ func run() error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	pool, err := db.Connect(ctx, c.DatabaseURL)
+	pool, err := db.ConnectProvider(ctx, c.DatabaseProvider, c.DatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -74,7 +75,7 @@ func run() error {
 		}
 	}
 	for _, key := range keys {
-		exists, queryErr := sqlc.New(pool).FileReferenced(ctx, sqlc.FileReferencedParams{ObjectKey: key, Storage: c.UploadStorage})
+		exists, queryErr := pool.Queries().FileReferenced(ctx, sqlc.FileReferencedParams{ObjectKey: key, Storage: c.UploadStorage})
 		if err = queryErr; err != nil {
 			return err
 		}

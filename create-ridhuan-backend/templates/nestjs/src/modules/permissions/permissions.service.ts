@@ -1,3 +1,4 @@
+import { textSearchPage } from "../../platform/database/text-search";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma, Permission } from "../../generated/prisma/client";
 import { AuditService } from "../../common/audit/audit.service";
@@ -23,12 +24,14 @@ export class PermissionsService {
       const cached = await this.cache.get<{ data: PermissionResponseDto[]; meta: PaginationMeta }>(key);
       if (cached) return cached;
     }
-    const where: Prisma.PermissionWhereInput = query.search ? { name: { contains: query.search, mode: "insensitive" } } : {};
+    const matches = query.search ? await textSearchPage(this.prisma, "permissions", query) : undefined;
+    const where: Prisma.PermissionWhereInput = { ...(matches ? { id: { in: matches.ids } } : {}) };
     const sortBy = ["name", "createdAt", "updatedAt"].includes(query.sortBy) ? query.sortBy : "createdAt";
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.permission.findMany({ where, skip: (query.page - 1) * query.limit, take: query.limit,
-        orderBy: { [sortBy]: query.orderBy } }), this.prisma.permission.count({ where }),
+    const [items, pageCount] = await this.prisma.$transaction([
+      this.prisma.permission.findMany({ where, skip: matches ? 0 : (query.page - 1) * query.limit, take: query.limit,
+        orderBy: [{ [sortBy]: query.orderBy }, { id: "asc" }] }), this.prisma.permission.count({ where }),
     ]);
+    const total = matches?.total ?? pageCount;
     const result = { data: items.map(mapPermission), meta: pagination(query.page, query.limit, total) };
     if (version && this.policy.for("permission.list").cache === "read") await this.cache.set(key, result);
     return result;

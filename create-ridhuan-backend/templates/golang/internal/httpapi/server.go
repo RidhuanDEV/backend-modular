@@ -16,12 +16,12 @@ import (
 	"github.com/RidhuanDEV/golang-backend/internal/auth"
 	"github.com/RidhuanDEV/golang-backend/internal/cache"
 	"github.com/RidhuanDEV/golang-backend/internal/config"
+	"github.com/RidhuanDEV/golang-backend/internal/db"
 	"github.com/RidhuanDEV/golang-backend/internal/notification"
 	"github.com/RidhuanDEV/golang-backend/internal/ratelimit"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -55,7 +55,7 @@ func requestID(ctx context.Context) string { v, _ := ctx.Value(requestIDKey{}).(
 
 type Server struct {
 	Config config.Config
-	DB     *pgxpool.Pool
+	DB     db.Connection
 	Redis  *redis.Client
 	app.Services
 	Cache         *cache.Cache
@@ -68,7 +68,7 @@ type Server struct {
 	Notifications *notification.Service
 }
 
-func NewServer(c config.Config, pool *pgxpool.Pool, client *redis.Client, services app.Services, logger *slog.Logger) (*Server, error) {
+func NewServer(c config.Config, pool db.Connection, client *redis.Client, services app.Services, logger *slog.Logger) (*Server, error) {
 	if services.Auth == nil || services.Users == nil || services.Roles == nil || services.Permissions == nil || services.Uploads == nil || services.Audit == nil || logger == nil {
 		return nil, fmt.Errorf("HTTP dependencies are required")
 	}

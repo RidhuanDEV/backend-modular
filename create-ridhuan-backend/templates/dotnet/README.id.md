@@ -16,6 +16,14 @@ Template backend modular monolith yang siap dijalankan dengan ASP.NET Core 10, P
 
 Cocok untuk tim yang memulai API baru dan membutuhkan struktur bertipe serta kontrol operasional yang jelas. Bisa terlalu kompleks untuk prototipe kecil atau aplikasi yang sejak awal perlu layanan terpisah.
 
+## Pilihan PostgreSQL dan MySQL
+
+PostgreSQL tetap default. Untuk proyek baru melalui CLI terpadu, pilih `--template dotnet --database mysql`; port database MySQL default `3306`, API manual/host `5080`, dan API container `8080`. Initializer native juga menerima `--database=mysql`; template `dotnet new modular-net` menerima `--database mysql`.
+
+Untuk checkout source MySQL, salin `.env.mysql.example` ke `.env`, isi credential, lalu gunakan `docker compose -f compose.mysql.yaml up --build -d --wait` dan `docker compose -f compose.mysql.yaml --profile seed run --rm seeder`. Jangan menjalankan varian PostgreSQL bersamaan untuk proyek yang sama.
+
+Provider MySQL memakai EF Core resmi Oracle dengan migration/context terpisah; PostgreSQL mempertahankan history migrasinya. Baca [DEPENDENCIES.md](DEPENDENCIES.md) untuk lisensi provider MySQL. Mengganti env tidak mengonversi data existing; provider proyek hasil initializer dicatat dan divalidasi. Untuk database remote, gunakan `SslMode=VerifyFull` dan CA tepercaya melalui opsi resmi Connector/NET.
+
 ## Quick start
 
 Perlu Git, Docker Desktop/Engine dengan Compose, dan terminal. Untuk build atau menjalankan tool .NET di komputer lokal, pasang [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) melalui [installer resmi Microsoft](https://learn.microsoft.com/dotnet/core/tools/dotnet-install-script).

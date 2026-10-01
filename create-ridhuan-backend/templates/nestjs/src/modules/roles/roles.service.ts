@@ -1,3 +1,4 @@
+import { textSearchPage } from "../../platform/database/text-search";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { Prisma } from "../../generated/prisma/client";
 import { PrismaService } from "../../platform/database/prisma.service";
@@ -29,12 +30,14 @@ export class RolesService {
       const cached = await this.cache.get<{ data: RoleResponseDto[]; meta: PaginationMeta }>(key);
       if (cached) return cached;
     }
-    const where: Prisma.RoleWhereInput = query.search ? { name: { contains: query.search, mode: "insensitive" } } : {};
+    const matches = query.search ? await textSearchPage(this.prisma, "roles", query) : undefined;
+    const where: Prisma.RoleWhereInput = { ...(matches ? { id: { in: matches.ids } } : {}) };
     const sortBy = ["name", "createdAt", "updatedAt"].includes(query.sortBy) ? query.sortBy : "createdAt";
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.role.findMany({ where, include, skip: (query.page - 1) * query.limit, take: query.limit,
-        orderBy: { [sortBy]: query.orderBy } }), this.prisma.role.count({ where }),
+    const [items, pageCount] = await this.prisma.$transaction([
+      this.prisma.role.findMany({ where, include, skip: matches ? 0 : (query.page - 1) * query.limit, take: query.limit,
+        orderBy: [{ [sortBy]: query.orderBy }, { id: "asc" }] }), this.prisma.role.count({ where }),
     ]);
+    const total = matches?.total ?? pageCount;
     const result = { data: items.map(mapRole), meta: pagination(query.page, query.limit, total) };
     if (version && this.policy.for("role.list").cache === "read") await this.cache.set(key, result);
     return result;

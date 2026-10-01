@@ -1,8 +1,9 @@
+import "dotenv/config";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 
-process.env.DATABASE_URL = "postgresql://test:test@127.0.0.1:5432/test";
+process.env.DATABASE_URL = process.env.DB_PROVIDER === "mysql" ? "mysql://test:test@127.0.0.1:3306/test" : "postgresql://test:test@127.0.0.1:5432/test";
 process.env.JWT_SECRET = "test_secret_at_least_32_characters_long";
 process.env.CACHE_ENABLED = "false";
 process.env.RATE_LIMIT_STORE = "memory";

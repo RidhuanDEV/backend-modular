@@ -184,3 +184,11 @@ npx create-ridhuan-backend@latest MyBackend --template dotnet --yes
 ```
 
 The generated `GETTING-STARTED.md` includes the required env loader, migrations, explicit seed, and chosen port. Defaults are `5080` on the host/manual API and `8080` in containers. `COMPOSE_PROFILES` enables selected development services; run `docker compose up --build -d --wait` to verify service readiness. Custom S3 provider endpoint, region, access key and bucket are retained. All four tool projects are included; renamed projects restore in locked mode without changing lockfile policy.
+
+## PostgreSQL or MySQL
+
+The unified CLI supports `--database postgresql` (default) and `--database mysql`. MySQL defaults to port 3306. Each generated project records the selected provider in `backend-template.json`; its active Compose file and `.env` match that choice. Changing the provider does not convert existing data. PostgreSQL migration history stays intact; MySQL has an independent migration baseline and UTC sessions.
+
+For a source checkout, copy `.env.mysql.example` to `.env`, configure credentials, and run `docker compose -f compose.mysql.yaml up --build -d --wait`. Seed is a separate explicit operation using the same `-f` option. CLI-generated MySQL projects use the ordinary active Compose filename. MySQL bootstrap uses a separate root password and supports quoted/Unicode application passwords without logging them.
+
+For external MySQL, use `SslMode=VerifyFull` and the official Connector/NET CA options in `Database__ConnectionString`. Review the Oracle provider license in [DEPENDENCIES.md](DEPENDENCIES.md). Local Compose is a development fixture. Follow [operations](docs/OPERATIONS.md) for provider-specific backup/restore and failed migration recovery.

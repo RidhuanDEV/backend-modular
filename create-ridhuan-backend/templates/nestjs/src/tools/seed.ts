@@ -1,5 +1,5 @@
 import "../config/load-env";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { createDatabaseAdapter, databaseProvider } from "../platform/database/database-adapter";
 import { PrismaClient } from "../generated/prisma/client";
 import bcrypt from "bcrypt";
 
@@ -10,7 +10,7 @@ async function main(): Promise<void> {
   if (!url || !email || !password || password.length < 12 || password.includes("replace")) {
     throw new Error("DATABASE_URL, ADMIN_EMAIL and a strong ADMIN_PASSWORD are required for explicit seed");
   }
-  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+  const prisma = new PrismaClient({ adapter: createDatabaseAdapter(url, databaseProvider()) });
   try {
     const permissions = ["manage_users", "manage_roles", "manage_permissions", "manage_uploads", "manage_notifications"] as const;
     const admin = await prisma.role.upsert({ where: { name: "admin" }, create: { name: "admin" }, update: {} });

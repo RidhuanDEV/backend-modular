@@ -1,5 +1,7 @@
 FROM node:24.15.0-bookworm-slim AS build
 WORKDIR /app
+ARG DB_PROVIDER=postgresql
+ENV DB_PROVIDER=$DB_PROVIDER
 ENV DATABASE_URL=postgresql://build:build@localhost:5432/build?schema=public
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./

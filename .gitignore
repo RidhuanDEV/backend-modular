@@ -47,6 +47,8 @@ nestjs-prototype-snapshot-*.zip
 **/.env.*.local
 !.env.example
 !**/.env.example
+!.env.mysql.example
+!**/.env.mysql.example
 
 # ==========================================
 # Temporary & Cache Files

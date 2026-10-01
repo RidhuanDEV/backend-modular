@@ -1,19 +1,102 @@
 {
   "$schema": "http://json.schemastore.org/template",
   "author": "RidhuanDEV",
-  "classifications": ["Web", "API", "PostgreSQL"],
+  "classifications": [
+    "Web",
+    "API",
+    "PostgreSQL",
+    "MySQL"
+  ],
   "identity": "RidhuanDEV.NetBackend.CSharp",
-  "name": "Modular ASP.NET Core PostgreSQL Backend",
+  "name": "Modular ASP.NET Core PostgreSQL/MySQL Backend",
   "shortName": "modular-net",
   "sourceName": "ModularBackend",
   "preferNameDirectory": true,
   "symbols": {
-    "port": {"type": "parameter", "datatype": "integer", "defaultValue": "5080", "replaces": "5080"}
+    "port": {
+      "type": "parameter",
+      "datatype": "integer",
+      "defaultValue": "5080",
+      "replaces": "5080"
+    },
+    "database": {
+      "type": "parameter",
+      "datatype": "choice",
+      "defaultValue": "postgresql",
+      "choices": [
+        {
+          "choice": "postgresql",
+          "description": "PostgreSQL (default)"
+        },
+        {
+          "choice": "mysql",
+          "description": "MySQL 8.4"
+        }
+      ],
+      "replaces": "__DATABASE_PROVIDER__"
+    }
   },
-  "sources": [{
-    "source": "./",
-    "target": "./",
-    "include": [".template.config/template.json", "src/**", "tools/**", "tests/**", "contracts/**", "docs/**", "scripts/**", ".github/workflows/**", "templates/**", "*.md", "LICENSE", "ModularBackend.slnx", "global.json", "Directory.Build.props", "Directory.Packages.props", "NuGet.Config", "dotnet-tools.json", ".gitignore", ".gitattributes", ".dockerignore", ".editorconfig", ".env.example", "Dockerfile", "compose.yaml", "compose.override.yaml.example"],
-    "exclude": ["**/bin/**", "**/obj/**", "**/.env", "**/.git/**", "**/uploads/**", "**/artifacts/**", "**/TestResults/**", "**/*.user", "**/launchSettings.json"]
-  }]
+  "sources": [
+    {
+      "source": "./",
+      "target": "./",
+      "include": [
+        ".template.config/template.json",
+        "src/**",
+        "tools/**",
+        "tests/**",
+        "contracts/**",
+        "docs/**",
+        "scripts/**",
+        ".github/workflows/**",
+        "templates/**",
+        "*.md",
+        "LICENSE",
+        "ModularBackend.slnx",
+        "global.json",
+        "Directory.Build.props",
+        "Directory.Packages.props",
+        "NuGet.Config",
+        "dotnet-tools.json",
+        ".gitignore",
+        ".gitattributes",
+        ".dockerignore",
+        ".editorconfig",
+        ".env.example",
+        "Dockerfile",
+        "compose.yaml",
+        "compose.override.yaml.example",
+        ".env.mysql.example",
+        "compose.mysql.yaml",
+        ".template.config/backend-template.json"
+      ],
+      "exclude": [
+        "**/bin/**",
+        "**/obj/**",
+        "**/.env",
+        "**/.git/**",
+        "**/uploads/**",
+        "**/artifacts/**",
+        "**/TestResults/**",
+        "**/*.user",
+        "**/launchSettings.json"
+      ],
+      "modifiers": [
+        {
+          "condition": "(database == \"mysql\")",
+          "exclude": [
+            ".env.example",
+            "compose.yaml"
+          ],
+          "rename": {
+            ".env.mysql.example": ".env.example",
+            "compose.mysql.yaml": "compose.yaml"
+          }
+        }
+      ],
+      "rename": {
+        ".template.config/backend-template.json": "backend-template.json"
+      }
+    }
+  ]
 }

@@ -7,8 +7,7 @@ package sqlc
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
 
 const insertAudit = `-- name: InsertAudit :exec
@@ -16,15 +15,15 @@ INSERT INTO activity_logs(behavior,module,entity_id,user_id,actor_id_snapshot,be
 `
 
 type InsertAuditParams struct {
-	Behavior        string      `json:"behavior"`
-	Module          string      `json:"module"`
-	EntityID        pgtype.Text `json:"entity_id"`
-	UserID          *string     `json:"user_id"`
-	ActorIDSnapshot pgtype.Text `json:"actor_id_snapshot"`
-	Before          []byte      `json:"before"`
-	After           []byte      `json:"after"`
-	RequestID       pgtype.Text `json:"request_id"`
-	EndpointID      pgtype.Text `json:"endpoint_id"`
+	Behavior        string         `json:"behavior"`
+	Module          string         `json:"module"`
+	EntityID        sql.NullString `json:"entity_id"`
+	UserID          *string        `json:"user_id"`
+	ActorIDSnapshot sql.NullString `json:"actor_id_snapshot"`
+	Before          []byte         `json:"before"`
+	After           []byte         `json:"after"`
+	RequestID       sql.NullString `json:"request_id"`
+	EndpointID      sql.NullString `json:"endpoint_id"`
 }
 
 func (q *Queries) InsertAudit(ctx context.Context, arg InsertAuditParams) error {

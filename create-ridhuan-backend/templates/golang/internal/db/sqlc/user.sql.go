@@ -7,8 +7,7 @@ package sqlc
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
 
 const countUsers = `-- name: CountUsers :one
@@ -153,9 +152,9 @@ UPDATE users SET email=coalesce(lower($1::text),email),role_id=coalesce($2::uuid
 `
 
 type UpdateUserParams struct {
-	Email  pgtype.Text `json:"email"`
-	RoleID *string     `json:"role_id"`
-	ID     string      `json:"id"`
+	Email  sql.NullString `json:"email"`
+	RoleID *string        `json:"role_id"`
+	ID     string         `json:"id"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {

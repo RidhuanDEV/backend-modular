@@ -1,0 +1,154 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        DB_PROVIDER: mysql
+    env_file: .env
+    environment:
+      PORT: '3000'
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?Set DATABASE_URL_DOCKER}
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: ${S3_ENDPOINT_DOCKER:-http://minio:9000}
+      UPLOAD_LOCAL_DIR: /app/uploads
+      NODE_ENV: production
+      DB_PROVIDER: mysql
+    volumes:
+    - uploads_data:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+        required: false
+      minio-init:
+        condition: service_completed_successfully
+        required: false
+    healthcheck:
+      test:
+      - CMD
+      - node
+      - -e
+      - 'fetch(''http://127.0.0.1:3000/ready'').then(r => process.exit(r.ok ? 0 :
+        1)).catch(() => process.exit(1))'
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+    ports:
+    - ${APP_PORT:-3000}:3000
+  migrate:
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?Set DATABASE_URL_DOCKER}
+      DB_PROVIDER: mysql
+    command:
+    - npx
+    - prisma
+    - migrate
+    - deploy
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: 'no'
+    build:
+      context: .
+      args:
+        DB_PROVIDER: mysql
+  redis:
+    image: redis:8.6.1-alpine
+    profiles:
+    - redis
+    volumes:
+    - redis_data:/data
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+    - 127.0.0.1:${REDIS_PORT:-6379}:6379
+  minio:
+    profiles:
+    - minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+    volumes:
+    - minio_data:/data
+    build:
+      context: .
+      dockerfile: scripts/minio.Dockerfile
+      target: server
+    ports:
+    - 127.0.0.1:${MINIO_PORT:-9000}:9000
+    - 127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://localhost:9000/minio/health/live
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  minio-init:
+    build:
+      context: .
+      dockerfile: scripts/minio.Dockerfile
+      target: client
+    profiles:
+    - minio
+    entrypoint:
+    - /bin/sh
+    - /init-bucket.sh
+    environment:
+      MC_CONFIG_DIR: /tmp/mc
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-uploads}
+    volumes:
+    - ./scripts/init-bucket.sh:/init-bucket.sh:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: 'no'
+  mysql:
+    image: mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
+    command:
+    - --character-set-server=utf8mb4
+    - --collation-server=utf8mb4_bin
+    - --default-time-zone=+00:00
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-backend}
+      MYSQL_USER: ${MYSQL_USER:-backend}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
+    ports:
+    - 127.0.0.1:${MYSQL_PORT:-3306}:3306
+    volumes:
+    - mysql_data:/var/lib/mysql
+    - ./scripts/mysql-entrypoint.sh:/opt/template/mysql-entrypoint.sh:ro
+    - ./scripts/mysql-init-user.sh:/docker-entrypoint-initdb.d/10-app-user.sh:ro
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - MYSQL_PWD="$${MYSQL_PASSWORD}" mysql -h 127.0.0.1 -u "$${MYSQL_USER}" "$${MYSQL_DATABASE}"
+        -e "SELECT 1"
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    entrypoint:
+    - /bin/bash
+    - /opt/template/mysql-entrypoint.sh
+volumes:
+  redis_data: null
+  minio_data: null
+  uploads_data: null
+  mysql_data: null

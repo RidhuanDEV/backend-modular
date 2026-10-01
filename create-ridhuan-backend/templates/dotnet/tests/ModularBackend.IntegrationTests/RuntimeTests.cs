@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
@@ -19,6 +20,7 @@ using ModularBackend.Infrastructure.Persistence;
 using ModularBackend.Infrastructure.Security;
 using ModularBackend.Infrastructure.Storage;
 using ModularBackend.Tests;
+using MySql.Data.MySqlClient;
 using Npgsql;
 using Role = ModularBackend.Domain.Role;
 
@@ -35,21 +37,30 @@ public sealed class RuntimeTests
     private Guid userRoleId;
     private TestHost host = null!;
     private HttpClient client = null!;
-    private BackendDbContext Db() => new(new DbContextOptionsBuilder<BackendDbContext>().UseNpgsql(connectionString).Options);
+    private string Provider => Environment.GetEnvironmentVariable("Database__Provider") ?? "postgresql";
+    private BackendDbContext Db() => DatabaseProvider.Create(Provider, connectionString);
+    private DbConnection Control() => Provider == "mysql" ? new MySqlConnection(controlConnection) : new NpgsqlConnection(controlConnection);
     [TestInitialize]
     public async Task Initialize()
     {
         var configured = Environment.GetEnvironmentVariable("Database__ConnectionString");
-        if (string.IsNullOrEmpty(configured)) Assert.Inconclusive("Real PostgreSQL required: Database__ConnectionString");
+        if (string.IsNullOrEmpty(configured)) Assert.Inconclusive("Real database required: Database__ConnectionString");
         database = "modular_net_test_" + Guid.NewGuid().ToString("N");
         uploadRoot = Path.Combine(Path.GetTempPath(), database);
-        var control = new NpgsqlConnectionStringBuilder(configured) { Database = "postgres", Pooling = false };
-        controlConnection = control.ConnectionString;
-        await using (var connection = new NpgsqlConnection(controlConnection))
+        if (Provider == "mysql")
         {
-            await connection.OpenAsync(); await using var command = new NpgsqlCommand($"CREATE DATABASE {database}", connection); await command.ExecuteNonQueryAsync();
+            controlConnection = new MySqlConnectionStringBuilder(configured) { Database = "mysql", Pooling = false }.ConnectionString;
+            connectionString = new MySqlConnectionStringBuilder(configured) { Database = database, Pooling = false }.ConnectionString;
         }
-        var test = new NpgsqlConnectionStringBuilder(configured) { Database = database, Pooling = false }; connectionString = test.ConnectionString;
+        else
+        {
+            controlConnection = new NpgsqlConnectionStringBuilder(configured) { Database = "postgres", Pooling = false }.ConnectionString;
+            connectionString = new NpgsqlConnectionStringBuilder(configured) { Database = database, Pooling = false }.ConnectionString;
+        }
+        await using (var connection = Control())
+        {
+            await connection.OpenAsync(); await using var command = connection.CreateCommand(); command.CommandText = $"CREATE DATABASE {database}" + (Provider == "mysql" ? " CHARACTER SET utf8mb4 COLLATE utf8mb4_bin" : ""); await command.ExecuteNonQueryAsync();
+        }
         await using var db = Db(); await db.Database.MigrateAsync();
         var now = TimeProvider.System.GetUtcNow();
         var adminRole = new Role { Name = "admin", CreatedAt = now, UpdatedAt = now }; var userRole = new Role { Name = "user", CreatedAt = now, UpdatedAt = now };
@@ -66,8 +77,8 @@ public sealed class RuntimeTests
     {
         client?.Dispose(); if (host is not null) await host.DisposeAsync();
         if (database.Length == 0 || controlConnection.Length == 0) return;
-        await using var connection = new NpgsqlConnection(controlConnection); await connection.OpenAsync();
-        await using var command = new NpgsqlCommand($"DROP DATABASE IF EXISTS {database} WITH (FORCE)", connection); await command.ExecuteNonQueryAsync();
+        await using var connection = Control(); await connection.OpenAsync();
+        await using var command = connection.CreateCommand(); command.CommandText = $"DROP DATABASE IF EXISTS {database}" + (Provider == "postgresql" ? " WITH (FORCE)" : ""); await command.ExecuteNonQueryAsync();
     }
     private async Task<JsonElement> Send<T>(HttpMethod method, string path, T body, HttpStatusCode expected)
     {
@@ -155,7 +166,7 @@ public sealed class RuntimeTests
     public async Task RequiredAuditFailureRollsBackAndOptionalFailureCommits()
     {
         await using var db = Db();
-        await db.Database.ExecuteSqlRawAsync("CREATE FUNCTION reject_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit unavailable'; END $$; CREATE TRIGGER reject_audit BEFORE INSERT ON activity_logs FOR EACH ROW EXECUTE FUNCTION reject_audit();");
+        await db.Database.ExecuteSqlRawAsync(Provider == "mysql" ? "CREATE TRIGGER reject_audit BEFORE INSERT ON activity_logs FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='audit unavailable'" : "CREATE FUNCTION reject_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit unavailable'; END $$; CREATE TRIGGER reject_audit BEFORE INSERT ON activity_logs FOR EACH ROW EXECUTE FUNCTION reject_audit();");
         await Send(HttpMethod.Post, "/api/roles", new { name = "must_rollback" }, HttpStatusCode.InternalServerError);
         Assert.IsFalse(await db.Roles.AnyAsync(r => r.Name == "must_rollback"));
         await using var optionalHost = new TestHost(new Dictionary<string, string?> { ["Database:ConnectionString"] = connectionString, ["ENDPOINT_POLICIES_JSON"] = "{\"role.create\":{\"audit\":\"optional\"}}" });
@@ -222,7 +233,7 @@ public sealed class RuntimeTests
     {
         using var allowed = new HttpRequestMessage(HttpMethod.Get, "/live"); allowed.Headers.Add("Origin", "http://localhost:5173"); using var accepted = await client.SendAsync(allowed); Assert.IsTrue(accepted.Headers.Contains("Access-Control-Allow-Origin"));
         using var denied = new HttpRequestMessage(HttpMethod.Get, "/live"); denied.Headers.Add("Origin", "https://untrusted.example"); using var deniedResponse = await client.SendAsync(denied); Assert.IsFalse(deniedResponse.Headers.Contains("Access-Control-Allow-Origin"));
-        await using var downHost = new TestHost(new Dictionary<string, string?> { ["Database:ConnectionString"] = "Host=localhost;Port=1;Database=down;Username=test;Password=test;Timeout=1", ["Cache:Enabled"] = "true", ["Redis:ConnectionString"] = "localhost:1" }); using var down = downHost.CreateClient();
+        await using var downHost = new TestHost(new Dictionary<string, string?> { ["Database:Provider"] = Provider, ["Database:ConnectionString"] = Provider == "mysql" ? "Server=localhost;Port=1;Database=down;User ID=test;Password=test;Connection Timeout=1;SslMode=Preferred" : "Host=localhost;Port=1;Database=down;Username=test;Password=test;Timeout=1", ["Cache:Enabled"] = "true", ["Redis:ConnectionString"] = "localhost:1" }); using var down = downHost.CreateClient();
         using var live = await down.GetAsync("/live"); Assert.AreEqual(HttpStatusCode.OK, live.StatusCode); using var ready = await down.GetAsync("/ready"); Assert.AreEqual(HttpStatusCode.ServiceUnavailable, ready.StatusCode);
     }
 
@@ -262,7 +273,7 @@ public sealed class RuntimeTests
     public async Task UploadCompensationAndOrphanToolDryRunApply()
     {
         await using var db = Db();
-        await db.Database.ExecuteSqlRawAsync("CREATE FUNCTION reject_upload_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit unavailable'; END $$; CREATE TRIGGER reject_upload_audit BEFORE INSERT ON activity_logs FOR EACH ROW EXECUTE FUNCTION reject_upload_audit();");
+        await db.Database.ExecuteSqlRawAsync(Provider == "mysql" ? "CREATE TRIGGER reject_upload_audit BEFORE INSERT ON activity_logs FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='audit unavailable'" : "CREATE FUNCTION reject_upload_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit unavailable'; END $$; CREATE TRIGGER reject_upload_audit BEFORE INSERT ON activity_logs FOR EACH ROW EXECUTE FUNCTION reject_upload_audit();");
         using var upload = new MultipartFormDataContent(); var bytes = new ByteArrayContent("%PDF-compensation"u8.ToArray()); bytes.Headers.ContentType = new("application/pdf"); upload.Add(bytes, "file", "test.pdf");
         using var result = await client.PostAsync("/api/upload", upload); Assert.AreEqual(HttpStatusCode.InternalServerError, result.StatusCode);
         Assert.IsFalse(await db.StoredFiles.AnyAsync()); Assert.IsFalse(Directory.Exists(uploadRoot) && Directory.EnumerateFiles(uploadRoot).Any());

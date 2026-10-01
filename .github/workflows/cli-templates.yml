@@ -46,7 +46,8 @@ jobs:
       max-parallel: 2
       matrix:
         os: [ubuntu-latest, windows-latest]
-        template: [express-typescript, nestjs, golang, dotnet]
+        template: [express-typescript, nestjs, golang, dotnet, fastapi]
+        database: [postgresql, mysql]
     runs-on: ${{ matrix.os }}
     env:
       CLI_RUNTIME_TEST: ${{ matrix.os == 'ubuntu-latest' && 'true' || 'false' }}
@@ -69,6 +70,14 @@ jobs:
         if: matrix.template == 'dotnet'
         with:
           global-json-file: modular-NET/global.json
+      - uses: actions/setup-python@v5
+        if: matrix.template == 'fastapi'
+        with:
+          python-version: '3.13.3'
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        if: matrix.template == 'fastapi'
+        with:
+          version: '0.12.21'
       - uses: actions/download-artifact@v4
         with:
           name: cli-package
@@ -79,7 +88,7 @@ jobs:
         shell: pwsh
         run: |
           $env:CLI_TARBALL = (Get-ChildItem artifact/*.tgz).FullName
-          node scripts/verify-consumer.mjs '${{ matrix.template }}'
+          node scripts/verify-consumer.mjs '${{ matrix.template }}' '${{ matrix.database }}'
   macos-smoke:
     needs: package
     runs-on: macos-latest
@@ -90,6 +99,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24.15.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.3'
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: '0.12.21'
       - uses: actions/download-artifact@v4
         with:
           name: cli-package
@@ -97,6 +112,11 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)" npm test
+      - name: FastAPI native install and generator smoke
+        run: |
+          export CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)"
+          node scripts/verify-consumer.mjs fastapi postgresql
+          node scripts/verify-consumer.mjs fastapi mysql
   compose:
     needs: package
     runs-on: ubuntu-latest
@@ -105,7 +125,8 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        template: [express-typescript, nestjs, golang, dotnet]
+        template: [express-typescript, nestjs, golang, dotnet, fastapi]
+        database: [postgresql, mysql]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -119,7 +140,7 @@ jobs:
           path: create-ridhuan-backend/artifact
       - run: npm ci
       - run: npm run build
-      - run: CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)" node scripts/verify-compose.mjs '${{ matrix.template }}'
+      - run: CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)" node scripts/verify-compose.mjs '${{ matrix.template }}' '${{ matrix.database }}'
   publish:
     if: github.event_name == 'workflow_dispatch' && inputs.publish
     needs: [package, consumer, macos-smoke, compose]

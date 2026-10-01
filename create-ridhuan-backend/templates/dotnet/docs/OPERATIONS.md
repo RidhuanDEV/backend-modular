@@ -2,7 +2,7 @@
 
 ## Release
 
-Provision a separate PostgreSQL database and storage. Inject runtime secrets from environment/secret manager; .env is for local convenience. Back up PostgreSQL and objects before schema changes. Run Migrator once as a controlled release job, then deploy API replicas; never start migrator/seed per replica. Compose enforces successful migration before app.
+Provision a separate database using the selected PostgreSQL or MySQL provider, and storage. Inject runtime secrets from environment/secret manager; .env is for local convenience. Back up the database and objects before schema changes. Run Migrator once as a controlled release job, then deploy API replicas; never start migrator/seed per replica. Compose enforces successful migration before app. Changing provider does not convert existing data; PostgreSQL and MySQL have separate migration histories. MySQL DDL can implicitly commit: inspect actual schema/history after a failed migration before attempting recovery.
 
 Before rollback, inspect migration SQL and schema compatibility with previous API. Rolling application back cannot undo destructive schema changes. Use additive changes before removing columns; restore a verified backup when an incompatible data rollback is required. Do not automatically retry non-idempotent transaction failures; 409 asks the caller to retry deliberately.
 
@@ -25,6 +25,8 @@ Alert on 5xx/503, limiter outage, audit optional failure, upload compensation/or
 ## Backup, restore and retention
 
 Use pg_dump in custom format for the dedicated .NET database, preserve migration history and cache_generation, and back up upload objects consistently. Encrypt backups with access/retention policies. Restore PostgreSQL to an isolated database and objects to an isolated root/bucket, run migration compatibility checks, verify grants/user reads/file metadata and sample object checksums. Record RPO/RTO from an actual restore drill. Local smoke does not prove disaster recovery.
+
+For MySQL, use MySQL 8.4 backup/restore tools such as mysqldump, preserve EF migration history and cache_generation, and restore to an isolated MySQL database with the same charset/collation. PostgreSQL restore tools cannot restore a MySQL dump. Use separate operational credentials with the required backup privileges; keep secrets outside command logs. Apply the same metadata/object consistency and application checks before accepting a recovery point.
 
 Archive activity_logs according to the project's retention policy; keep historical actor snapshots and nullable user FK intact. Clean upload orphans with the tool dry run, review UUID candidates after grace period, then use --apply explicitly. Grace must exceed all upload/transaction durations; never delete newly written objects. Upload compensation checks database references before deleting after a commit failure; if the database outcome cannot be confirmed, retain the object and recover through the orphan tool after the grace period.
 

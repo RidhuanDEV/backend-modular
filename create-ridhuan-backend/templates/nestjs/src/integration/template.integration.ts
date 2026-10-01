@@ -29,6 +29,36 @@ before(async () => {
 });
 after(async () => { if (app) await app.close(); });
 
+test("search is case insensitive, escapes wildcards and counts beyond the page", async () => {
+  const login = await request(app.getHttpServer()).post("/api/auth/login")
+    .send({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD });
+  assert.equal(login.status, 200);
+  const authorization = `Bearer ${textField(field(login.body, "data"), "token")}`;
+  const prefix = `search_${randomUUID().replaceAll("-", "")}`;
+  const ids: string[] = [];
+  try {
+    for (const suffix of ["%one", "%two", "Xthree"]) {
+      const created = await request(app.getHttpServer()).post("/api/roles")
+        .set("Authorization", authorization).send({ name: prefix + suffix });
+      assert.equal(created.status, 201);
+      ids.push(textField(field(created.body, "data"), "id"));
+    }
+    const first = await request(app.getHttpServer()).get("/api/roles")
+      .query({ search: prefix.toUpperCase() + "%", limit: 1, sortBy: "name", orderBy: "asc" })
+      .set("Authorization", authorization);
+    assert.equal(first.status, 200);
+    assert.equal(field(field(first.body, "meta"), "totalItems"), 2);
+    assert.deepEqual((field(first.body, "data") as Record<string, unknown>[]).map(row => row.id), [ids[0]]);
+    const second = await request(app.getHttpServer()).get("/api/roles")
+      .query({ search: prefix.toUpperCase() + "%", limit: 1, page: 2, sortBy: "name", orderBy: "asc" })
+      .set("Authorization", authorization);
+    assert.equal(second.status, 200);
+    assert.deepEqual((field(second.body, "data") as Record<string, unknown>[]).map(row => row.id), [ids[1]]);
+  } finally {
+    for (const id of ids) await request(app.getHttpServer()).delete(`/api/roles/${id}`).set("Authorization", authorization);
+  }
+});
+
 test("auth refresh rotation, replay revocation and public DTO", async () => {
   const email = `integration-${randomUUID()}@example.com`;
   const registered = await request(app.getHttpServer()).post("/api/auth/register")
@@ -132,14 +162,18 @@ test("a required audit failure rolls back the business mutation", async () => {
     .send({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD });
   const token = textField(field(login.body, "data"), "token");
   const name = `rollback_${randomUUID().replaceAll("-", "")}`;
+  const mysql = process.env.DB_PROVIDER === "mysql";
+  if (mysql) await prisma.$executeRawUnsafe("ALTER TABLE activity_logs ADD CONSTRAINT reject_permission_audit CHECK (endpointId <> 'permission.create' OR requestId <> 'audit-rollback-fixture')");
+  else {
   await prisma.$executeRawUnsafe(`CREATE FUNCTION reject_permission_audit() RETURNS trigger AS $$
     BEGIN IF NEW."endpointId" = 'permission.create' THEN RAISE EXCEPTION 'audit test failure'; END IF;
     RETURN NEW; END; $$ LANGUAGE plpgsql`);
   await prisma.$executeRawUnsafe(`CREATE TRIGGER reject_permission_audit_insert BEFORE INSERT ON activity_logs
     FOR EACH ROW EXECUTE FUNCTION reject_permission_audit()`);
+  }
   try {
     const response = await request(app.getHttpServer()).post("/api/permissions")
-      .set("Authorization", `Bearer ${token}`).send({ name });
+      .set("Authorization", `Bearer ${token}`).set("X-Request-ID", "audit-rollback-fixture").send({ name });
     assert.equal(response.status, 500);
     assert.equal(await prisma.permission.count({ where: { name } }), 0);
     const optionalName = `optional_${randomUUID().replaceAll("-", "")}`;
@@ -147,12 +181,12 @@ test("a required audit failure rolls back the business mutation", async () => {
     await audit.transact(async (tx) => {
       const created = await tx.permission.create({ data: { name: optionalName } });
       return [created, { endpointId: "permission.create", policy: { ...endpointRegistry["permission.create"], audit: "optional" },
-        behavior: "created", module: "permissions", entityId: created.id }] as const;
+        behavior: "created", module: "permissions", entityId: created.id, requestId: "audit-rollback-fixture" }] as const;
     });
     assert.equal(await prisma.permission.count({ where: { name: optionalName } }), 1);
   } finally {
-    await prisma.$executeRawUnsafe("DROP TRIGGER reject_permission_audit_insert ON activity_logs");
-    await prisma.$executeRawUnsafe("DROP FUNCTION reject_permission_audit()");
+    await prisma.$executeRawUnsafe(mysql ? "ALTER TABLE activity_logs DROP CHECK reject_permission_audit" : "DROP TRIGGER reject_permission_audit_insert ON activity_logs");
+    if (!mysql) await prisma.$executeRawUnsafe("DROP FUNCTION reject_permission_audit()");
   }
 });
 

@@ -15,7 +15,7 @@ import (
 )
 
 type Service struct {
-	Queries *sqlc.Queries
+	Queries sqlc.Querier
 	Audit   *audit.Writer
 	Storage storage.Storage
 	Kind    string
@@ -43,7 +43,7 @@ func (s *Service) Create(ctx context.Context, p audit.Policy, actor *audit.Actor
 		s.Log.Error("upload storage write failed", "storage", s.Kind, "error", err)
 		return model.StoredFile{}, fault.DB(err)
 	}
-	out, err := audit.Mutate(ctx, s.Audit, p, actor, "CREATE", func(q *sqlc.Queries) (model.StoredFile, audit.Change, error) {
+	out, err := audit.Mutate(ctx, s.Audit, p, actor, "CREATE", func(q sqlc.Querier) (model.StoredFile, audit.Change, error) {
 		var uploader *string
 		if actor != nil {
 			value := actor.ID

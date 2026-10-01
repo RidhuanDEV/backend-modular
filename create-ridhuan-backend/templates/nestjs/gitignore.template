@@ -18,3 +18,5 @@ src/generated/
 *.zip
 .env.*
 !.env.example
+
+!.env.mysql.example

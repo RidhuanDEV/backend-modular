@@ -111,3 +111,11 @@ The prior MySQL prototype and its logs are in the ignored `.legacy` folder; it i
 ### Generated setup defaults
 
 The unified CLI sets host/manual HTTP to `3000` by default and keeps the container on `3000`. `--port` updates `.env` and the generated guide. `COMPOSE_PROFILES` starts selected Redis/S3 dependencies with `docker compose up --build -d --wait`; MinIO bucket provisioning is explicit and idempotent. Seed with `docker compose exec app npm run seed` after migrations complete. For a manual API with Compose dependencies, follow `GETTING-STARTED.md`. `REDIS_NAMESPACE` isolates independent deployments sharing Redis; replicas share one namespace.
+
+## PostgreSQL or MySQL
+
+The unified CLI supports `--database postgresql` (default) and `--database mysql`. MySQL defaults to port 3306. Each generated project records the selected provider in `backend-template.json`; its active Compose file and `.env` match that choice. Changing the provider does not convert existing data. PostgreSQL migration history stays intact; MySQL has an independent migration baseline and UTC sessions.
+
+For a source checkout, copy `.env.mysql.example` to `.env`, configure credentials, and run `docker compose -f compose.mysql.yaml up --build -d --wait`. Seed is a separate explicit operation using the same `-f` option. CLI-generated MySQL projects use the ordinary active Compose filename. MySQL bootstrap uses a separate root password and supports quoted/Unicode application passwords without logging them.
+
+For an external MySQL database, use `sslaccept=strict` (or `sslmode=verify-full`) and an absolute `sslcert` CA path in `DATABASE_URL`; both the Prisma adapter and migration connection must verify the server. Local Compose is a development fixture. Back up MySQL with MySQL tooling and PostgreSQL with PostgreSQL tooling, preserving migration history and upload metadata/objects. Test restoration into isolated storage/database before relying on a recovery point.

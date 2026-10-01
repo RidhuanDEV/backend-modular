@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/RidhuanDEV/golang-backend/internal/db/migrations"
+	mysqlmigrations "github.com/RidhuanDEV/golang-backend/internal/db/mysql/migrations"
+	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -32,12 +34,37 @@ func Connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 }
 
 func Migrate(url string) error {
-	return migrate(url, 0)
+	return MigrateProvider("postgresql", url, 0)
 }
 
-func MigrateTo(url string, version int64) error { return migrate(url, version) }
+func MigrateTo(url string, version int64) error { return MigrateProvider("postgresql", url, version) }
 
-func migrate(url string, version int64) error {
+func MigrateProvider(provider, url string, version int64) error {
+	dialect := "postgres"
+	driver := "pgx"
+	if provider == "mysql" {
+		config, err := MySQLConfig(url)
+		if err != nil {
+			return err
+		}
+		connector, err := mysql.NewConnector(config)
+		if err != nil {
+			return err
+		}
+		database := sql.OpenDB(connector)
+		defer database.Close()
+		if err = goose.SetDialect("mysql"); err != nil {
+			return err
+		}
+		goose.SetBaseFS(mysqlmigrations.FS)
+		if version > 0 {
+			return goose.UpTo(database, ".", version)
+		}
+		return goose.Up(database, ".")
+	}
+	if provider != "" && provider != "postgresql" {
+		return fmt.Errorf("invalid DB_PROVIDER")
+	}
 	if !strings.Contains(url, "timezone=") {
 		separator := "?"
 		if strings.Contains(url, "?") {
@@ -45,12 +72,12 @@ func migrate(url string, version int64) error {
 		}
 		url += separator + "timezone=UTC"
 	}
-	database, err := sql.Open("pgx", url)
+	database, err := sql.Open(driver, url)
 	if err != nil {
 		return err
 	}
 	defer database.Close()
-	if err = goose.SetDialect("postgres"); err != nil {
+	if err = goose.SetDialect(dialect); err != nil {
 		return err
 	}
 	goose.SetBaseFS(migrations.FS)

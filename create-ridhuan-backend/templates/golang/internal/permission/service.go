@@ -11,7 +11,7 @@ import (
 )
 
 type Service struct {
-	Queries *sqlc.Queries
+	Queries sqlc.Querier
 	Audit   *audit.Writer
 }
 
@@ -37,7 +37,7 @@ func (s *Service) Create(ctx context.Context, p audit.Policy, actor *audit.Actor
 	if err := fault.Name(name, 128); err != nil {
 		return model.Permission{}, err
 	}
-	return audit.Mutate(ctx, s.Audit, p, actor, "CREATE", func(q *sqlc.Queries) (model.Permission, audit.Change, error) {
+	return audit.Mutate(ctx, s.Audit, p, actor, "CREATE", func(q sqlc.Querier) (model.Permission, audit.Change, error) {
 		row, err := q.CreatePermission(ctx, strings.TrimSpace(name))
 		if err != nil {
 			return model.Permission{}, audit.Change{}, fault.DB(err)
@@ -56,7 +56,7 @@ func (s *Service) Update(ctx context.Context, p audit.Policy, actor *audit.Actor
 			return model.Permission{}, err
 		}
 	}
-	return audit.Mutate(ctx, s.Audit, p, actor, "UPDATE", func(q *sqlc.Queries) (model.Permission, audit.Change, error) {
+	return audit.Mutate(ctx, s.Audit, p, actor, "UPDATE", func(q sqlc.Querier) (model.Permission, audit.Change, error) {
 		old, err := q.LockPermission(ctx, id)
 		if err != nil {
 			return model.Permission{}, audit.Change{}, fault.DB(err)
@@ -78,7 +78,7 @@ func (s *Service) Delete(ctx context.Context, p audit.Policy, actor *audit.Actor
 	if err := fault.UUID(id); err != nil {
 		return err
 	}
-	_, err := audit.Mutate(ctx, s.Audit, p, actor, "DELETE", func(q *sqlc.Queries) (struct{}, audit.Change, error) {
+	_, err := audit.Mutate(ctx, s.Audit, p, actor, "DELETE", func(q sqlc.Querier) (struct{}, audit.Change, error) {
 		row, err := q.LockPermission(ctx, id)
 		if err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)

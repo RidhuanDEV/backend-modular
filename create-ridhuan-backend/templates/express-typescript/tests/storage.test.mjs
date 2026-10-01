@@ -1,10 +1,11 @@
+import "dotenv/config";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rmdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";
+process.env.DATABASE_URL = process.env.DB_PROVIDER === "mysql" ? "mysql://test:test@127.0.0.1:3306/test" : "postgresql://test:test@localhost:5432/test";
 process.env.JWT_SECRET = "test_secret_at_least_32_characters_long";
 process.env.UPLOAD_STORAGE = "local";
 process.env.CACHE_ENABLED = "false";

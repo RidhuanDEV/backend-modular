@@ -2,18 +2,18 @@ package user
 
 import (
 	"context"
+	"database/sql"
 	"github.com/RidhuanDEV/golang-backend/internal/audit"
 	"github.com/RidhuanDEV/golang-backend/internal/db/projection"
 	"github.com/RidhuanDEV/golang-backend/internal/db/sqlc"
 	"github.com/RidhuanDEV/golang-backend/internal/fault"
 	"github.com/RidhuanDEV/golang-backend/internal/model"
 	"github.com/RidhuanDEV/golang-backend/internal/role"
-	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type Service struct {
-	Queries *sqlc.Queries
+	Queries sqlc.Querier
 	Audit   *audit.Writer
 	Roles   *role.Service
 }
@@ -92,7 +92,7 @@ func (s *Service) Create(ctx context.Context, p audit.Policy, actor *audit.Actor
 	if err != nil {
 		return model.User{}, fault.DB(err)
 	}
-	out, err := audit.Mutate(ctx, s.Audit, p, actor, "CREATE", func(q *sqlc.Queries) (model.User, audit.Change, error) {
+	out, err := audit.Mutate(ctx, s.Audit, p, actor, "CREATE", func(q sqlc.Querier) (model.User, audit.Change, error) {
 		if err := role.RoleWithinActor(ctx, q, actor, b.RoleID); err != nil {
 			return model.User{}, audit.Change{}, err
 		}
@@ -126,7 +126,7 @@ func (s *Service) Update(ctx context.Context, p audit.Policy, actor *audit.Actor
 			return model.User{}, err
 		}
 	}
-	_, err := audit.Mutate(ctx, s.Audit, p, actor, "UPDATE", func(q *sqlc.Queries) (model.User, audit.Change, error) {
+	_, err := audit.Mutate(ctx, s.Audit, p, actor, "UPDATE", func(q sqlc.Querier) (model.User, audit.Change, error) {
 		old, err := q.LockUser(ctx, id)
 		if err != nil {
 			return model.User{}, audit.Change{}, fault.DB(err)
@@ -139,9 +139,9 @@ func (s *Service) Update(ctx context.Context, p audit.Policy, actor *audit.Actor
 				return model.User{}, audit.Change{}, err
 			}
 		}
-		var email pgtype.Text
+		var email sql.NullString
 		if b.Email != nil {
-			email = pgtype.Text{String: *b.Email, Valid: true}
+			email = sql.NullString{String: *b.Email, Valid: true}
 		}
 		row, err := q.UpdateUser(ctx, sqlc.UpdateUserParams{ID: id, Email: email, RoleID: b.RoleID})
 		if err != nil {
@@ -163,7 +163,7 @@ func (s *Service) Delete(ctx context.Context, p audit.Policy, actor *audit.Actor
 	if actor.ID == id {
 		return fault.New(fault.Forbidden, "You cannot delete your own account.")
 	}
-	_, err := audit.Mutate(ctx, s.Audit, p, actor, "DELETE", func(q *sqlc.Queries) (struct{}, audit.Change, error) {
+	_, err := audit.Mutate(ctx, s.Audit, p, actor, "DELETE", func(q sqlc.Querier) (struct{}, audit.Change, error) {
 		row, err := q.LockUser(ctx, id)
 		if err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)

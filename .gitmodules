@@ -13,3 +13,7 @@
 [submodule "nestjs"]
 	path = nestjs
 	url = https://github.com/RidhuanDEV/modular-nestjs.git
+
+[submodule "modular-fastapi"]
+	path = modular-fastapi
+	url = https://github.com/RidhuanDEV/modular-fastapi.git

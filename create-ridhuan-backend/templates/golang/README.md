@@ -185,3 +185,11 @@ npx create-ridhuan-backend@latest my-api --template golang --yes
 ```
 
 Follow the generated `GETTING-STARTED.md` for manual migrations, explicit seed, and hybrid or Docker setup. `--port` changes the manual and Compose host port (default `8080`); the container remains on `8080`. The selected optional services are activated by `COMPOSE_PROFILES`. `REDIS_NAMESPACE` must be unique per deployment and shared by its replicas when using a common Redis server.
+
+## PostgreSQL or MySQL
+
+The unified CLI supports `--database postgresql` (default) and `--database mysql`. MySQL defaults to port 3306. Each generated project records the selected provider in `backend-template.json`; its active Compose file and `.env` match that choice. Changing the provider does not convert existing data. PostgreSQL migration history stays intact; MySQL has an independent migration baseline and UTC sessions.
+
+For a source checkout, copy `.env.mysql.example` to `.env`, configure credentials, and run `docker compose -f compose.mysql.yaml up --build -d --wait`. Seed is a separate explicit operation using the same `-f` option. CLI-generated MySQL projects use the ordinary active Compose filename. MySQL bootstrap uses a separate root password and supports quoted/Unicode application passwords without logging them.
+
+For an external MySQL database, set `sslmode=verify-full` in `DATABASE_URL`; optionally provide an absolute `sslrootcert` CA path. The driver validates the server hostname and certificate chain. Local Compose is a development fixture. Follow [operations](docs/OPERATIONS.md) for provider-specific backup/restore and failed migration recovery.

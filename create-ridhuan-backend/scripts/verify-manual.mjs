@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { command } from '../dist/process.js';
 import { replaceEnv } from '../dist/scaffold/env.js';
 import pg from 'pg';
+import mysql from 'mysql2/promise';
 
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 async function freePort() {
@@ -21,14 +22,14 @@ function value(text, key) {
   return encoded.startsWith("'") && encoded.endsWith("'") ? encoded.slice(1, -1).replaceAll("\\'", "'") : encoded;
 }
 
-export async function verifyManual(project, id) {
+export async function verifyManual(project, id, provider = 'postgresql') {
   const databasePort = await freePort(), apiPort = await freePort();
   const container = 'ridhuan-manual-' + randomUUID().slice(0, 8);
   const password = `manual #$ apostrophe' quote" slash\\ 日本;`;
   const original = await readFile(join(project, '.env'), 'utf8');
-  const database = value(original, 'POSTGRES_DB'), user = value(original, 'POSTGRES_USER');
-  const url = `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password).replaceAll("'", '%27')}@127.0.0.1:${databasePort}/${database}?sslmode=disable`;
-  const connection = `Host="127.0.0.1";Port=${databasePort};Database="${database}";Username="${user}";Password="${password.replaceAll('"', '""')}"`;
+  const database = value(original, provider === 'mysql' ? 'MYSQL_DATABASE' : 'POSTGRES_DB'), user = value(original, provider === 'mysql' ? 'MYSQL_USER' : 'POSTGRES_USER');
+  const url = `${provider}://${encodeURIComponent(user)}:${encodeURIComponent(password).replaceAll("'", '%27')}@127.0.0.1:${databasePort}/${database}${id === 'fastapi' ? '' : '?sslmode=disable'}`;
+  const connection = provider === 'mysql' ? `Server="127.0.0.1";Port=${databasePort};Database="${database}";User ID="${user}";Password="${password.replaceAll('"', '""')}";SslMode=Preferred` : `Host="127.0.0.1";Port=${databasePort};Database="${database}";Username="${user}";Password="${password.replaceAll('"', '""')}"`;
   const replacements = id === 'dotnet'
     ? { Database__ConnectionString: connection, ASPNETCORE_URLS: `http://127.0.0.1:${apiPort}`, APP_PORT: String(apiPort) }
     : { DATABASE_URL: url, PORT: String(apiPort), APP_PORT: String(apiPort) };
@@ -44,15 +45,22 @@ export async function verifyManual(project, id) {
   }
   let server;
   try {
-    const created = command('docker', ['run', '-d', '--name', container, '-p', `127.0.0.1:${databasePort}:5432`, '-e', `POSTGRES_USER=${user}`, '-e', `POSTGRES_PASSWORD=${password}`, '-e', `POSTGRES_DB=${database}`, 'postgres:18.3-alpine'], project);
-    if(created.status!==0) throw new Error('Disposable PostgreSQL startup failed: '+created.stderr);
+    const dockerArgs = provider === 'mysql' ? ['-p', `127.0.0.1:${databasePort}:3306`, '-e', `MYSQL_USER=${user}`, '-e', `MYSQL_PASSWORD=${password}`, '-e', `MYSQL_DATABASE=${database}`, '-e', 'MYSQL_ROOT_PASSWORD=disposable-root-password', '--mount', `type=bind,source=${join(project,'scripts/mysql-entrypoint.sh')},target=/opt/template/mysql-entrypoint.sh,readonly`, '--mount', `type=bind,source=${join(project,'scripts/mysql-init-user.sh')},target=/docker-entrypoint-initdb.d/10-app-user.sh,readonly`, '--entrypoint', '/bin/bash', 'mysql:8.4', '/opt/template/mysql-entrypoint.sh', 'mysqld'] : ['-p', `127.0.0.1:${databasePort}:5432`, '-e', `POSTGRES_USER=${user}`, '-e', `POSTGRES_PASSWORD=${password}`, '-e', `POSTGRES_DB=${database}`, 'postgres:18.3-alpine'];
+    const created = command('docker', ['run', '-d', '--name', container, ...dockerArgs], project);
+    if(created.status!==0) throw new Error('Disposable database startup failed: '+created.stderr);
     let connected = false;
-    for (let attempt = 0; attempt < 30; attempt++) {
+    for (let attempt = 0; attempt < 90; attempt++) {
+      if (provider === 'mysql') {
+        let probe;
+        try { probe = await mysql.createConnection({host:'127.0.0.1', port:databasePort, user, password, database, connectTimeout:1500}); await probe.query('SELECT 1'); connected=true; break; }
+        catch { await pause(500); } finally { probe?.destroy(); }
+        continue;
+      }
       const probe = new pg.Client({ connectionString: url, connectionTimeoutMillis: 1500 });
       try { await probe.connect(); await probe.query('SELECT 1'); connected = true; break; }
       catch { await pause(500); } finally { await probe.end(); }
     }
-    assert(connected, 'Disposable PostgreSQL did not become ready');
+    assert(connected, 'Disposable database did not become ready');
     let executable, args;
     if (id === 'dotnet') {
       const loader = process.platform === 'win32' ? 'pwsh' : 'python3';
@@ -64,6 +72,15 @@ export async function verifyManual(project, id) {
       run('go', ['run', './cmd/migrate']); run('go', ['run', './cmd/seed']);
       const binary = join(project, process.platform === 'win32' ? '.tmp-manual-api.exe' : '.tmp-manual-api');
       run('go', ['build', '-p', '1', '-o', binary, './cmd/api']); executable = binary; args = [];
+    } else if (id === 'fastapi') {
+      run('uv', ['run', '--locked', 'backend', 'migrate']);
+      run('uv', ['run', '--locked', 'backend', 'revision', 'consumer_generated_modules']);
+      run('uv', ['run', '--locked', 'backend', 'migrate']);
+      run('uv', ['run', '--locked', 'backend', 'check-migrations']);
+      run('uv', ['run', '--locked', 'python', 'scripts/verify.py']);
+      run('uv', ['run', '--locked', 'backend', 'seed']);
+      executable = join(project, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+      args = ['-m', 'app.cli.main', 'serve'];
     } else {
       // Use npm's executable resolved by the CLI; no Windows shell command construction.
       for (const script of ['prisma:migrate:deploy', 'seed']) {
@@ -90,7 +107,14 @@ export async function verifyManual(project, id) {
       body: JSON.stringify({ email: value(fixtureEnv, id === 'dotnet' ? 'Bootstrap__Email' : 'ADMIN_EMAIL'), password: value(fixtureEnv, id === 'dotnet' ? 'Bootstrap__Password' : 'ADMIN_PASSWORD') }) });
     assert.equal(login.status, 200, 'Manual bootstrap login failed');
     const tokens = (await login.json()).data; assert(tokens[id === 'dotnet' ? 'accessToken' : 'token']);
-    console.log(`${id}: manual migration, explicit seed, env loader, chosen port, health/docs and login passed`);
+    if (id === 'fastapi') {
+      for (const module of ['consumer_example', 'settings']) {
+        const response = await fetch(origin + '/api/' + module, { headers: { authorization: `Bearer ${tokens.token}` } });
+        assert.equal(response.status, 200, 'Generated FastAPI module failed after its migration');
+        assert.deepEqual((await response.json()).data, []);
+      }
+    }
+    console.log(`${id}/${provider}: manual migration, explicit seed, env loader, chosen port, health/docs and login passed`);
   } finally {
     if (server?.pid) {
       if (process.platform === 'win32') command('taskkill', ['/PID', String(server.pid), '/T', '/F'], project);

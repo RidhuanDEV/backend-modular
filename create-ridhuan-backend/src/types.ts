@@ -1,4 +1,5 @@
-export type TemplateId = "express-typescript" | "nestjs" | "golang" | "dotnet";
+export type TemplateId = "express-typescript" | "nestjs" | "golang" | "dotnet" | "fastapi";
+export type DatabaseProvider = "postgresql" | "mysql";
 export type UploadStorageType = "local" | "s3";
 export type SetupMode = "manual" | "docker";
 
@@ -10,6 +11,7 @@ export interface PromptOption<T> {
   readonly inactiveColor?: string;
 }
 export interface CliArguments {
+  readonly database?: DatabaseProvider;
   readonly projectName?: string;
   readonly template?: TemplateId;
   readonly port?: number;
@@ -32,6 +34,7 @@ export interface CliArguments {
   readonly version: boolean;
 }
 export interface ProjectAnswers {
+  readonly databaseProvider: DatabaseProvider;
   readonly targetDirectory: string;
   readonly projectName: string;
   readonly packageName: string;
@@ -56,14 +59,17 @@ export interface ProjectAnswers {
   readonly goModulePath?: string;
 }
 export interface RuntimeRequirements {
+  readonly python?: string;
+  readonly uv?: string;
   readonly node?: string;
   readonly go?: string;
   readonly dotnet?: string;
 }
 export interface TemplateManifest {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 1 | 2;
+  readonly databaseProviders: readonly DatabaseProvider[];
   readonly id: TemplateId;
-  readonly source: { readonly repository: string; readonly commit: string; readonly dirty: boolean };
+  readonly source: { readonly repository: string; readonly commit: string | null; readonly dirty: boolean };
   readonly requirements: RuntimeRequirements;
   readonly identity: string;
   readonly files: Readonly<Record<string, string>>;
@@ -80,7 +86,7 @@ export interface TemplateDescriptor {
   readonly storageHost: string;
   readonly storageProfile: string;
   readonly composeFile: string;
-  readonly install: { readonly command: "npm" | "go" | "dotnet"; readonly args: readonly string[] };
+  readonly install: { readonly command: "npm" | "go" | "dotnet" | "uv"; readonly args: readonly string[] };
 }
 export interface ScaffoldResult {
   readonly projectDirectory: string;

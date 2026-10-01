@@ -8,16 +8,17 @@ import passwordPrompt from "@inquirer/password";
 import { parseCliArgs, parsePort, validateProjectName, validateGoModule, helpText } from "./arguments.js";
 import { selectPrompt } from "./prompts/select.js";
 import { textPrompt } from "./prompts/text.js";
-import { verifyPostgresConnection } from "./prompts/db-check.js";
+import { verifyDatabaseConnection } from "./prompts/db-check.js";
 import { scaffoldExpress } from "./scaffold/express.js";
 import { scaffoldNestjs } from "./scaffold/nestjs.js";
 import { scaffoldGolang } from "./scaffold/golang.js";
 import { scaffoldDotnet } from "./scaffold/dotnet.js";
+import { scaffoldFastapi } from "./scaffold/fastapi.js";
 import { objectRecord, readManifest, templateRegistry } from "./templates.js";
 import { command, preflight, installDependencies } from "./process.js";
 import { gettingStarted, nextSteps } from "./instructions.js";
 import { serializeEnvValue } from "./scaffold/env.js";
-import type { ProjectAnswers, SetupMode, UploadStorageType, TemplateId } from "./types.js";
+import type { DatabaseProvider, ProjectAnswers, SetupMode, UploadStorageType, TemplateId } from "./types.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 async function secret(label: string, supplied: string | undefined, auto: boolean): Promise<string> {
@@ -31,6 +32,7 @@ function emptyTarget(target: string): void {
   if (existsSync(target) && (!lstatSync(target).isDirectory() || readdirSync(target).length > 0)) throw new Error(`Target must be an empty directory: ${target}`);
 }
 function validateAnswers(answers: ProjectAnswers): void {
+  if (answers.databaseProvider === "mysql" && answers.dbUser.toLowerCase() === "root") throw new Error("Use a dedicated MySQL application user; root is reserved for database administration.");
   if (!/^[a-z_][a-z0-9_]{0,62}$/.test(answers.dbName) || !/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(answers.dbUser)) throw new Error("Database name/user must be SQL identifiers (maximum 63 characters)");
   if (!isIP(answers.dbHost) && !/^(?=.{1,253}$)[A-Za-z0-9]+(?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/.test(answers.dbHost)) throw new Error("Invalid database host");
   for (const endpoint of [answers.s3Endpoint, answers.s3DockerEndpoint]) {
@@ -56,6 +58,11 @@ export async function runCli(): Promise<void> {
   const descriptor = templateRegistry[template];
   const source = join(root, "templates", template);
   const manifest = await readManifest(source, template);
+  const databaseProvider: DatabaseProvider = args.database ?? (automatic ? "postgresql" : await selectPrompt<DatabaseProvider>("Database engine", [
+    { label: "PostgreSQL", value: "postgresql", hint: "Default" }, { label: "MySQL 8.4 LTS", value: "mysql" },
+  ]));
+  const databaseLabel = databaseProvider === "mysql" ? "MySQL" : "PostgreSQL";
+  if (!manifest.databaseProviders.includes(databaseProvider)) throw new Error(`${descriptor.label} snapshot does not support ${databaseProvider}.`);
   const mode: SetupMode = args.mode ?? (automatic ? "manual" : await selectPrompt<SetupMode>("Setup mode", [
     { label: "Manual", value: "manual", hint: "Install dependencies using host tools" },
     { label: "Docker", value: "docker", hint: "Build and run with Compose" },
@@ -65,13 +72,13 @@ export async function runCli(): Promise<void> {
   const targetDirectory = resolve(realpathSync(process.cwd()), projectName);
   emptyTarget(targetDirectory);
   const appPort = args.port ?? parsePort(await textPrompt("HTTP port", String(descriptor.defaultPort), automatic), "HTTP port");
-  const dbHost = args.dbHost ?? await textPrompt("PostgreSQL host for manual startup", "127.0.0.1", automatic);
-  const dbPort = args.dbPort ?? parsePort(await textPrompt("PostgreSQL host port", String(descriptor.dbPort), automatic), "Database port");
+  const dbHost = args.dbHost ?? await textPrompt(`${databaseLabel} host for manual startup`, "127.0.0.1", automatic);
+  const dbPort = args.dbPort ?? parsePort(await textPrompt(`${databaseLabel} host port`, String(databaseProvider === "mysql" ? 3306 : descriptor.dbPort), automatic), "Database port");
   const slug = projectName.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/-+$/, "");
   const dbDefault = slug.replace(/-/g, "_");
-  const dbName = args.dbName ?? await textPrompt("PostgreSQL database", /^\d/.test(dbDefault) ? `app_${dbDefault}` : dbDefault, automatic);
-  const dbUser = args.dbUser ?? await textPrompt("PostgreSQL username", "postgres", automatic);
-  const dbPassword = await secret("PostgreSQL password", process.env.RIDHUAN_DB_PASSWORD, automatic);
+  const dbName = args.dbName ?? await textPrompt(`${databaseLabel} database`, /^\d/.test(dbDefault) ? `app_${dbDefault}` : dbDefault, automatic);
+  const dbUser = args.dbUser ?? await textPrompt(`${databaseLabel} username`, databaseProvider === "mysql" ? "backend" : "postgres", automatic);
+  const dbPassword = await secret(`${databaseLabel} password`, process.env.RIDHUAN_DB_PASSWORD, automatic);
   const enableRedis = args.redis ?? (automatic ? false : await selectPrompt<boolean>("Redis cache and shared rate limiter", [
     { label: "Disabled", value: false }, { label: "Enabled", value: true },
   ]));
@@ -87,6 +94,7 @@ export async function runCli(): Promise<void> {
   const namespaceParts = projectName.split(/[.-]/).map((part) => part.charAt(0).toUpperCase() + part.slice(1));
   const namespace = namespaceParts.join("");
   const answers: ProjectAnswers = {
+    databaseProvider,
     targetDirectory, projectName, packageName: slug, namespace: /^\d/.test(namespace) ? `App${namespace}` : namespace,
     deploymentName: `${slug.slice(0, 48)}-${randomBytes(4).toString("hex")}`, templateId: template, mode, appPort,
     dbHost, dbPort, dbName, dbUser, dbPassword, enableRedis, uploadStorage, s3Endpoint, s3DockerEndpoint,
@@ -100,7 +108,7 @@ export async function runCli(): Promise<void> {
   if (template !== "golang" && args.goModule !== undefined) throw new Error("--go-module is only valid for Go");
   if (!args.noInstall) preflight(answers, manifest);
   if (!automatic && mode === "manual") {
-    const check = await verifyPostgresConnection(dbHost, dbPort, dbUser, dbPassword, dbName);
+    const check = await verifyDatabaseConnection(databaseProvider, dbHost, dbPort, dbUser, dbPassword, dbName);
     process.stdout.write(`${check.message}\n`);
     if (check.status !== "connected") {
       const proceed = await selectPrompt<boolean>("Database is not ready", [
@@ -110,7 +118,7 @@ export async function runCli(): Promise<void> {
     }
   }
   process.stdout.write(`Creating ${projectName}; package ${answers.packageName}; namespace ${answers.namespace}\n`);
-  const scaffold = { "express-typescript": scaffoldExpress, nestjs: scaffoldNestjs, golang: scaffoldGolang, dotnet: scaffoldDotnet }[template];
+  const scaffold = { "express-typescript": scaffoldExpress, nestjs: scaffoldNestjs, golang: scaffoldGolang, dotnet: scaffoldDotnet, fastapi: scaffoldFastapi }[template];
   emptyTarget(targetDirectory);
   await scaffold(source, answers);
   await writeFile(join(targetDirectory, "GETTING-STARTED.md"), gettingStarted(answers, manifest));

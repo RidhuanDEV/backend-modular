@@ -89,3 +89,11 @@ npm run verify:template
 GitHub Actions also tests fresh and upgrade migrations against PostgreSQL 18, builds the Docker image, and smoke-tests the packed npm initializer. `create-ridhuanbackendtemplate` is released by `.github/workflows/publish.yml` through npm trusted publishing after its publisher is registered in npm. Run `npm pack --dry-run` in the initializer directory to inspect the files before a release.
 
 HTTP defaults to port `3000`; `PORT` selects the manual API port and `APP_PORT` the Compose host port. The container always listens on `3000`. Set `REDIS_NAMESPACE` to a unique deployment namespace when projects share Redis; replicas of one deployment must use the same namespace. Build and dev scripts generate Prisma automatically. `verify:template` checks the standalone application; legacy initializer packaging is a repository-only check.
+
+## PostgreSQL or MySQL
+
+The unified CLI supports `--database postgresql` (default) and `--database mysql`. MySQL defaults to port 3306. Each generated project records the selected provider in `backend-template.json`; its active Compose file and `.env` match that choice. Changing the provider does not convert existing data. PostgreSQL migration history stays intact; MySQL has an independent migration baseline and UTC sessions.
+
+For a source checkout, copy `.env.mysql.example` to `.env`, configure credentials, and run `docker compose -f docker-compose.mysql.yml up --build -d --wait`. Seed is a separate explicit operation using the same `-f` option. CLI-generated MySQL projects use the ordinary active Compose filename. MySQL bootstrap uses a separate root password and supports quoted/Unicode application passwords without logging them.
+
+For an external MySQL database, use `sslaccept=strict` (or `sslmode=verify-full`) and an absolute `sslcert` CA path in `DATABASE_URL`; both the Prisma adapter and migration connection must verify the server. Local Compose is a development fixture. Back up MySQL with MySQL tooling and PostgreSQL with PostgreSQL tooling, preserving migration history and upload metadata/objects. Test restoration into isolated storage/database before relying on a recovery point.

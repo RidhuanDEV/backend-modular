@@ -7,8 +7,7 @@ package sqlc
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
 
 const createAuthRefreshToken = `-- name: CreateAuthRefreshToken :exec
@@ -17,10 +16,10 @@ VALUES ($1, $2, $3, $4)
 `
 
 type CreateAuthRefreshTokenParams struct {
-	FamilyID  string             `json:"family_id"`
-	UserID    string             `json:"user_id"`
-	TokenHash []byte             `json:"token_hash"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	FamilyID  string       `json:"family_id"`
+	UserID    string       `json:"user_id"`
+	TokenHash []byte       `json:"token_hash"`
+	ExpiresAt sql.NullTime `json:"expires_at"`
 }
 
 func (q *Queries) CreateAuthRefreshToken(ctx context.Context, arg CreateAuthRefreshTokenParams) error {

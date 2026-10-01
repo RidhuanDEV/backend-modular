@@ -15,6 +15,8 @@ export type RateStore = "memory" | "redis";
 export type UploadStorage = "local" | "s3";
 
 class EnvironmentInput {
+  @IsIn(["postgresql", "mysql"])
+  DB_PROVIDER!: "postgresql" | "mysql";
   @IsIn(["development", "test", "production"])
   NODE_ENV!: Environment;
 
@@ -107,6 +109,7 @@ class EnvironmentInput {
 }
 
 export interface AppConfig {
+  DB_PROVIDER: "postgresql" | "mysql";
   NODE_ENV: Environment;
   PORT: number;
   CORS_ORIGINS: string[];
@@ -149,6 +152,7 @@ export interface AppConfig {
 }
 
 const defaults: Record<string, string> = {
+  DB_PROVIDER: "postgresql",
   NODE_ENV: "development", PORT: "3000", CORS_ORIGINS: "http://localhost:5173,http://localhost:3000",
   JWT_ISSUER: "modular-nestjs", JWT_AUDIENCE: "modular-nestjs-api", ENDPOINT_POLICIES_JSON: "{}",
   APP_INSTANCE_COUNT: "1", TRUST_PROXY_HOPS: "0", RATE_LIMIT_STORE: "memory", CACHE_ENABLED: "false",
@@ -182,7 +186,7 @@ export function validateEnvironment(raw: Record<string, unknown>): AppConfig {
     const keys = errors.map((error) => error.property).join(", ");
     throw new Error(`Invalid environment configuration: ${keys}`);
   }
-  if (input.PORT > 65535 || !input.DATABASE_URL.startsWith("postgresql://")) {
+  if (input.PORT > 65535 || !(input.DB_PROVIDER === "mysql" ? /^mysql:\/\// : /^postgres(?:ql)?:\/\//).test(input.DATABASE_URL)) {
     throw new Error("PORT or DATABASE_URL is invalid");
   }
   if (input.NODE_ENV === "production" && /replace|change|example|test/i.test(input.JWT_SECRET)) {
@@ -210,6 +214,7 @@ export function validateEnvironment(raw: Record<string, unknown>): AppConfig {
     throw new Error("SMTP requires a valid port, host, sender and matching username/password");
   }
   return {
+    DB_PROVIDER: input.DB_PROVIDER,
     NODE_ENV: input.NODE_ENV, PORT: input.PORT, CORS_ORIGINS: origins, DATABASE_URL: input.DATABASE_URL,
     JWT_SECRET: input.JWT_SECRET, JWT_ISSUER: input.JWT_ISSUER, JWT_AUDIENCE: input.JWT_AUDIENCE,
     ENDPOINT_POLICIES_JSON: input.ENDPOINT_POLICIES_JSON, APP_INSTANCE_COUNT: input.APP_INSTANCE_COUNT,

@@ -10,7 +10,16 @@ sql:
         sql_package: "pgx/v5"
         emit_json_tags: true
         emit_empty_slices: true
+        emit_interface: true
         overrides:
+          - db_type: "timestamptz"
+            go_type: { import: "database/sql", type: "NullTime" }
+          - db_type: "timestamptz"
+            nullable: true
+            go_type: { import: "database/sql", type: "NullTime" }
+          - db_type: "text"
+            nullable: true
+            go_type: { import: "database/sql", type: "NullString" }
           - db_type: "uuid"
             go_type: "string"
           - db_type: "uuid"
@@ -18,3 +27,31 @@ sql:
             go_type:
               type: "string"
               pointer: true
+  - engine: "mysql"
+    schema: "internal/db/mysql/migrations"
+    queries: "internal/db/mysql/queries"
+    gen:
+      go:
+        package: "mysqlsqlc"
+        out: "internal/db/mysql/sqlc"
+        emit_json_tags: true
+        emit_empty_slices: true
+        emit_interface: true
+        overrides:
+          - db_type: "datetime"
+            go_type: { import: "database/sql", type: "NullTime" }
+          - db_type: "datetime"
+            nullable: true
+            go_type: { import: "database/sql", type: "NullTime" }
+          - db_type: "text"
+            nullable: true
+            go_type: { import: "database/sql", type: "NullString" }
+          - column: "activity_logs.user_id"
+            nullable: true
+            go_type: { type: "string", pointer: true }
+          - column: "stored_files.uploader_id"
+            nullable: true
+            go_type: { type: "string", pointer: true }
+          - column: "notifications.actor_id"
+            nullable: true
+            go_type: { type: "string", pointer: true }

@@ -2,18 +2,16 @@ package notification
 
 import (
 	"context"
-	"encoding/json"
+	"database/sql"
 	"errors"
-	"strings"
-	"time"
-
 	"github.com/RidhuanDEV/golang-backend/internal/audit"
 	"github.com/RidhuanDEV/golang-backend/internal/config"
 	"github.com/RidhuanDEV/golang-backend/internal/db"
 	"github.com/RidhuanDEV/golang-backend/internal/db/sqlc"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/google/uuid"
 	mail "github.com/wneessen/go-mail"
+	"strings"
+	"time"
 )
 
 type Item struct {
@@ -32,7 +30,7 @@ type CreateInput struct {
 	SendEmail   bool   `json:"sendEmail"`
 }
 type Service struct {
-	Pool  *pgxpool.Pool
+	Pool  db.Connection
 	Audit *audit.Writer
 	SMTP  config.Config
 }
@@ -41,72 +39,56 @@ var ErrRecipient = errors.New("recipient not found")
 var ErrItem = errors.New("notification not found")
 var ErrInvalid = errors.New("invalid notification")
 
-func scan(row pgx.Row) (Item, error) {
-	var value Item
-	err := row.Scan(&value.ID, &value.RecipientID, &value.Title, &value.Body, &value.EmailStatus, &value.ReadAt, &value.CreatedAt)
-	return value, err
-}
-
-const projection = `id, recipient_id, title, body, email_status, read_at, created_at`
-
-func (s *Service) Create(ctx context.Context, policy audit.Policy, actor *audit.Actor, input CreateInput) (Item, error) {
-	var value Item
-	if strings.TrimSpace(input.Title) == "" || strings.TrimSpace(input.Body) == "" || len(input.Title) > 160 || len(input.Body) > 4000 {
-		return value, ErrInvalid
+func project(row sqlc.Notification) Item {
+	var read *time.Time
+	if row.ReadAt.Valid {
+		value := row.ReadAt.Time.UTC()
+		read = &value
 	}
-	var email string
-	err := s.Pool.QueryRow(ctx, `SELECT email FROM users WHERE id=$1 AND deleted_at IS NULL`, input.RecipientID).Scan(&email)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return value, ErrRecipient
+	return Item{ID: row.ID, RecipientID: row.RecipientID, Title: row.Title, Body: row.Body, EmailStatus: row.EmailStatus, ReadAt: read, CreatedAt: row.CreatedAt.Time.UTC()}
+}
+func (s *Service) Create(ctx context.Context, policy audit.Policy, actor *audit.Actor, input CreateInput) (Item, error) {
+	if strings.TrimSpace(input.Title) == "" || strings.TrimSpace(input.Body) == "" || len(input.Title) > 160 || len(input.Body) > 4000 {
+		return Item{}, ErrInvalid
+	}
+	recipient, err := s.Pool.Queries().FindActiveUserByID(ctx, input.RecipientID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Item{}, ErrRecipient
 	}
 	if err != nil {
-		return value, err
+		return Item{}, err
 	}
 	status := "NOT_REQUESTED"
 	if input.SendEmail {
 		status = "PENDING"
 	}
-	var change audit.Change
-	err = db.InTx(ctx, s.Pool, func(tx pgx.Tx) error {
-		var e error
-		value, e = scan(tx.QueryRow(ctx, `INSERT INTO notifications(recipient_id, actor_id, title, body, email_status)
-   VALUES($1,$2,$3,$4,$5) RETURNING `+projection, input.RecipientID, actor.ID, strings.TrimSpace(input.Title), strings.TrimSpace(input.Body), status))
-		if e != nil {
-			return e
+	value, err := audit.Mutate(ctx, s.Audit, policy, actor, "CREATE", func(q sqlc.Querier) (Item, audit.Change, error) {
+		id := uuid.NewString()
+		err := q.CreateNotification(ctx, sqlc.CreateNotificationParams{ID: id, RecipientID: input.RecipientID, ActorID: &actor.ID, Title: strings.TrimSpace(input.Title), Body: strings.TrimSpace(input.Body), EmailStatus: status})
+		if err != nil {
+			return Item{}, audit.Change{}, err
 		}
-		after, e := json.Marshal(struct {
-			ID             string `json:"id"`
-			RecipientID    string `json:"recipientId"`
-			Title          string `json:"title"`
-			EmailRequested bool   `json:"emailRequested"`
-		}{value.ID, value.RecipientID, value.Title, input.SendEmail})
-		if e != nil {
-			return e
+		row, err := q.FindNotification(ctx, id)
+		if err != nil {
+			return Item{}, audit.Change{}, err
 		}
-		change = audit.Change{EntityID: value.ID, After: after}
-		if policy.Mode == audit.Required {
-			return s.Audit.Write(ctx, sqlc.New(s.Pool).WithTx(tx), policy, actor, "CREATE", change)
-		}
-		return nil
+		value := project(row)
+		change, err := audit.Capture(id, (*Item)(nil), &value)
+		return value, change, err
 	})
-	if err != nil {
-		return Item{}, err
-	}
-	if policy.Mode == audit.Optional {
-		if e := s.Audit.Write(ctx, sqlc.New(s.Pool), policy, actor, "CREATE", change); e != nil {
-			s.Audit.Log.Warn("optional notification audit failed", "error", e)
-		}
-	}
-	if !input.SendEmail {
-		return value, nil
+	if err != nil || !input.SendEmail {
+		return value, err
 	}
 	status = "FAILED"
-	if s.SMTP.SMTPEnabled && s.send(ctx, email, input.Title, input.Body) == nil {
+	if s.SMTP.SMTPEnabled && s.send(ctx, recipient.Email, input.Title, input.Body) == nil {
 		status = "SENT"
 	}
-	return scan(s.Pool.QueryRow(ctx, `UPDATE notifications SET email_status=$2 WHERE id=$1 RETURNING `+projection, value.ID, status))
+	if err = s.Pool.Queries().SetNotificationEmailStatus(ctx, sqlc.SetNotificationEmailStatusParams{ID: value.ID, EmailStatus: status}); err != nil {
+		return Item{}, err
+	}
+	row, err := s.Pool.Queries().FindNotification(ctx, value.ID)
+	return project(row), err
 }
-
 func (s *Service) send(ctx context.Context, to, title, body string) error {
 	options := []mail.Option{mail.WithPort(s.SMTP.SMTPPort)}
 	if s.SMTP.SMTPSecure {
@@ -136,67 +118,32 @@ func (s *Service) send(ctx context.Context, to, title, body string) error {
 }
 
 func (s *Service) List(ctx context.Context, recipient string, unread bool) ([]Item, error) {
-	query := `SELECT ` + projection + ` FROM notifications WHERE recipient_id=$1`
-	if unread {
-		query += ` AND read_at IS NULL`
+	rows, err := s.Pool.Queries().ListOwnNotifications(ctx, sqlc.ListOwnNotificationsParams{RecipientID: recipient, Unread: unread})
+	items := make([]Item, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, project(row))
 	}
-	query += ` ORDER BY created_at DESC, id DESC LIMIT 50`
-	rows, err := s.Pool.Query(ctx, query, recipient)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := make([]Item, 0)
-	for rows.Next() {
-		value, e := scan(rows)
-		if e != nil {
-			return nil, e
-		}
-		items = append(items, value)
-	}
-	return items, rows.Err()
+	return items, err
 }
-
 func (s *Service) Read(ctx context.Context, policy audit.Policy, actor *audit.Actor, id string) (Item, error) {
-	var value Item
-	var change audit.Change
-	err := db.InTx(ctx, s.Pool, func(tx pgx.Tx) error {
-		prior, e := scan(tx.QueryRow(ctx, `SELECT `+projection+` FROM notifications WHERE id=$1 AND recipient_id=$2 FOR UPDATE`, id, actor.ID))
-		if errors.Is(e, pgx.ErrNoRows) {
-			return ErrItem
+	return audit.Mutate(ctx, s.Audit, policy, actor, "UPDATE", func(q sqlc.Querier) (Item, audit.Change, error) {
+		prior, err := q.LockOwnNotification(ctx, sqlc.LockOwnNotificationParams{ID: id, RecipientID: actor.ID})
+		if errors.Is(err, sql.ErrNoRows) {
+			return Item{}, audit.Change{}, ErrItem
 		}
-		if e != nil {
-			return e
+		if err != nil {
+			return Item{}, audit.Change{}, err
 		}
-		value, e = scan(tx.QueryRow(ctx, `UPDATE notifications SET read_at=coalesce(read_at, now()) WHERE id=$1 RETURNING `+projection, id))
-		if e != nil {
-			return e
+		if err = q.ReadNotification(ctx, id); err != nil {
+			return Item{}, audit.Change{}, err
 		}
-		before, e := json.Marshal(struct {
-			ReadAt *time.Time `json:"readAt"`
-		}{prior.ReadAt})
-		if e != nil {
-			return e
+		row, err := q.FindNotification(ctx, id)
+		if err != nil {
+			return Item{}, audit.Change{}, err
 		}
-		after, e := json.Marshal(struct {
-			ReadAt *time.Time `json:"readAt"`
-		}{value.ReadAt})
-		if e != nil {
-			return e
-		}
-		change = audit.Change{EntityID: id, Before: before, After: after}
-		if policy.Mode == audit.Required {
-			return s.Audit.Write(ctx, sqlc.New(s.Pool).WithTx(tx), policy, actor, "UPDATE", change)
-		}
-		return nil
+		before := project(prior)
+		value := project(row)
+		change, err := audit.Capture(id, &before, &value)
+		return value, change, err
 	})
-	if err != nil {
-		return Item{}, err
-	}
-	if policy.Mode == audit.Optional {
-		if e := s.Audit.Write(ctx, sqlc.New(s.Pool), policy, actor, "UPDATE", change); e != nil {
-			s.Audit.Log.Warn("optional notification audit failed", "error", e)
-		}
-	}
-	return value, nil
 }

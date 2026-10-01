@@ -20,8 +20,8 @@ try {
  if (pack) {
   const paths = pack.files.map(file=>file.path);
   assert(paths.includes('dist/bin/index.js'));
-  assert(!paths.some(path=>/(^|\/)(?:\.env|node_modules|\.git|obj)(\/|$)/.test(path)));
-  for (const id of ['express-typescript','nestjs','golang','dotnet']) for (const file of ['gitignore.template','LICENSE','template-manifest.json']) assert(paths.includes(`templates/${id}/${file}`));
+  assert(!paths.some(path=>/(^|\/)(?:\.env|node_modules|\.git|obj|\.venv|__pycache__)(\/|$)/.test(path)));
+  for (const id of ['express-typescript','nestjs','golang','dotnet','fastapi']) for (const file of ['gitignore.template','LICENSE','template-manifest.json']) assert(paths.includes(`templates/${id}/${file}`));
   assert(paths.includes('templates/dotnet/tools/ModularBackend.Migrator/ModularBackend.Migrator.csproj'));
  }
  const tarball=asset?resolve(asset):join(scratch,pack.filename);
@@ -34,24 +34,32 @@ try {
  const cancellation=command(process.execPath,['--input-type=module','--eval',`import { selectPrompt } from ${JSON.stringify(promptModule)};Object.defineProperty(process.stdin,'isTTY',{value:true});process.stdin.setRawMode=()=>process.stdin;selectPrompt('Cancel fixture',[{label:'Continue',value:true}]);process.stdin.emit('data',Buffer.from([3]));`],scratch);
  assert.equal(cancellation.status,130);assert.match(cancellation.stdout,/Aborted/);
 
- for (const args of [['--template','unknown'],['--port','3000bad'],['--port','65536'],['--unknown'],['../escape'],['CON'],['bad','--template','go','--go-module','../bad']]) assert.notEqual(command(process.execPath,[executable,...args,'--yes','--no-install'],scratch).status,0);
+ for (const args of [['--database','sqlite'],['--template','unknown'],['--port','3000bad'],['--port','65536'],['--unknown'],['../escape'],['CON'],['bad','--template','go','--go-module','../bad']]) assert.notEqual(command(process.execPath,[executable,...args,'--yes','--no-install'],scratch).status,0);
  assert.throws(()=>parsePort('3.14','port')); assert.throws(()=>validateProjectName('bad.')); assert.throws(()=>validateGoModule('foo/../bar')); assert.throws(()=>parseCliArgs(['--redis','--no-redis'])); assert.throws(()=>serializeEnvValue('line\nbreak'));
- const fixtures=[['express-typescript','Custom.Express',3000],['nestjs','Custom.Nest',3000],['golang','custom-go',8080],['dotnet','Custom.Net',5080]];
- for (const [id,name,port] of fixtures) {
-  run(process.execPath,[executable,name,'--template',id,'--yes','--no-install']);
+ const baseFixtures=[['express-typescript','Custom.Express',3000],['nestjs','Custom.Nest',3000],['golang','custom-go',8080],['dotnet','Custom.Net',5080],['fastapi','custom-fastapi',8000]];
+ const fixtures=baseFixtures.flatMap(([id,name,port])=>['postgresql','mysql'].map(database=>[id,database==='mysql'?name+'-mysql':name,port,database]));
+ for (const [id,name,port,database] of fixtures) {
+  run(process.execPath,[executable,name,'--template',id,'--database',database,'--yes','--no-install']);
   const project=join(scratch,name),env=await readFile(join(project,'.env'),'utf8');
   assert.match(env,new RegExp(`^APP_PORT=${port}$`,'m'));
+  assert.match(env,new RegExp(`^${id==='dotnet'?'Database__Provider':'DB_PROVIDER'}=${database}$`,'m'));
+  const marker=JSON.parse(await readFile(join(project,'backend-template.json'),'utf8'));
+  assert.equal(marker.databaseProvider,database);
+  const compose=await readFile(join(project,id==='express-typescript'?'docker-compose.yml':'compose.yaml'),'utf8');
+  assert.match(compose,new RegExp(`^  ${database==='mysql'?'mysql':'postgres'}:`, 'm'));
+  if(database==='mysql') { assert.match(env,/^MYSQL_PORT=3306$/m); assert(!/^POSTGRES_PORT=/m.test(env)); }
+  if(id==='fastapi') { assert.match(await readFile(join(project,'pyproject.toml'),'utf8'),new RegExp(`name = "${name}"`)); assert.match(await readFile(join(project,'uv.lock'),'utf8'),new RegExp(`name = "${name}"`)); }
   if(id!=='dotnet') assert.match(env,new RegExp(`^PORT=${port}$`,'m'));
   assert.equal(run('git',['check-ignore','.env'],project).trim(),'.env'); assert(!run('git',['add','--dry-run','.'],project).includes("'.env'"));
   const files=await readdir(project); assert(!files.includes('gitignore.template')); assert(!files.includes('node_modules'));
   const guide=await readFile(join(project,'GETTING-STARTED.md'),'utf8'); assert.match(guide,/migrat/i); assert.match(guide,new RegExp(`localhost:${port}`));
   if(['nestjs','express-typescript'].includes(id)) {const pkg=JSON.parse(await readFile(join(project,'package.json'),'utf8')),lock=JSON.parse(await readFile(join(project,'package-lock.json'),'utf8')); assert.equal(pkg.name,lock.name); assert.equal(pkg.name,lock.packages[''].name); assert.match(pkg.scripts.prebuild ?? pkg.scripts.build,/prisma.*generate/); assert(!pkg.scripts['verify:template'].includes('verify-package'));}
   assert.notEqual(command(process.execPath,[executable,name,'--yes','--no-install'],scratch).status,0); assert.equal(await readFile(join(project,'.env'),'utf8'),env);
-  console.log(`${id}: tarball generation, defaults, lockfiles and secret ignore passed`);
+  console.log(`${id}/${database}: tarball generation, defaults, lockfiles and secret ignore passed`);
  }
- for (const [id] of fixtures) {
-  run('npm',['exec','--offline','--','create-ridhuan-backend',`exec-${id}`,'--template',id,'--yes','--no-install']);
-  run('npm',['create','ridhuan-backend',`create-${id}`,'--offline','--','--template',id,'--yes','--no-install']);
+ for (const [id,,,database] of fixtures) {
+  run('npm',['exec','--offline','--','create-ridhuan-backend',`exec-${id}-${database}`,'--template',id,'--database',database,'--yes','--no-install']);
+  run('npm',['create','ridhuan-backend',`create-${id}-${database}`,'--offline','--','--template',id,'--database',database,'--yes','--no-install']);
  }
  const missingTool=command(process.execPath,[executable,'missing-tool','--template','go','--yes'],scratch,false,{PATH:''});
  assert.notEqual(missingTool.status,0);assert.match(missingTool.stderr,/go is missing/);

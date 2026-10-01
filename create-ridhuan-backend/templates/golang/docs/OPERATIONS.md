@@ -4,7 +4,7 @@
 
 1. Build image dari revision yang sudah lolos verify; simpan tag immutable dan versi konfigurasi.
 2. Backup database dan objects, kemudian jalankan `migrate` sebagai satu job rilis. Jangan menjalankan migrasi dari setiap replica. Compose sudah menunggu job sukses.
-3. Jalankan replica baru; probe `/live` untuk proses dan `/ready` untuk PostgreSQL serta Redis rate store. Seed hanya lewat perintah eksplisit, dengan kredensial bootstrap yang segera diganti.
+3. Jalankan replica baru; probe `/live` untuk proses dan `/ready` untuk engine database terpilih serta Redis rate store. Seed hanya lewat perintah eksplisit, dengan kredensial bootstrap yang segera diganti.
 4. Rollback image hanya jika aplikasi lama kompatibel dengan schema baru. Gunakan migrasi expand/contract untuk perubahan berikutnya. Jangan otomatis menjalankan Goose down terhadap database production.
 
 SIGTERM menguras request HTTP sampai 10 detik sebelum menutup dependency. Sesuaikan termination grace deployment menjadi lebih panjang dari batas tersebut. Request normal dibatasi 30 detik; shutdown timeout memaksa koneksi ditutup dan menghasilkan error.
@@ -12,6 +12,8 @@ SIGTERM menguras request HTTP sampai 10 detik sebelum menutup dependency. Sesuai
 ## Backup dan restore
 
 Gunakan `pg_dump --format=custom --file=backend.dump` dengan koneksi dari secret manager atau environment. Lindungi arsip seperti database asli; jangan memasukkan password ke Git atau perintah yang tercatat di log. Simpan versi migrasi dan waktu backup.
+
+Untuk MySQL, gunakan tooling backup/restore MySQL 8.4, termasuk `mysqldump` untuk logical backup. Sertakan history Goose, grants aplikasi dan tabel notifikasi/cache; pulihkan ke database staging terpisah dengan charset/collation yang sama. Jangan memakai `pg_restore` untuk dump MySQL. Akun aplikasi tidak harus memiliki izin backup atau membuat database; sediakan akun operasional terpisah. MySQL DDL dapat melakukan implicit commit, sehingga kegagalan migrasi harus diperbaiki berdasarkan kondisi schema dan history nyata sebelum API dimulai kembali.
 
 Backup bucket S3 atau direktori upload melalui mekanisme storage provider. Untuk pasangan database/object yang konsisten, hentikan mutasi upload selama snapshot keduanya atau gunakan backup versioned dan catat recovery point yang sama. Restore PostgreSQL ke database staging kosong dengan `pg_restore --exit-on-error --no-owner`; restore objects ke lokasi terpisah. Arahkan aplikasi staging ke database/bucket tersebut, jalankan readiness dan cek metadata upload menunjuk object yang ada. Jangan menimpa database production untuk latihan restore.
 

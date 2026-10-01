@@ -1,0 +1,109 @@
+services:
+  postgres:
+    image: postgres:18.3-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-backend}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-backend}
+      TZ: UTC
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
+    volumes: [postgres_data:/var/lib/postgresql]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  migrate:
+    build:
+      context: .
+      args:
+        DB_PROVIDER: postgresql
+    env_file: .env
+    environment:
+      DB_PROVIDER: postgresql
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?Set DATABASE_URL_DOCKER}
+    command: [backend, migrate]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+  app:
+    build:
+      context: .
+      args:
+        DB_PROVIDER: postgresql
+    env_file: .env
+    environment:
+      ENVIRONMENT: production
+      DB_PROVIDER: postgresql
+      PORT: '8000'
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?Set DATABASE_URL_DOCKER}
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379}
+      S3_ENDPOINT: ${S3_ENDPOINT_DOCKER:-http://minio:9000}
+      UPLOAD_LOCAL_DIR: /app/uploads
+    ports: ["${APP_PORT:-8000}:8000"]
+    volumes: [uploads_data:/app/uploads]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+        required: false
+      minio-init:
+        condition: service_completed_successfully
+        required: false
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+  redis:
+    image: redis:8.6.1-alpine
+    profiles: [redis]
+    ports: ["127.0.0.1:${REDIS_PORT:-6379}:6379"]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  minio:
+    build:
+      context: .
+      dockerfile: scripts/minio.Dockerfile
+      target: server
+    profiles: [s3]
+    command: [server, /data, --console-address, ':9001']
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:?Set S3_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:?Set S3_SECRET_ACCESS_KEY}
+    ports: ["127.0.0.1:${MINIO_PORT:-9000}:9000", "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"]
+    volumes: [minio_data:/data]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://localhost:9000/minio/health/live']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  minio-init:
+    build:
+      context: .
+      dockerfile: scripts/minio.Dockerfile
+      target: client
+    profiles: [s3]
+    entrypoint: [/bin/sh, /init-bucket.sh]
+    environment:
+      MC_CONFIG_DIR: /tmp/mc
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-backend-uploads}
+    volumes: [./scripts/init-bucket.sh:/init-bucket.sh:ro]
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: 'no'
+volumes:
+  postgres_data:
+  uploads_data:
+  redis_data:
+  minio_data:

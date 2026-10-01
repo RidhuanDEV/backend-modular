@@ -1,7 +1,7 @@
 {
   "name": "create-ridhuan-backend",
-  "version": "1.3.0",
-  "description": "Multi-template CLI for Express TypeScript, NestJS, Golang, and .NET backends",
+  "version": "1.4.0",
+  "description": "CLI for Express TypeScript, NestJS, Go, ASP.NET Core and FastAPI with PostgreSQL or MySQL",
   "type": "module",
   "bin": {
     "create-ridhuan-backend": "./dist/bin/index.js"
@@ -28,7 +28,12 @@
     "postgresql",
     "prisma",
     "sqlc",
-    "efcore"
+    "efcore",
+    "fastapi",
+    "python",
+    "mysql",
+    "sqlalchemy",
+    "alembic"
   ],
   "author": "RidhuanDEV",
   "license": "MIT",
@@ -56,6 +61,7 @@
   },
   "dependencies": {
     "@inquirer/password": "^5.2.2",
+    "mysql2": "3.24.4",
     "pg": "^8.23.0",
     "semver": "^7.8.5"
   },

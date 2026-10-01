@@ -25,6 +25,7 @@ type Config struct {
 	Environment            string
 	Port                   int
 	DatabaseURL            string
+	DatabaseProvider       string
 	JWTSecret              string
 	JWTIssuer              string
 	JWTAudience            string
@@ -84,6 +85,7 @@ func Load() (Config, error) {
 		Environment:       getenv("NODE_ENV", "development"),
 		Port:              8080,
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
+		DatabaseProvider:  getenv("DB_PROVIDER", "postgresql"),
 		JWTSecret:         os.Getenv("JWT_SECRET"),
 		JWTIssuer:         os.Getenv("JWT_ISSUER"),
 		JWTAudience:       os.Getenv("JWT_AUDIENCE"),
@@ -203,6 +205,23 @@ func Load() (Config, error) {
 	}
 	if c.DatabaseURL == "" || len(c.JWTSecret) < 32 {
 		return c, errors.New("DATABASE_URL and JWT_SECRET (minimum 32 characters) are required")
+	}
+	if c.DatabaseProvider != "postgresql" && c.DatabaseProvider != "mysql" {
+		return c, errors.New("DB_PROVIDER must be postgresql or mysql")
+	}
+	parsedDatabase, parseError := url.Parse(c.DatabaseURL)
+	if parseError != nil || c.DatabaseProvider == "mysql" && parsedDatabase.Scheme != "mysql" || c.DatabaseProvider == "postgresql" && parsedDatabase.Scheme != "postgresql" && parsedDatabase.Scheme != "postgres" {
+		return c, errors.New("DATABASE_URL does not match DB_PROVIDER")
+	}
+	if data, readError := os.ReadFile("backend-template.json"); readError == nil {
+		var marker struct {
+			DatabaseProvider string `json:"databaseProvider"`
+		}
+		if json.Unmarshal(data, &marker) != nil || marker.DatabaseProvider != c.DatabaseProvider {
+			return c, errors.New("DB_PROVIDER does not match generated project")
+		}
+	} else if !errors.Is(readError, os.ErrNotExist) {
+		return c, readError
 	}
 	if c.Environment != "development" && c.Environment != "production" && c.Environment != "test" {
 		return c, errors.New("NODE_ENV must be development, production, or test")

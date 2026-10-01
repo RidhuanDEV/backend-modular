@@ -2,7 +2,7 @@ import "../config/load-env";
 import { readdir, lstat, unlink } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { DeleteObjectCommand, ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { createDatabaseAdapter, databaseProvider } from "../platform/database/database-adapter";
 import { PrismaClient } from "../generated/prisma/client";
 
 const KEY = /^[0-9a-f-]{36}$/;
@@ -13,7 +13,7 @@ async function main(): Promise<void> {
   const hours = Number(process.env.UPLOAD_ORPHAN_GRACE_HOURS ?? "24");
   if (!Number.isInteger(hours) || hours < 1) throw new Error("UPLOAD_ORPHAN_GRACE_HOURS must be positive");
   const cutoff = Date.now() - hours * 3600000;
-  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+  const prisma = new PrismaClient({ adapter: createDatabaseAdapter(url, databaseProvider()) });
   try {
     await prisma.$connect();
     const stored = await prisma.storedFile.findMany({ select: { objectKey: true } });

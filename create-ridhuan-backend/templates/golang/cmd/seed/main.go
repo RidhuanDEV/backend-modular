@@ -23,12 +23,12 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	pool, err := db.Connect(ctx, url)
+	pool, err := db.ConnectProvider(ctx, os.Getenv("DB_PROVIDER"), url)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer pool.Close()
-	q := sqlc.New(pool)
+	q := pool.Queries()
 	for _, name := range []string{"admin", "user"} {
 		if err = q.SeedRole(ctx, name); err != nil {
 			log.Fatal(err)

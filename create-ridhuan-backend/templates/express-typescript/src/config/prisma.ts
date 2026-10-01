@@ -1,16 +1,9 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
+import { createDatabaseAdapter } from "./database-adapter.js";
 import { env } from "./env.js";
 import { logger } from "../core/logger/logger.js";
 
-const pool = new Pool({
-  connectionString: env.DATABASE_URL,
-  options: "-c timezone=UTC",
-  connectionTimeoutMillis: 3000,
-});
-
-const adapter = new PrismaPg(pool);
+const adapter = createDatabaseAdapter(env.DATABASE_URL, env.DB_PROVIDER);
 
 export const prisma = new PrismaClient({
   adapter,
@@ -30,6 +23,5 @@ prisma.$on("error", (e) => {
 
 export async function disconnectPrisma(): Promise<void> {
   await prisma.$disconnect();
-  await pool.end();
   logger.info("Prisma disconnected");
 }

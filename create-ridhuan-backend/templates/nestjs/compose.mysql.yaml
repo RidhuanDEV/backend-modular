@@ -1,0 +1,189 @@
+services:
+  migrate:
+    build:
+      context: .
+      target: migration
+      args:
+        DB_PROVIDER: mysql
+    environment:
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?Set DATABASE_URL_DOCKER}
+      DB_PROVIDER: mysql
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command:
+    - node_modules/.bin/prisma
+    - migrate
+    - deploy
+    restart: 'no'
+  app:
+    build:
+      context: .
+      args:
+        DB_PROVIDER: mysql
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?Set DATABASE_URL_DOCKER}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_ISSUER: ${JWT_ISSUER:-modular-nestjs}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-modular-nestjs-api}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      ENDPOINT_POLICIES_JSON: ${ENDPOINT_POLICIES_JSON:-{}}
+      APP_INSTANCE_COUNT: ${APP_INSTANCE_COUNT:-1}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
+      RATE_LIMIT_STORE: ${RATE_LIMIT_STORE:-memory}
+      RATE_LIMIT_AUTH_WINDOW_MS: ${RATE_LIMIT_AUTH_WINDOW_MS:-900000}
+      RATE_LIMIT_AUTH_MAX: ${RATE_LIMIT_AUTH_MAX:-20}
+      RATE_LIMIT_PUBLIC_WINDOW_MS: ${RATE_LIMIT_PUBLIC_WINDOW_MS:-900000}
+      RATE_LIMIT_PUBLIC_MAX: ${RATE_LIMIT_PUBLIC_MAX:-100}
+      RATE_LIMIT_INTERNAL_WINDOW_MS: ${RATE_LIMIT_INTERNAL_WINDOW_MS:-900000}
+      RATE_LIMIT_INTERNAL_MAX: ${RATE_LIMIT_INTERNAL_MAX:-300}
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379}
+      REDIS_NAMESPACE: ${REDIS_NAMESPACE:-modular-nestjs}
+      CACHE_ENABLED: ${CACHE_ENABLED:-false}
+      UPLOAD_ENABLED: ${UPLOAD_ENABLED:-true}
+      UPLOAD_STORAGE: ${UPLOAD_STORAGE:-local}
+      UPLOAD_LOCAL_DIR: /app/uploads
+      UPLOAD_MAX_BYTES: ${UPLOAD_MAX_BYTES:-10485760}
+      UPLOAD_ALLOWED_MIME: ${UPLOAD_ALLOWED_MIME:-image/png,image/jpeg,application/pdf}
+      UPLOAD_ORPHAN_GRACE_HOURS: ${UPLOAD_ORPHAN_GRACE_HOURS:-24}
+      S3_ENDPOINT: ${S3_ENDPOINT_DOCKER:-http://minio:9000}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-uploads}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-minioadmin}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      DB_PROVIDER: mysql
+    ports:
+    - ${APP_PORT:-3000}:3000
+    volumes:
+    - uploads_data:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+        required: false
+      minio-init:
+        condition: service_completed_successfully
+        required: false
+    healthcheck:
+      test:
+      - CMD
+      - node
+      - -e
+      - fetch('http://127.0.0.1:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 10s
+      timeout: 3s
+      retries: 12
+  redis:
+    image: redis:8.6.1-alpine
+    profiles:
+    - redis
+    volumes:
+    - redis_data:/data
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+    - 127.0.0.1:${REDIS_PORT:-6379}:6379
+  minio:
+    build:
+      context: .
+      dockerfile: scripts/minio.Dockerfile
+      target: server
+    profiles:
+    - s3
+    command:
+    - server
+    - /data
+    - --console-address
+    - :9001
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+    volumes:
+    - minio_data:/data
+    ports:
+    - 127.0.0.1:${MINIO_PORT:-9000}:9000
+    - 127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://localhost:9000/minio/health/live
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  minio-init:
+    build:
+      context: .
+      dockerfile: scripts/minio.Dockerfile
+      target: client
+    profiles:
+    - s3
+    entrypoint:
+    - /bin/sh
+    - /init-bucket.sh
+    environment:
+      MC_CONFIG_DIR: /tmp/mc
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-uploads}
+    volumes:
+    - ./scripts/init-bucket.sh:/init-bucket.sh:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: 'no'
+  mysql:
+    image: mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
+    command:
+    - --character-set-server=utf8mb4
+    - --collation-server=utf8mb4_bin
+    - --default-time-zone=+00:00
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-backend}
+      MYSQL_USER: ${MYSQL_USER:-backend}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
+    ports:
+    - 127.0.0.1:${MYSQL_PORT:-3306}:3306
+    volumes:
+    - mysql_data:/var/lib/mysql
+    - ./scripts/mysql-entrypoint.sh:/opt/template/mysql-entrypoint.sh:ro
+    - ./scripts/mysql-init-user.sh:/docker-entrypoint-initdb.d/10-app-user.sh:ro
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - MYSQL_PWD="$${MYSQL_PASSWORD}" mysql -h 127.0.0.1 -u "$${MYSQL_USER}" "$${MYSQL_DATABASE}"
+        -e "SELECT 1"
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    entrypoint:
+    - /bin/bash
+    - /opt/template/mysql-entrypoint.sh
+volumes:
+  uploads_data: null
+  redis_data: null
+  minio_data: null
+  mysql_data: null

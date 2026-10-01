@@ -5,56 +5,56 @@
 package sqlc
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
 )
 
 type ActivityLog struct {
-	ID              string             `json:"id"`
-	Behavior        string             `json:"behavior"`
-	Module          string             `json:"module"`
-	EntityID        pgtype.Text        `json:"entity_id"`
-	UserID          *string            `json:"user_id"`
-	ActorIDSnapshot pgtype.Text        `json:"actor_id_snapshot"`
-	Before          []byte             `json:"before"`
-	After           []byte             `json:"after"`
-	RequestID       pgtype.Text        `json:"request_id"`
-	EndpointID      pgtype.Text        `json:"endpoint_id"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	ID              string         `json:"id"`
+	Behavior        string         `json:"behavior"`
+	Module          string         `json:"module"`
+	EntityID        sql.NullString `json:"entity_id"`
+	UserID          *string        `json:"user_id"`
+	ActorIDSnapshot sql.NullString `json:"actor_id_snapshot"`
+	Before          []byte         `json:"before"`
+	After           []byte         `json:"after"`
+	RequestID       sql.NullString `json:"request_id"`
+	EndpointID      sql.NullString `json:"endpoint_id"`
+	CreatedAt       sql.NullTime   `json:"created_at"`
 }
 
 type AuthRefreshToken struct {
-	ID        string             `json:"id"`
-	FamilyID  string             `json:"family_id"`
-	UserID    string             `json:"user_id"`
-	TokenHash []byte             `json:"token_hash"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+	ID        string       `json:"id"`
+	FamilyID  string       `json:"family_id"`
+	UserID    string       `json:"user_id"`
+	TokenHash []byte       `json:"token_hash"`
+	ExpiresAt sql.NullTime `json:"expires_at"`
+	CreatedAt sql.NullTime `json:"created_at"`
+	RevokedAt sql.NullTime `json:"revoked_at"`
 }
 
 type Notification struct {
-	ID          string             `json:"id"`
-	RecipientID string             `json:"recipient_id"`
-	ActorID     *string            `json:"actor_id"`
-	Title       string             `json:"title"`
-	Body        string             `json:"body"`
-	EmailStatus string             `json:"email_status"`
-	ReadAt      pgtype.Timestamptz `json:"read_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ID          string       `json:"id"`
+	RecipientID string       `json:"recipient_id"`
+	ActorID     *string      `json:"actor_id"`
+	Title       string       `json:"title"`
+	Body        string       `json:"body"`
+	EmailStatus string       `json:"email_status"`
+	ReadAt      sql.NullTime `json:"read_at"`
+	CreatedAt   sql.NullTime `json:"created_at"`
 }
 
 type Permission struct {
-	ID        string             `json:"id"`
-	Name      string             `json:"name"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID        string       `json:"id"`
+	Name      string       `json:"name"`
+	CreatedAt sql.NullTime `json:"created_at"`
+	UpdatedAt sql.NullTime `json:"updated_at"`
 }
 
 type Role struct {
-	ID        string             `json:"id"`
-	Name      string             `json:"name"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID        string       `json:"id"`
+	Name      string       `json:"name"`
+	CreatedAt sql.NullTime `json:"created_at"`
+	UpdatedAt sql.NullTime `json:"updated_at"`
 }
 
 type RolePermission struct {
@@ -63,23 +63,23 @@ type RolePermission struct {
 }
 
 type StoredFile struct {
-	ID           string             `json:"id"`
-	Storage      string             `json:"storage"`
-	Status       string             `json:"status"`
-	ObjectKey    string             `json:"object_key"`
-	OriginalName string             `json:"original_name"`
-	MimeType     string             `json:"mime_type"`
-	Size         int64              `json:"size"`
-	UploaderID   *string            `json:"uploader_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID           string       `json:"id"`
+	Storage      string       `json:"storage"`
+	Status       string       `json:"status"`
+	ObjectKey    string       `json:"object_key"`
+	OriginalName string       `json:"original_name"`
+	MimeType     string       `json:"mime_type"`
+	Size         int64        `json:"size"`
+	UploaderID   *string      `json:"uploader_id"`
+	CreatedAt    sql.NullTime `json:"created_at"`
 }
 
 type User struct {
-	ID        string             `json:"id"`
-	Email     string             `json:"email"`
-	Password  string             `json:"password"`
-	RoleID    string             `json:"role_id"`
-	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID        string       `json:"id"`
+	Email     string       `json:"email"`
+	Password  string       `json:"password"`
+	RoleID    string       `json:"role_id"`
+	DeletedAt sql.NullTime `json:"deleted_at"`
+	CreatedAt sql.NullTime `json:"created_at"`
+	UpdatedAt sql.NullTime `json:"updated_at"`
 }

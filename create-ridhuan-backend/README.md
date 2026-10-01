@@ -1,6 +1,6 @@
 # create-ridhuan-backend
 
-Scaffold four modular PostgreSQL backend templates from one npm package. Template files are bundled; generation does not download source from GitHub.
+Scaffold five modular backend templates with PostgreSQL or MySQL from one npm package. Template files are bundled; generation does not download source from GitHub.
 
 ## Start a project
 
@@ -21,6 +21,9 @@ Omit `--yes` for the wizard. It masks password input; accepting an empty passwor
 | NestJS | 3000 | 3000 | 5432 | 6379 | MinIO 9000 |
 | Go | 8080 | 8080 | 5432 | 6379 | MinIO 9000 |
 | ASP.NET Core | 5080 | 8080 | 55432 | 56379 | S3Mock 19000 |
+| FastAPI | 8000 | 8000 | 5432 | 6379 | MinIO 9000 |
+
+MySQL host port defaults to 3306 for every framework. PostgreSQL remains the default engine. FastAPI manual setup requires Python 3.13.3 and uv 0.12.21 or newer; installation uses the locked dependency graph and only the selected driver.
 
 The CLI supports Node 22.13+ or Node 24+. Express and NestJS require Node 24.15+ (below 27) for manual setup. Go/.NET requirements come from the bundled `go.mod`/`global.json`; use the exact supported SDK/toolchain shown in the generated guide. Go automatic toolchain selection is confined to child processes. `.NET` requires PowerShell 7 on Windows or Python 3 for its supplied env loader. Docker mode needs Docker Engine and Compose 2.24.4+, and skips host application dependency installation.
 
@@ -32,12 +35,13 @@ Run `create-ridhuan-backend --help` for the complete contract.
 
 | Option | Purpose |
 | --- | --- |
-| `--template`, `-t` | `express-typescript`, `nestjs`, `golang`, `dotnet` (aliases `express`, `ts`, `nest`, `go`, `net`, `csharp`) |
+| `--template`, `-t` | `express-typescript`, `nestjs`, `golang`, `dotnet`, `fastapi` (aliases `express`, `ts`, `nest`, `go`, `net`, `csharp`, `python`, `py`) |
+| `--database` | `postgresql` (default) or `mysql`; chosen once when generating |
 | `--yes`, `-y` | Accept defaults without prompting; Express is default |
 | `--mode manual\|docker` | Install host dependencies or prepare Compose setup |
 | `--no-install` | Generate files only; tool checks/install are deferred |
 | `--port` | HTTP host/manual port, 1–65535 |
-| `--db-host`, `--db-port`, `--db-name`, `--db-user` | PostgreSQL settings for manual/hybrid startup |
+| `--db-host`, `--db-port`, `--db-name`, `--db-user` | Selected database settings for manual/hybrid startup |
 | `--redis`, `--no-redis` | Enable/disable cache and shared limiter |
 | `--storage local\|s3` | Upload adapter |
 | `--s3-endpoint`, `--s3-docker-endpoint` | Host/container endpoint; custom provider settings are preserved |
@@ -51,7 +55,7 @@ A nonempty target or a symlink target is rejected. Installation failure preserve
 
 ## Run the generated application
 
-Each project gets framework-specific manual and Compose steps in `GETTING-STARTED.md`: install, explicit migration, build, explicit seed, start, readiness and docs URLs. API startup never performs migrations or seed. Express uses Zod; NestJS uses class-validator/class-transformer/Swagger; Go uses Chi/Huma/sqlc/Goose; .NET uses ASP.NET Core/EF Core/Npgsql. Auth, RBAC, audit, notifications in PostgreSQL plus SSE, SMTP, uploads, optional Redis and OpenAPI follow each framework's source contracts.
+Each project gets framework-specific manual and Compose steps in `GETTING-STARTED.md`: install, explicit migration, build, explicit seed, start, readiness and docs URLs. API startup never performs migrations or seed. Express uses Zod; NestJS uses class-validator/class-transformer/Swagger; Go uses Chi/Huma/sqlc/Goose; .NET uses ASP.NET Core/EF Core; FastAPI uses Pydantic/SQLAlchemy/Alembic. Auth, RBAC, audit, persisted notifications plus SSE, SMTP, uploads, optional Redis and OpenAPI follow each framework's source contracts.
 
 ## Maintainer verification
 
@@ -76,3 +80,18 @@ Release snapshots require clean source repositories, explicit file manifests and
 MIT © RidhuanDEV
 
 Credential values containing backslashes use escaped JSON double quotes; literal dollar signs are escaped for Compose. Other special values use single quotes. The framework env loaders preserve these literal values and keep injected environment variables authoritative. Do not hand-edit generated escaping into shell syntax.
+
+## Database selection
+
+```sh
+npm create ridhuan-backend@latest my-api -- --template fastapi --database mysql --yes
+npm create ridhuan-backend@latest my-api -- --template golang --database postgresql --mode docker --yes
+```
+
+These options are part of the next source revision; use `latest` only after that revision is published. The generated `backend-template.json` records the engine and source provenance. Runtime rejects a provider mismatch. Changing env never converts existing tables/data; use a reviewed export/import process for database engine changes. Each framework owns its separate migration history. PostgreSQL histories are preserved; MySQL introduces an independent baseline.
+
+MySQL Compose uses a dedicated application account and a separate generated root password. Its bootstrap helper sets arbitrary application credentials using server-side quoting before the network server starts. Environment secrets and upload files stay ignored. Use verified TLS and a trusted CA for external databases; the localhost Compose database is a development fixture.
+
+## Verification matrix
+
+`node scripts/verify-consumer.mjs <template> <postgresql|mysql> [--runtime]` installs the packed CLI, generates a project, installs dependencies and runs native checks. `node scripts/verify-compose.mjs <template> <postgresql|mysql>` exercises actual migration gating, preservation, auth, notifications/SSE, SMTP TLS, Redis and upload adapters. CI uses one tarball across all ten combinations on Windows/Linux and runs FastAPI install smoke checks on macOS. Configuring these jobs does not mean a remote CI run has passed. Public `npx @latest` acceptance requires the tested version to be published first.

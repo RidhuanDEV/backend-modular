@@ -18,11 +18,12 @@ Implement the new port methods in `src/ModularBackend.Infrastructure/Persistence
 dotnet tool restore
 dotnet ef migrations add AddOrders \
   --project src/ModularBackend.Infrastructure \
-  --startup-project src/ModularBackend.Api \
+  --startup-project src/ModularBackend.Infrastructure \
+  --context BackendDbContext \
   --output-dir Persistence/Migrations
 ```
 
-Review the generated migration. Apply it only through `tools/ModularBackend.Migrator` after deployment; the API does not migrate its database during startup. The dedicated database must have this application's own migration history.
+For MySQL use `--context MySqlBackendDbContext --output-dir Persistence/MySqlMigrations` and the MySQL connection/provider configuration. The Infrastructure project owns the design factory and official EF Design dependency. Review the generated migration and run `dotnet ef migrations has-pending-model-changes` with the same project/context arguments. Apply it through `tools/ModularBackend.Migrator` as a release job before starting new API replicas; the API does not migrate during startup. The dedicated database must have this application's own migration history.
 
 ## 4. Add endpoint and permission
 

@@ -1,9 +1,10 @@
 import { parseArgs } from "node:util";
-import type { CliArguments, TemplateId } from "./types.js";
+import type { CliArguments, TemplateId, DatabaseProvider } from "./types.js";
 
 const aliases: Readonly<Record<string, TemplateId>> = {
   "express-typescript": "express-typescript", express: "express-typescript", ts: "express-typescript",
   nestjs: "nestjs", nest: "nestjs", golang: "golang", go: "golang", dotnet: "dotnet", net: "dotnet", csharp: "dotnet",
+  fastapi: "fastapi", python: "fastapi", py: "fastapi",
 };
 export function parsePort(value: string, name: string): number {
   if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 65535) throw new Error(`${name} must be an integer from 1 to 65535`);
@@ -11,7 +12,7 @@ export function parsePort(value: string, name: string): number {
 }
 export function parseCliArgs(args: readonly string[]): CliArguments {
   const { values, positionals } = parseArgs({ args: [...args], strict: true, allowPositionals: true, options: {
-    template: { type: "string", short: "t" }, yes: { type: "boolean", short: "y" },
+    template: { type: "string", short: "t" }, database: { type: "string" }, yes: { type: "boolean", short: "y" },
     "no-install": { type: "boolean" }, help: { type: "boolean", short: "h" }, version: { type: "boolean", short: "v" },
     port: { type: "string" }, mode: { type: "string" }, "db-host": { type: "string" }, "db-port": { type: "string" },
     "db-name": { type: "string" }, "db-user": { type: "string" }, redis: { type: "boolean" }, "no-redis": { type: "boolean" },
@@ -20,13 +21,17 @@ export function parseCliArgs(args: readonly string[]): CliArguments {
   } });
   if (positionals.length > 1) throw new Error("Provide exactly one project folder name");
   const template = values.template === undefined ? undefined : aliases[values.template];
-  if (values.template !== undefined && template === undefined) throw new Error("Unknown template; choose express-typescript, nestjs, golang, or dotnet");
+  if (values.template !== undefined && template === undefined) throw new Error("Unknown template; choose express-typescript, nestjs, golang, dotnet, or fastapi");
+  const databases: Readonly<Record<string, DatabaseProvider>> = { postgresql: "postgresql", postgres: "postgresql", pg: "postgresql", mysql: "mysql" };
+  const database = values.database === undefined ? undefined : databases[values.database];
+  if (values.database !== undefined && database === undefined) throw new Error("Database must be postgresql or mysql");
   const mode = values.mode;
   const storage = values.storage;
   if (mode !== undefined && mode !== "manual" && mode !== "docker") throw new Error("Mode must be manual or docker");
   if (storage !== undefined && storage !== "local" && storage !== "s3") throw new Error("Storage must be local or s3");
   if (values.redis && values["no-redis"]) throw new Error("Use either --redis or --no-redis");
   return {
+    ...(database === undefined ? {} : { database }),
     ...(positionals[0] === undefined ? {} : { projectName: positionals[0] }),
     ...(template === undefined ? {} : { template }), ...(mode === undefined ? {} : { mode }),
     ...(storage === undefined ? {} : { storage }),
@@ -53,7 +58,8 @@ export function validateGoModule(module: string): void {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._~-]*(?:\/[a-zA-Z0-9][a-zA-Z0-9._~-]*)+$/.test(module) || module.includes("..")) throw new Error("Invalid Go module path");
 }
 export const helpText = `Usage: create-ridhuan-backend [project-name] [options]
-  --template, -t <express-typescript|nestjs|golang|dotnet>
+  --template, -t <express-typescript|nestjs|golang|dotnet|fastapi>
+  --database <postgresql|mysql>  Default: postgresql
   --yes, -y                 Use defaults without prompting
   --no-install              Generate files and defer tool/dependency checks
   --mode <manual|docker>    Default: manual; Docker skips host dependency install

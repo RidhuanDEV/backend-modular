@@ -1,0 +1,6 @@
+# Copy to compose.override.yaml to change only published host ports.
+services:
+  app:
+    ports: !override ["8081:8000"]
+  postgres:
+    ports: !override ["127.0.0.1:55432:5432"]

@@ -2,7 +2,11 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ModularBackend.Infrastructure.Configuration;
 
-public sealed class DatabaseOptions { [Required] public string ConnectionString { get; set; } = ""; }
+public sealed class DatabaseOptions
+{
+    [AllowedValues("postgresql", "mysql")] public string Provider { get; set; } = "postgresql";
+    [Required] public string ConnectionString { get; set; } = "";
+}
 public sealed class JwtOptions
 {
     [Required, MinLength(32)] public string Secret { get; set; } = "";
