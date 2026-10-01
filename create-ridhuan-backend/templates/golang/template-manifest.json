@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/golang-backend.git",
-    "commit": "3fac3719f04790b2926ba086ef0a32cc6a378e8d",
+    "commit": "2125414e5ad6bfed003e6cfce5bee4e3c6828c53",
     "dirty": false
   },
   "requirements": {
@@ -159,7 +159,7 @@
     "scripts/initproject-smoke-input.txt": "97e8276d9a70540717223283a8bd853e5e2c2a7a5889315d2bf416f982aba5ad",
     "scripts/minio.Dockerfile": "1f41a7baa0a917fb32ee82b8b4523cb144077a7a61469cb580cc4000a876013f",
     "scripts/mysql-entrypoint.sh": "7ddb1c2a7f0a8654a71b00d39dc7deb940886b880572577fce57460448d4f7ab",
-    "scripts/mysql-init-user.sh": "623a650c59f091bce6901f0be90ff7792aae0800e4a2f31f892b22097f8ddde9",
+    "scripts/mysql-init-user.sh": "e429349384af26cfe2a6061979fd074c5e065fec8a304ba5f7363bca562500d6",
     "scripts/verify-linux-initializer.sh": "6c497132458cfa028e162f742d0e9300fab920d589155672bcc4d729784f9d7f",
     "scripts/verify-migration-gate.sh": "e96d4e62c8104a17c491ff4236a9a93cd4dbd6c3f1297b4596aeea6e6b9e79c1",
     "scripts/verify-template.ps1": "b62b53bd1628ff60f4787b96b9f8f210726940c100ab5b193e2e3687d8aa30ff",

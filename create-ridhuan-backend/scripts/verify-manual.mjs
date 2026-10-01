@@ -60,6 +60,11 @@ export async function verifyManual(project, id, provider = 'postgresql') {
       try { await probe.connect(); await probe.query('SELECT 1'); connected = true; break; }
       catch { await pause(500); } finally { await probe.end(); }
     }
+    if (!connected) {
+      const logs=command('docker',['logs','--tail','30',container],project);
+      const redact=text=>text.replaceAll(password,'[fixture-password]').replaceAll(encodeURIComponent(password),'[fixture-password]').replaceAll(Buffer.from(password).toString('hex'),'[fixture-password-hex]');
+      console.error(redact((logs.stdout ?? '')+(logs.stderr ?? '')));
+    }
     assert(connected, 'Disposable database did not become ready');
     let executable, args;
     if (id === 'dotnet') {

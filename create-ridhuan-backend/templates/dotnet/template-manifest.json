@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/NET-backend.git",
-    "commit": "90d59a45325395f4f5bbd4470918943f37ab1e1c",
+    "commit": "69db01055c7e607192f43a3a738a2c8ddee5a976",
     "dirty": false
   },
   "requirements": {
@@ -46,7 +46,7 @@
     "README.id.md": "744b325742626ae52a2443511941a601acd38c2baa3bcc104e0525bf23d5edf2",
     "README.md": "67ba9450015919d2e7f8884f92c0d331fe0405bd30490de20f6881da172deee5",
     "scripts/mysql-entrypoint.sh": "7ddb1c2a7f0a8654a71b00d39dc7deb940886b880572577fce57460448d4f7ab",
-    "scripts/mysql-init-user.sh": "623a650c59f091bce6901f0be90ff7792aae0800e4a2f31f892b22097f8ddde9",
+    "scripts/mysql-init-user.sh": "e429349384af26cfe2a6061979fd074c5e065fec8a304ba5f7363bca562500d6",
     "scripts/run.ps1": "47a5dcaea2517f6fd56683b743a33f6e4929be6b2e00091706c683d97da7d725",
     "scripts/run.py": "c7f43b6b20377ea91d2407ae73c6b247b4a1702ee1fa5081a71a434c264d3b8b",
     "scripts/verify-initializer.ps1": "f1343f717cf963311264747805947b1ba322c71db2b4b04e9df627ffa1a06254",

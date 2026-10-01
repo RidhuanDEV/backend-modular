@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre.git",
-    "commit": "1c3b4765085dd2644f82f1302224066768a48b95",
+    "commit": "bd806af1884f43cddaad0b20d25554ae6cfddb66",
     "dirty": false
   },
   "requirements": {
@@ -43,7 +43,7 @@
     "scripts/init-bucket.sh": "4dd62855a4d9d354f31bffea2d89e4a57b554705e189e440b1c72fea97c87d96",
     "scripts/minio.Dockerfile": "1f41a7baa0a917fb32ee82b8b4523cb144077a7a61469cb580cc4000a876013f",
     "scripts/mysql-entrypoint.sh": "7ddb1c2a7f0a8654a71b00d39dc7deb940886b880572577fce57460448d4f7ab",
-    "scripts/mysql-init-user.sh": "623a650c59f091bce6901f0be90ff7792aae0800e4a2f31f892b22097f8ddde9",
+    "scripts/mysql-init-user.sh": "e429349384af26cfe2a6061979fd074c5e065fec8a304ba5f7363bca562500d6",
     "src/app.ts": "c35c9eef7cff5d0adc192d503bd8ebde847f5dbb185cfa148050b3cf46726d55",
     "src/config/database-adapter.ts": "21df62fec6fa56624abe96f8cdfef0352dee9d390891abeed3c8abbc21e42a82",
     "src/config/env.ts": "bb332ba84486985cb8d826df44ffc76e3a350cf63fcf6fdd79d67ae9dd566984",

@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-fastapi.git",
-    "commit": "1373a0898cab8569b352d83a5c276822e5307b4a",
+    "commit": "0cdab5dc6f41517f5c3ecaf7977aa0854fd62014",
     "dirty": false
   },
   "requirements": {
@@ -44,7 +44,7 @@
     "scripts/init-bucket.sh": "4dd62855a4d9d354f31bffea2d89e4a57b554705e189e440b1c72fea97c87d96",
     "scripts/minio.Dockerfile": "1f41a7baa0a917fb32ee82b8b4523cb144077a7a61469cb580cc4000a876013f",
     "scripts/mysql-entrypoint.sh": "7ddb1c2a7f0a8654a71b00d39dc7deb940886b880572577fce57460448d4f7ab",
-    "scripts/mysql-init-user.sh": "623a650c59f091bce6901f0be90ff7792aae0800e4a2f31f892b22097f8ddde9",
+    "scripts/mysql-init-user.sh": "e429349384af26cfe2a6061979fd074c5e065fec8a304ba5f7363bca562500d6",
     "scripts/upgrade-fixture.py": "b0e02df29e80b02ef52862683cb9682dd5cc58f1ada26fcc306648cad4e52d30",
     "scripts/verify.py": "598ead91ea4e9b88a5554cfcaac61bf9fc9e484a085322990efbf6790f1c8e00",
     "src/app/api/dependencies.py": "36282efe9f5b745536c95c884cc905be53c52e0ac0012febee246ba512825d01",

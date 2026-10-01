@@ -44,7 +44,7 @@ Log pengujian bersifat lokal dan diabaikan Git. Hasil ini tidak membuktikan load
 
 ## Gate yang masih terbuka
 
-- Remote GitHub Actions Windows/Linux/macOS belum dijalankan untuk revisi ini. Linux di Docker bukan verifikasi seluruh native toolchain Linux/macOS.
+- CI source kelima framework pada commit fitur awal lulus. Root CI menemukan hook bootstrap MySQL yang mengubah shell entrypoint saat hook di-source di Linux; fix subshell sudah di-push ke kelima source dan snapshot CLI. Putaran CI terbaru sedang diverifikasi.
 - Source kelima framework sudah di-commit dan di-push ke main atas instruksi pengguna. FastAPI sudah diregistrasikan sebagai submodule; snapshot CLI dibangun ulang dari source clean tanpa `--allow-dirty`.
 - CLI `1.4.0` belum dipublikasikan oleh pekerjaan ini. Tidak ada deploy atau acceptance `npx @latest` untuk fitur baru ini. Publikasi tetap menunggu required CI terhadap satu artifact clean yang sama.
 
@@ -52,13 +52,15 @@ Log pengujian bersifat lokal dan diabaikan Git. Hasil ini tidak membuktikan load
 
 | Source | Commit main | Gate lokal terakhir |
 | --- | --- | --- |
-| Express | `1c3b476` | verify:template, build, test, API docs, Prisma validate |
-| NestJS | `97ff691` | verify:template, build, 10 tests |
-| Go | `3fac371` | build, vet, test |
-| .NET | `90d59a4` | Release build, format, 4 unit + 3 contract tests |
-| FastAPI | `1373a08` | Ruff, strict Pyright, 8 unit tests, OpenAPI |
+| Express | `bd806af` | verify:template, build, test, API docs, Prisma validate |
+| NestJS | `a0c0b72` | verify:template, build, 10 tests |
+| Go | `2125414` | build, vet, test |
+| .NET | `69db010` | Release build, format, 4 unit + 3 contract tests |
+| FastAPI | `0cdab5d` | Ruff, strict Pyright, 8 unit tests, OpenAPI |
 
-GitHub Actions source dan root akan dicatat setelah hasil run untuk commit tersebut tersedia.
+Build aplikasi dilakukan pada commit fitur sebelum fix hook; source aplikasi tidak berubah pada fix tersebut. Regresi hook MySQL terbaru diuji terhadap image resmi dengan mode Linux `0644` (sourced) dan `0755` (executable): keduanya berhasil startup dan mengautentikasi password kutip/backslash/Unicode. Pengujian CLI clean sepuluh pasangan juga lulus kembali.
+
+GitHub Actions source dan root akan dicatat setelah hasil run terbaru tersedia.
 
 ## Reproduksi
 

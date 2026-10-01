@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-nestjs.git",
-    "commit": "97ff691e8cb18d5368227bb44e599cd319c9d352",
+    "commit": "a0c0b725c3791a4845b2e13016f0a9fd754ac845",
     "dirty": false
   },
   "requirements": {
@@ -46,7 +46,7 @@
     "scripts/init-bucket.sh": "4dd62855a4d9d354f31bffea2d89e4a57b554705e189e440b1c72fea97c87d96",
     "scripts/minio.Dockerfile": "1f41a7baa0a917fb32ee82b8b4523cb144077a7a61469cb580cc4000a876013f",
     "scripts/mysql-entrypoint.sh": "7ddb1c2a7f0a8654a71b00d39dc7deb940886b880572577fce57460448d4f7ab",
-    "scripts/mysql-init-user.sh": "623a650c59f091bce6901f0be90ff7792aae0800e4a2f31f892b22097f8ddde9",
+    "scripts/mysql-init-user.sh": "e429349384af26cfe2a6061979fd074c5e065fec8a304ba5f7363bca562500d6",
     "src/app.module.ts": "4ecced7aba90eb5b84dee7925c7c938d467d6fa3efe616f81757f14c55d7f989",
     "src/common/audit/audit.service.ts": "b78b24ff6448ef8e13559ad2de1f63cb6c85f7e8c022e22391b0fcc2dd557240",
     "src/common/audit/read-audit.interceptor.ts": "943dd6a67c020e4f5824264dcf600d3ea7fa19c81a2c795244e778f358b2c627",

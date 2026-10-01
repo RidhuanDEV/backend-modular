@@ -1,4 +1,6 @@
 #!/bin/bash
+# Non-executable hooks are sourced by MySQL; isolate options and exit statements.
+(
 set -Eeuo pipefail
 if [[ -z "${RIDHUAN_MYSQL_APP_PASSWORD:-}" ]]; then
   exit 0
@@ -16,3 +18,4 @@ PREPARE app_password_statement FROM @alter_user;
 EXECUTE app_password_statement;
 DEALLOCATE PREPARE app_password_statement;
 SQL
+)
