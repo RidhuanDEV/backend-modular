@@ -145,7 +145,8 @@ jobs:
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      max-parallel: 1
+      # Each matrix job has its own runner; cap concurrency without sharing RAM.
+      max-parallel: 3
       matrix:
         template: [express-typescript, nestjs, golang, dotnet, fastapi]
         database: [postgresql, mysql]
