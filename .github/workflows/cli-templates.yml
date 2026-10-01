@@ -2,7 +2,29 @@ name: CLI template consumers
 on:
   push:
     branches: [main]
+    paths:
+      - .github/workflows/cli-templates.yml
+      - create-ridhuan-backend/**
+      - .gitmodules
+      - .gitattributes
+      - .gitignore
+      - modular-express-typescript-starter-postgre
+      - nestjs
+      - modular-golang
+      - modular-NET
+      - modular-fastapi
   pull_request:
+    paths:
+      - .github/workflows/cli-templates.yml
+      - create-ridhuan-backend/**
+      - .gitmodules
+      - .gitattributes
+      - .gitignore
+      - modular-express-typescript-starter-postgre
+      - nestjs
+      - modular-golang
+      - modular-NET
+      - modular-fastapi
   workflow_dispatch:
     inputs:
       publish:
