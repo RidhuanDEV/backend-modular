@@ -199,6 +199,13 @@ try {
         };
         const cwd = join(root, folder);
         if (id === "express" || id === "nestjs") {
+          if (id === "express" && provider === "postgresql") {
+            run(process.execPath, ["scripts/test-migrations.mjs"], cwd, {
+              ...env,
+              CI: "true",
+              PG_TEST_ADMIN_URL: `postgresql://fixture:${password}@127.0.0.1:${postgres}/postgres`,
+            });
+          }
           run("npm", ["run", "build"], cwd, env);
           run("npm", ["run", "prisma:migrate:deploy"], cwd, env);
           run("npm", ["run", "seed"], cwd, env);
