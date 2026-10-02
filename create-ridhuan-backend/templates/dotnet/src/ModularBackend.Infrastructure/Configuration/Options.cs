@@ -41,7 +41,7 @@ public sealed class UploadOptions
     [Range(1, 8760)] public int OrphanGraceHours { get; set; } = 24;
 }
 public sealed class CorsOptions { public string[] Origins { get; set; } = []; }
-public sealed class TelemetryOptions { public bool Enabled { get; set; } public string Endpoint { get; set; } = "http://localhost:4317"; public string ServiceName { get; set; } = "modular-net"; }
+public sealed class TelemetryOptions { public bool Enabled { get; set; } public string Endpoint { get; set; } = "http://localhost:4317"; public string ServiceName { get; set; } = "modular-net"; public string Protocol { get; set; } = "grpc"; }
 public sealed class SmtpOptions
 {
     public bool Enabled { get; set; }
@@ -51,4 +51,20 @@ public sealed class SmtpOptions
     public string User { get; set; } = "";
     public string Password { get; set; } = "";
     public string From { get; set; } = "";
+}
+public sealed class WorkerOptions
+{
+    [Range(1, 16)] public int Concurrency { get; set; } = 2;
+    [Range(1, 300)] public int PollSeconds { get; set; } = 3;
+    [Range(30, 3600)] public int LeaseSeconds { get; set; } = 60;
+    [Range(1, 1800)] public int RenewSeconds { get; set; } = 20;
+    [Range(1, 5)] public int MaxAttempts { get; set; } = 5;
+}
+public sealed class CleanupOptions
+{
+    [Range(1, 5000)] public int BatchSize { get; set; } = 500;
+    [Range(1, 3650)] public int SessionDays { get; set; } = 30;
+    [Range(1, 3650)] public int OutboxDays { get; set; } = 30;
+    public bool AuditEnabled { get; set; }
+    [Range(1, 36500)] public int AuditDays { get; set; } = 365;
 }

@@ -6,21 +6,37 @@ package sqlc
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
+	AdvanceRefreshFamily(ctx context.Context, arg AdvanceRefreshFamilyParams) error
 	AssignRolePermission(ctx context.Context, arg AssignRolePermissionParams) error
+	ClaimEmail(ctx context.Context, arg ClaimEmailParams) error
+	ClaimableEmail(ctx context.Context, now sql.NullTime) (EmailJob, error)
+	CleanupAudit(ctx context.Context, arg CleanupAuditParams) ([]string, error)
+	CleanupEmail(ctx context.Context, arg CleanupEmailParams) ([]string, error)
+	CleanupFamilies(ctx context.Context, arg CleanupFamiliesParams) ([]string, error)
 	ClearRolePermissions(ctx context.Context, roleID string) error
+	CompleteEmail(ctx context.Context, arg CompleteEmailParams) error
 	CountUsers(ctx context.Context, search string) (int64, error)
 	CreateAuthRefreshToken(ctx context.Context, arg CreateAuthRefreshTokenParams) error
 	CreateFile(ctx context.Context, arg CreateFileParams) (StoredFile, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) error
 	CreatePermission(ctx context.Context, name string) (Permission, error)
+	CreateRefreshFamily(ctx context.Context, arg CreateRefreshFamilyParams) error
 	CreateRole(ctx context.Context, name string) (Role, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteAudit(ctx context.Context, id string) error
+	DeleteEmail(ctx context.Context, id string) error
 	DeleteExpiredAuthRefreshTokens(ctx context.Context, userID string) error
+	DeleteFamily(ctx context.Context, id string) error
 	DeletePermission(ctx context.Context, id string) error
 	DeleteRole(ctx context.Context, id string) error
+	EmailBacklogCount(ctx context.Context) (int64, error)
+	EmailBacklogOldest(ctx context.Context) (sql.NullTime, error)
+	EnqueueEmail(ctx context.Context, arg EnqueueEmailParams) error
+	EnsureNotificationCounter(ctx context.Context, recipientID string) error
 	FileReferenced(ctx context.Context, arg FileReferencedParams) (bool, error)
 	FindActiveUserByEmail(ctx context.Context, email string) (User, error)
 	FindActiveUserByID(ctx context.Context, id string) (User, error)
@@ -31,6 +47,7 @@ type Querier interface {
 	FindRole(ctx context.Context, id string) (Role, error)
 	FindRoleByName(ctx context.Context, name string) (Role, error)
 	FindUser(ctx context.Context, id string) (User, error)
+	IncrementNotificationCounter(ctx context.Context, recipientID string) error
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	ListOwnNotifications(ctx context.Context, arg ListOwnNotificationsParams) ([]Notification, error)
 	ListPermissions(ctx context.Context) ([]Permission, error)
@@ -38,13 +55,22 @@ type Querier interface {
 	ListRolePermissions(ctx context.Context, roleID string) ([]ListRolePermissionsRow, error)
 	ListRoles(ctx context.Context) ([]Role, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
+	LockEmail(ctx context.Context, id string) (EmailJob, error)
 	LockOwnNotification(ctx context.Context, arg LockOwnNotificationParams) (Notification, error)
 	LockPermission(ctx context.Context, id string) (Permission, error)
+	LockRefreshFamily(ctx context.Context, id string) (RefreshFamily, error)
 	LockRole(ctx context.Context, id string) (Role, error)
 	LockUser(ctx context.Context, id string) (User, error)
+	LookupAuthRefreshToken(ctx context.Context, tokenHash []byte) (AuthRefreshToken, error)
+	NotificationBacklog(ctx context.Context, arg NotificationBacklogParams) ([]Notification, error)
+	NotificationCursor(ctx context.Context, arg NotificationCursorParams) (int64, error)
+	NotificationPage(ctx context.Context, arg NotificationPageParams) ([]Notification, error)
+	NotificationSequence(ctx context.Context, recipientID string) (int64, error)
 	ReadNotification(ctx context.Context, id string) error
+	RenewEmail(ctx context.Context, arg RenewEmailParams) (int64, error)
 	RevokeAuthRefreshFamily(ctx context.Context, familyID string) error
 	RevokeAuthRefreshToken(ctx context.Context, id string) (int64, error)
+	RevokeRefreshFamilyRecord(ctx context.Context, id string) error
 	SeedAdminPermissions(ctx context.Context) error
 	SeedPermission(ctx context.Context, name string) error
 	SeedRole(ctx context.Context, name string) error

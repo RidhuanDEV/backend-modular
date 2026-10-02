@@ -3,13 +3,10 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import request from "supertest";
-import { firstValueFrom } from "rxjs";
 import type { INestApplication } from "@nestjs/common";
 import { AuditService } from "../common/audit/audit.service";
 import { endpointRegistry } from "../common/endpoint/endpoint.registry";
 import { PrismaService } from "../platform/database/prisma.service";
-import { NotificationsController } from "../modules/notifications/notifications.controller";
-import type { ApiRequest } from "../common/http/request-context";
 
 let app: INestApplication;
 let prisma: PrismaService;
@@ -216,9 +213,30 @@ test("notifications persist, stream to their recipient, mark read and report dis
     .set("Authorization", `Bearer ${recipientToken}`);
   assert.equal(list.status, 200);
   assert.ok((field(list.body, "data") as Array<{ id: string }>).some((item) => item.id === id));
-  const streamEvent = await firstValueFrom(app.get(NotificationsController).stream(
-    { id: recipientId, email, roleId: "" }, { accessExpiresAt: Date.now() + 10000 } as ApiRequest));
-  assert.equal(streamEvent.id, id);
+  // Exercise the actual transport and cancel after receiving the persisted event.
+  if (!app.getHttpServer().listening) await app.listen(0, "127.0.0.1");
+  const streamAbort = new AbortController();
+  const streamTimer = setTimeout(() => streamAbort.abort(), 10000);
+  try {
+    const stream = await fetch(`${await app.getUrl()}/api/notifications/stream`, {
+      headers: { authorization: `Bearer ${recipientToken}` },
+      signal: streamAbort.signal,
+    });
+    assert.equal(stream.status, 200);
+    assert.match(stream.headers.get("content-type") ?? "", /text\/event-stream/);
+    assert.ok(stream.body);
+    const reader = stream.body.getReader();
+    let events = "";
+    while (!events.includes(`id: ${id}\n`)) {
+      const chunk = await reader.read();
+      assert.equal(chunk.done, false);
+      events += new TextDecoder().decode(chunk.value);
+    }
+    await reader.cancel();
+  } finally {
+    clearTimeout(streamTimer);
+    streamAbort.abort();
+  }
   const wrongRecipient = await request(app.getHttpServer()).patch(`/api/notifications/${id}/read`)
     .set("Authorization", `Bearer ${adminToken}`);
   assert.equal(wrongRecipient.status, 404);

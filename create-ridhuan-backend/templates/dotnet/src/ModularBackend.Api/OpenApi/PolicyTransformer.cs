@@ -20,6 +20,14 @@ public sealed class PolicyTransformer(EndpointRegistry registry) : IOpenApiOpera
         operation.Extensions["x-cache"] = new JsonNodeExtension(JsonValue.Create(policy.Cache.ToString().ToLowerInvariant()));
         var schema = await context.GetOrCreateSchemaAsync(typeof(Failure), cancellationToken: ct);
         operation.Responses ??= new OpenApiResponses();
+        if (id == EndpointId.NotificationList && operation.Responses.TryGetValue("200", out var response) && response is OpenApiResponse page)
+            page.Headers = new Dictionary<string, IOpenApiHeader> { ["X-Next-Cursor"] = new OpenApiHeader { Description = "UUID cursor for next page; absent on final page", Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uuid" } } };
+        if (id == EndpointId.NotificationStream)
+        {
+            operation.Parameters ??= [];
+            operation.Parameters.Add(new OpenApiParameter { Name = "Last-Event-ID", In = ParameterLocation.Header, Required = false, Description = "Last notification UUID for this recipient", Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uuid" } });
+            operation.Responses["200"] = new OpenApiResponse { Description = "Ordered notification SSE, UUID event IDs, heartbeat 15s, maximum 14 minutes or JWT expiry", Content = new Dictionary<string, OpenApiMediaType> { ["text/event-stream"] = new() { Schema = new OpenApiSchema { Type = JsonSchemaType.String } } } };
+        }
         foreach (var status in new[] { "400", "401", "403", "404", "409", "413", "429", "500", "503" })
             operation.Responses[status] = new OpenApiResponse { Description = "Error envelope", Content = new Dictionary<string, OpenApiMediaType> { ["application/json"] = new() { Schema = schema } } };
     }

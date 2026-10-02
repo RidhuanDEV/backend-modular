@@ -5,7 +5,7 @@ import { endpointPolicy } from "../core/http/endpoint-registry.js";
 
 function ensureRequiredAudit(): void {
   const context = currentEndpoint();
-  if (context && endpointPolicy(context.endpointId).audit === "required" && !context.auditWritten) {
+  if (context && endpointPolicy(context.endpointId).audit === "required" && !context.auditWritten && !context.auditNoMutation) {
     throw new Error(`Required audit was not persisted for ${context.endpointId}`);
   }
 }

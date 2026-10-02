@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 from app.core.blocking import BlockingPool
 from app.core.settings import Settings
+from app.platform.telemetry import instrument
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,7 @@ class Storage:
             with self.path(key).open("xb") as target:
                 shutil.copyfileobj(stream, target, length=65536)
 
+    @instrument("storage")
     async def put(self, key: str, stream: BinaryIO, mime: str) -> None:
         await self.work.run(self._put, key, stream, mime)
 
@@ -84,6 +86,7 @@ class Storage:
         else:
             self.path(key).unlink(missing_ok=True)
 
+    @instrument("storage")
     async def delete(self, key: str) -> None:
         await self.work.run(self._delete, key)
 
@@ -102,4 +105,8 @@ class Storage:
         elif self.root.exists():
             for path in self.root.iterdir():
                 if path.is_file() and not path.is_symlink():
-                    yield ObjectInfo(path.name, datetime.fromtimestamp(path.stat().st_mtime, UTC))
+                    try:
+                        modified = path.stat().st_mtime
+                    except FileNotFoundError:
+                        continue
+                    yield ObjectInfo(path.name, datetime.fromtimestamp(modified, UTC))

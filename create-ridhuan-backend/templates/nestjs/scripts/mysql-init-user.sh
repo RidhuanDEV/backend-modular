@@ -6,7 +6,7 @@ if [[ -z "${RIDHUAN_MYSQL_APP_PASSWORD:-}" ]]; then
   exit 0
 fi
 # Usernames are identifiers, passwords become hex bytes and are quoted by MySQL.
-if [[ ! "${MYSQL_USER:-}" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]]; then
+if [[ ! "${MYSQL_USER:-}" =~ ^[A-Za-z_][A-Za-z0-9_]{0,31}$ ]]; then
   echo 'Invalid application database username' >&2
   exit 1
 fi

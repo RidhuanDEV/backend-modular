@@ -51,7 +51,11 @@
     "prepack": "npm run prepare:templates && npm run build",
     "test": "node ./scripts/verify-cli.mjs",
     "test:consumer": "node scripts/verify-consumer.mjs",
-    "test:compose": "node scripts/verify-compose.mjs"
+    "test:compose": "node scripts/verify-compose.mjs",
+    "test:hardening:plan": "node scripts/run-hardening-suite.mjs",
+    "test:hardening": "node scripts/run-hardening-suite.mjs --run",
+    "test:hardening:cleanup": "node scripts/hardening-fixture-cleanup.mjs",
+    "test:hardening:runner": "node --test scripts/test-hardening-runner.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",

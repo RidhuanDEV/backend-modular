@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"github.com/RidhuanDEV/golang-backend/internal/telemetry"
 	"io"
 	"os"
 	"path/filepath"
@@ -38,7 +39,9 @@ func (l *Local) path(key string) (string, error) {
 	}
 	return filepath.Join(l.root, key), nil
 }
-func (l *Local) Put(_ context.Context, key string, source io.Reader) error {
+func (l *Local) Put(ctx context.Context, key string, source io.Reader) error {
+	ctx, span := telemetry.Start(ctx, "storage")
+	defer span.End()
 	path, err := l.path(key)
 	if err != nil {
 		return err
@@ -58,7 +61,9 @@ func (l *Local) Put(_ context.Context, key string, source io.Reader) error {
 	}
 	return nil
 }
-func (l *Local) Delete(_ context.Context, key string) error {
+func (l *Local) Delete(ctx context.Context, key string) error {
+	ctx, span := telemetry.Start(ctx, "storage")
+	defer span.End()
 	path, err := l.path(key)
 	if err != nil {
 		return err
@@ -76,6 +81,8 @@ type S3 struct {
 }
 
 func (s *S3) ListOlder(ctx context.Context, before time.Time) ([]string, error) {
+	ctx, span := telemetry.Start(ctx, "storage")
+	defer span.End()
 	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{Bucket: aws.String(s.bucket)})
 	keys := []string{}
 	for paginator.HasMorePages() {
@@ -105,10 +112,14 @@ func NewS3(ctx context.Context, c config.Config) (*S3, error) {
 	return &S3{client: client, bucket: c.S3Bucket}, nil
 }
 func (s *S3) Put(ctx context.Context, key string, source io.Reader) error {
+	ctx, span := telemetry.Start(ctx, "storage")
+	defer span.End()
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key), Body: source})
 	return err
 }
 func (s *S3) Delete(ctx context.Context, key string) error {
+	ctx, span := telemetry.Start(ctx, "storage")
+	defer span.End()
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
 	return err
 }

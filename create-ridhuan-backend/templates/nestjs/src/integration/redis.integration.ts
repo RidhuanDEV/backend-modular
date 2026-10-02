@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import request from "supertest";
 import type { INestApplication } from "@nestjs/common";
@@ -10,7 +11,8 @@ let second: INestApplication;
 before(async () => {
   process.env.RATE_LIMIT_STORE = "redis";
   process.env.CACHE_ENABLED = "true";
-  process.env.REDIS_URL = "redis://127.0.0.1:6379";
+  process.env.REDIS_URL ??= "redis://127.0.0.1:6379";
+  process.env.REDIS_NAMESPACE = `integration-${randomUUID()}`;
   process.env.TRUST_PROXY_HOPS = "1";
   process.env.RATE_LIMIT_AUTH_MAX = "2";
   const { createApp } = await import("../main");

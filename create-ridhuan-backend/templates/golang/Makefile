@@ -1,4 +1,4 @@
-.PHONY: run migrate seed test verify sqlc
+.PHONY: run migrate seed worker cleanup test verify sqlc
 
 run:
 	go run ./cmd/api
@@ -9,11 +9,18 @@ migrate:
 seed:
 	go run ./cmd/seed
 
+worker:
+	go run ./cmd/worker
+
+cleanup:
+	go run ./cmd/cleanup-uploads --dry-run
+
 test:
 	go test ./...
 
 sqlc:
 	go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
+	go run ./cmd/generate-db-instrumentation
 
 verify:
 	test -z "$$(gofmt -l $$(find cmd internal -name '*.go'))"

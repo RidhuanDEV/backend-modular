@@ -1,7 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import { AuthService } from "./auth.service.js";
 import { requireAuthenticatedUser } from "../../core/http/request-context.js";
-import { sendSuccess, sendCreated, sendNoContent } from "../../utils/response.js";
+import {
+  sendSuccess,
+  sendCreated,
+  sendNoContent,
+} from "../../utils/response.js";
 import {
   registerSchema,
   loginSchema,
@@ -18,7 +22,10 @@ export class AuthController {
     next: NextFunction,
   ): Promise<void> => {
     try {
-      const user = await service.register(registerSchema.parse(req.body), req.requestId);
+      const user = await service.register(
+        registerSchema.parse(req.body),
+        req.requestId,
+      );
       sendCreated(res, user);
     } catch (err) {
       next(err);
@@ -31,7 +38,10 @@ export class AuthController {
     next: NextFunction,
   ): Promise<void> => {
     try {
-      const result = await service.login(loginSchema.parse(req.body), req.requestId);
+      const result = await service.login(
+        loginSchema.parse(req.body),
+        req.requestId,
+      );
       sendSuccess(res, { data: result });
     } catch (err) {
       next(err);
@@ -45,7 +55,7 @@ export class AuthController {
   ): Promise<void> => {
     try {
       const body = refreshSchema.parse(req.body);
-      const result = await service.refresh(body.refreshToken);
+      const result = await service.refresh(body.refreshToken, req.requestId);
       sendSuccess(res, { data: result });
     } catch (err) {
       next(err);
@@ -59,7 +69,7 @@ export class AuthController {
   ): Promise<void> => {
     try {
       const body = logoutSchema.parse(req.body);
-      await service.logout(body.refreshToken);
+      await service.logout(body.refreshToken, req.requestId);
       sendNoContent(res);
     } catch (err) {
       next(err);

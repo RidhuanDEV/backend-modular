@@ -1,10 +1,77 @@
 {
-  "source": "Go auth refresh plus shared notification API extensions",
+  "source": "Go auth refresh/logout plus shared notification API extensions (development hardening)",
   "endpoints": [
-    ["auth.refresh", "POST", "/api/auth/refresh", "auth", true, "", "required", "auth", "off", 200],
-    ["notification.create", "POST", "/api/notifications", "notifications", false, "manage_notifications", "required", "internal", "off", 201],
-    ["notification.list", "GET", "/api/notifications", "notifications", false, "", "none", "internal", "off", 200],
-    ["notification.read", "PATCH", "/api/notifications/{id}/read", "notifications", false, "", "required", "internal", "off", 200],
-    ["notification.stream", "GET", "/api/notifications/stream", "notifications", false, "", "none", "internal", "off", 200]
+    [
+      "auth.refresh",
+      "POST",
+      "/api/auth/refresh",
+      "auth",
+      true,
+      "",
+      "required",
+      "auth",
+      "off",
+      200
+    ],
+    [
+      "auth.logout",
+      "POST",
+      "/api/auth/logout",
+      "auth",
+      true,
+      "",
+      "optional",
+      "auth",
+      "off",
+      204
+    ],
+    [
+      "notification.create",
+      "POST",
+      "/api/notifications",
+      "notifications",
+      false,
+      "manage_notifications",
+      "required",
+      "internal",
+      "off",
+      201
+    ],
+    [
+      "notification.list",
+      "GET",
+      "/api/notifications",
+      "notifications",
+      false,
+      "",
+      "none",
+      "internal",
+      "off",
+      200
+    ],
+    [
+      "notification.read",
+      "PATCH",
+      "/api/notifications/{id}/read",
+      "notifications",
+      false,
+      "",
+      "required",
+      "internal",
+      "off",
+      200
+    ],
+    [
+      "notification.stream",
+      "GET",
+      "/api/notifications/stream",
+      "notifications",
+      false,
+      "",
+      "none",
+      "internal",
+      "off",
+      200
+    ]
   ]
 }

@@ -66,7 +66,7 @@ func TestFreshDatabaseUpgradePreservesExistingData(t *testing.T) {
 		t.Fatal("upgrade changed fixture", err)
 	}
 	var version int64
-	if err = pool.QueryRow(ctx, "SELECT max(version_id) FROM goose_db_version WHERE is_applied").Scan(&version); err != nil || version != 4 {
+	if err = pool.QueryRow(ctx, "SELECT max(version_id) FROM goose_db_version WHERE is_applied").Scan(&version); err != nil || version != 5 {
 		t.Fatal("upgrade did not reach latest migration", version, err)
 	}
 }

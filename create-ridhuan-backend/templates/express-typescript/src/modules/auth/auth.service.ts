@@ -11,6 +11,8 @@ import type { RegisterDto, LoginDto } from "./auth.schema.js";
 import type { User } from "@prisma/client";
 import type { AuthUserResponseDto } from "./dto/auth-user-response.dto.js";
 
+import { lockRefreshFamily } from "../../core/auth/refresh-family.js";
+
 const SALT_ROUNDS = 12;
 const DEFAULT_ROLE = "user";
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -57,7 +59,7 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(dto.password, SALT_ROUNDS);
 
-    const user = await prisma.$transaction(async (tx) => {
+    const user = await auditService.transaction(async (tx) => {
       const created = await repository.createUser(
         {
           email: dto.email,
@@ -85,7 +87,10 @@ export class AuthService {
 
   async login(dto: LoginDto, requestId?: string) {
     const user = await repository.findByEmail(dto.email);
-    const isMatch = await bcrypt.compare(dto.password, user?.password ?? (await dummyPasswordHash()));
+    const isMatch = await bcrypt.compare(
+      dto.password,
+      user?.password ?? (await dummyPasswordHash()),
+    );
     if (!user || user.deletedAt !== null || !isMatch) {
       throw HttpError.unauthorized("Invalid email or password");
     }
@@ -98,104 +103,160 @@ export class AuthService {
     const refreshToken = createRefreshToken();
     const now = new Date();
 
-    await auditService.persist({
-      action: AuditAction.LOGIN, module: AUTH_MODULE, userId: user.id,
-      after: { email: user.email }, requestId,
-    });
-
-    await prisma.$transaction([
-      // Keep the table bounded: drop this user's sessions that can no longer be used.
-      prisma.refreshToken.deleteMany({ where: { userId: user.id, expiresAt: { lt: now } } }),
-      prisma.refreshToken.create({
+    await auditService.transaction(async (tx) => {
+      const familyId = randomUUID();
+      const expiresAt = new Date(now.getTime() + REFRESH_TOKEN_TTL_MS);
+      await tx.refreshFamily.create({
+        data: { id: familyId, userId: user.id, expiresAt },
+      });
+      await tx.refreshToken.create({
         data: {
           tokenHash: hashRefreshToken(refreshToken),
-          familyId: randomUUID(),
+          familyId,
           userId: user.id,
-          expiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL_MS),
+          expiresAt,
         },
-      }),
-    ]);
+      });
+      await auditService.persist({
+        action: AuditAction.LOGIN,
+        module: AUTH_MODULE,
+        userId: user.id,
+        after: { email: user.email },
+        requestId,
+        trx: tx,
+      });
+    });
 
     return { token, refreshToken };
   }
 
-  async refresh(rawRefreshToken: string): Promise<{ token: string; refreshToken: string }> {
-    const now = new Date();
-    const oldTokenHash = hashRefreshToken(rawRefreshToken);
+  async refresh(
+    rawRefreshToken: string,
+    requestId?: string,
+  ): Promise<{ token: string; refreshToken: string }> {
+    const stored = await prisma.refreshToken.findUnique({
+      where: { tokenHash: hashRefreshToken(rawRefreshToken) },
+    });
+    if (!stored)
+      throw HttpError.unauthorized("Invalid or expired refresh token");
     const nextRefreshToken = createRefreshToken();
-    const nextTokenHash = hashRefreshToken(nextRefreshToken);
-
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await auditService.transaction(async (tx) => {
+      const family = await lockRefreshFamily(tx, stored.familyId);
+      const now = new Date();
       const session = await tx.refreshToken.findUnique({
-        where: { tokenHash: oldTokenHash },
+        where: { id: stored.id },
         include: { user: true },
       });
-      if (!session) return { kind: "invalid" as const };
-
-      if (session.revokedAt !== null) {
+      if (!family || !session) return undefined;
+      const before = {
+        expiresAt: family.expiresAt.toISOString(),
+        revoked: Boolean(family.revokedAt),
+      };
+      if (
+        family.revokedAt ||
+        family.expiresAt <= now ||
+        session.revokedAt ||
+        session.expiresAt <= now ||
+        session.user.deletedAt
+      ) {
+        await tx.refreshFamily.update({
+          where: { id: family.id },
+          data: { revokedAt: family.revokedAt ?? now },
+        });
         await tx.refreshToken.updateMany({
-          where: { familyId: session.familyId, revokedAt: null },
+          where: { familyId: family.id, revokedAt: null },
           data: { revokedAt: now },
         });
-        return { kind: "invalid" as const };
-      }
-
-      if (session.expiresAt <= now || session.user.deletedAt !== null) {
-        await tx.refreshToken.updateMany({
-          where: { familyId: session.familyId, revokedAt: null },
-          data: { revokedAt: now },
+        await auditService.persist({
+          action: AuditAction.REPLAY,
+          module: AUTH_MODULE,
+          entityId: family.id,
+          userId: family.userId,
+          before,
+          after: { expiresAt: before.expiresAt, revoked: true },
+          requestId,
+          trx: tx,
         });
-        return { kind: "invalid" as const };
+        return undefined;
       }
-
-      const revoked = await tx.refreshToken.updateMany({
-        where: { id: session.id, revokedAt: null },
+      const expiresAt = new Date(now.getTime() + REFRESH_TOKEN_TTL_MS);
+      await tx.refreshToken.update({
+        where: { id: session.id },
         data: { revokedAt: now },
       });
-      if (revoked.count !== 1) {
-        await tx.refreshToken.updateMany({
-          where: { familyId: session.familyId, revokedAt: null },
-          data: { revokedAt: now },
-        });
-        return { kind: "invalid" as const };
-      }
-
+      await tx.refreshFamily.update({
+        where: { id: family.id },
+        data: { expiresAt },
+      });
       await tx.refreshToken.create({
         data: {
-          tokenHash: nextTokenHash,
-          familyId: session.familyId,
-          userId: session.userId,
-          expiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL_MS),
+          tokenHash: hashRefreshToken(nextRefreshToken),
+          familyId: family.id,
+          userId: family.userId,
+          expiresAt,
         },
       });
-
-      return {
-        kind: "success" as const,
-        user: session.user,
-      };
+      await auditService.persist({
+        action: AuditAction.REFRESH,
+        module: AUTH_MODULE,
+        entityId: family.id,
+        userId: family.userId,
+        before,
+        after: { expiresAt: expiresAt.toISOString(), revoked: false },
+        requestId,
+        trx: tx,
+      });
+      return session.user;
     });
-
-    if (result.kind !== "success") {
+    if (!result)
       throw HttpError.unauthorized("Invalid or expired refresh token");
-    }
-
     return {
       token: signToken({
-        id: result.user.id,
-        email: result.user.email,
-        roleId: result.user.roleId,
+        id: result.id,
+        email: result.email,
+        roleId: result.roleId,
       }),
       refreshToken: nextRefreshToken,
     };
   }
 
-  async logout(rawRefreshToken: string): Promise<void> {
-    await prisma.refreshToken.updateMany({
-      where: {
-        tokenHash: hashRefreshToken(rawRefreshToken),
-        revokedAt: null,
-      },
-      data: { revokedAt: new Date() },
+  async logout(rawRefreshToken: string, requestId?: string): Promise<void> {
+    const stored = await prisma.refreshToken.findUnique({
+      where: { tokenHash: hashRefreshToken(rawRefreshToken) },
+    });
+    if (!stored) {
+      auditService.noLogoutMutation();
+      return;
+    }
+    await auditService.transaction(async (tx) => {
+      const family = await lockRefreshFamily(tx, stored.familyId);
+      if (!family || family.revokedAt) {
+        auditService.noLogoutMutation();
+        return;
+      }
+      const before = {
+        expiresAt: family.expiresAt.toISOString(),
+        revoked: false,
+      };
+      const revokedAt = new Date();
+      await tx.refreshFamily.update({
+        where: { id: family.id },
+        data: { revokedAt },
+      });
+      await tx.refreshToken.updateMany({
+        where: { familyId: family.id, revokedAt: null },
+        data: { revokedAt },
+      });
+      await auditService.persist({
+        action: AuditAction.LOGOUT,
+        module: AUTH_MODULE,
+        entityId: family.id,
+        userId: family.userId,
+        before,
+        after: { expiresAt: before.expiresAt, revoked: true },
+        requestId,
+        trx: tx,
+      });
     });
   }
 

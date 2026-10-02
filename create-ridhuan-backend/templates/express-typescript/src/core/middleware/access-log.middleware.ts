@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "../logger/logger.js";
+import { currentEndpoint } from "../http/endpoint-context.js";
 
 export function accessLogMiddleware(
   req: Request,
@@ -16,12 +17,11 @@ export function accessLogMiddleware(
       {
         requestId: req.requestId,
         method: req.method,
-        path: req.path,
+        endpointId: currentEndpoint()?.endpointId ?? "unregistered",
         status: res.statusCode,
         responseTimeMs: parseFloat(timeMs),
-        ip: req.ip,
       },
-      `${req.method} ${req.path} ${res.statusCode} - ${timeMs}ms`,
+      "HTTP response",
     );
   });
 

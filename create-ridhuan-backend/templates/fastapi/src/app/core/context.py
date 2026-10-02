@@ -33,6 +33,7 @@ class Context:
         *,
         invalidate_cache: bool = True,
         actor: UUID | None = None,
+        behavior: str | None = None,
     ) -> None:
         await record(
             self.session,
@@ -42,6 +43,7 @@ class Context:
             self.request_id,
             before=snapshot(before) if before else None,
             after=snapshot(after) if after else None,
+            behavior=behavior,
         )
         if invalidate_cache:
             await invalidate(self.session)

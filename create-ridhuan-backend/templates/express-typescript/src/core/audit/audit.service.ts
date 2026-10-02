@@ -5,6 +5,7 @@ import type { AuditActionType } from "../../constants/audit.constants.js";
 import type { ModuleName } from "../../constants/modules.constants.js";
 import { currentEndpoint } from "../http/endpoint-context.js";
 import { endpointPolicy } from "../http/endpoint-registry.js";
+import { prisma } from "../../config/prisma.js";
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -32,6 +33,26 @@ export interface PersistAuditOptions {
 }
 
 export class AuditService {
+  /** Explicit idempotent logout outcome: no mutation means no audit record. */
+  noLogoutMutation(): void {
+    const context = currentEndpoint();
+    if (context?.endpointId === "auth.logout") context.auditNoMutation = true;
+  }
+
+  /** Discard optional audit intents if the owning mutation fails to commit. */
+  async transaction<T>(
+    operation: (tx: TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    const context = currentEndpoint();
+    const checkpoint = context?.pendingAudits.length ?? 0;
+    try {
+      return await prisma.$transaction(operation);
+    } catch (error) {
+      context?.pendingAudits.splice(checkpoint);
+      throw error;
+    }
+  }
+
   /**
    * Persistent audit trail — writes to the `crud_audit_logs` table.
    *

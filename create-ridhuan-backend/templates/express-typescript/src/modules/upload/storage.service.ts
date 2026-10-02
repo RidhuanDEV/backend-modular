@@ -1,3 +1,4 @@
+import { observed } from "../../core/observability/telemetry.js";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, unlink, readdir, stat } from "node:fs/promises";
 import path from "node:path";
@@ -38,7 +39,18 @@ export class StorageService {
       const entries = await readdir(directory, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isFile()) continue;
-        const details = await stat(filePath(entry.name));
+        const details = await stat(filePath(entry.name)).catch(
+          (error: unknown) => {
+            if (
+              error instanceof Error &&
+              "code" in error &&
+              error.code === "ENOENT"
+            )
+              return undefined;
+            throw error;
+          },
+        );
+        if (!details) continue;
         yield { key: entry.name, modifiedAt: details.mtime };
       }
       return;
@@ -68,38 +80,53 @@ export class StorageService {
     body: Buffer,
     mimeType: string,
   ): Promise<{ key: string; storage: "local" | "s3" }> {
-    const key = randomUUID();
-    if (env.UPLOAD_STORAGE === "local") {
-      await mkdir(path.resolve(env.UPLOAD_LOCAL_DIR), { recursive: true });
-      await writeFile(filePath(key), body, { flag: "wx", mode: 0o600 });
-      return { key, storage: "local" };
-    }
-    const { client, bucket } = s3Connection();
-    try {
-      await client.send(
-        new PutObjectCommand({
-          Bucket: bucket,
-          Key: key,
-          Body: body,
-          ContentType: mimeType,
-        }),
-      );
-    } finally {
-      client.destroy();
-    }
-    return { key, storage: "s3" };
+    return observed("storage", async () => {
+      const key = randomUUID();
+      if (env.UPLOAD_STORAGE === "local") {
+        await mkdir(path.resolve(env.UPLOAD_LOCAL_DIR), { recursive: true });
+        await writeFile(filePath(key), body, { flag: "wx", mode: 0o600 });
+        return { key, storage: "local" };
+      }
+      const { client, bucket } = s3Connection();
+      try {
+        await client.send(
+          new PutObjectCommand({
+            Bucket: bucket,
+            Key: key,
+            Body: body,
+            ContentType: mimeType,
+          }),
+        );
+      } finally {
+        client.destroy();
+      }
+      return { key, storage: "s3" };
+    });
   }
   async remove(key: string, storage: "local" | "s3"): Promise<void> {
-    if (storage === "local") {
-      await unlink(filePath(key));
-      return;
-    }
-    const { client, bucket } = s3Connection();
-    try {
-      await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
-    } finally {
-      client.destroy();
-    }
+    return observed("storage", async () => {
+      if (storage === "local") {
+        await unlink(filePath(key)).catch((error: unknown) => {
+          if (
+            !(
+              error instanceof Error &&
+              "code" in error &&
+              error.code === "ENOENT"
+            )
+          )
+            throw error;
+        });
+        return;
+      }
+      const { client, bucket } = s3Connection();
+      try {
+        await client.send(
+          new DeleteObjectCommand({ Bucket: bucket, Key: key }),
+        );
+      } finally {
+        client.destroy();
+      }
+    });
   }
 }
 export const storageService = new StorageService();

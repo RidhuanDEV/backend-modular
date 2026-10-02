@@ -8,6 +8,7 @@ RUN --mount=type=cache,id=modular-go-app-build,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -p 1 -trimpath -o /out/api ./cmd/api && \
     CGO_ENABLED=0 go build -p 1 -trimpath -o /out/migrate ./cmd/migrate && \
     CGO_ENABLED=0 go build -p 1 -trimpath -o /out/seed ./cmd/seed && \
+    CGO_ENABLED=0 go build -p 1 -trimpath -o /out/worker ./cmd/worker && \
     CGO_ENABLED=0 go build -p 1 -trimpath -o /out/cleanup-uploads ./cmd/cleanup-uploads
 
 FROM alpine:3.22

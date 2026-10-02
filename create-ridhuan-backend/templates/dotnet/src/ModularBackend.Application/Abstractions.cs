@@ -17,6 +17,10 @@ public interface IBackendStore
     Task<StoredFile?> FileAsync(Guid id, CancellationToken ct);
     Task<bool> IsFileReferencedAsync(string objectKey, CancellationToken ct);
     Task<RefreshToken?> RefreshTokenAsync(string tokenHash, CancellationToken ct);
+    Task<RefreshToken?> LockRefreshTokenAsync(Guid id, CancellationToken ct);
+    Task<RefreshFamily?> LockRefreshFamilyAsync(Guid id, CancellationToken ct);
+    void AddRefreshFamily(RefreshFamily family);
+    Task BeginSessionAsync(CancellationToken ct);
     Task RevokeRefreshFamilyAsync(Guid familyId, DateTimeOffset revokedAt, CancellationToken ct);
     Task DeleteExpiredRefreshTokensAsync(Guid userId, DateTimeOffset now, CancellationToken ct);
     void AddUser(User user);
@@ -48,6 +52,9 @@ public interface IObjectStorage
 public interface ICacheInvalidation { Task InvalidateAsync(CancellationToken ct); }
 public interface INotificationStore
 {
+    Task<long?> CursorAsync(Guid recipientId, Guid? cursor, CancellationToken ct);
+    Task<IReadOnlyList<Notification>> PageAsync(Guid recipientId, long? before, CancellationToken ct);
+    Task<IReadOnlyList<Notification>?> StreamBatchAsync(Guid recipientId, long? after, CancellationToken ct, bool unreadOnly = false);
     Task<Notification> CreateAsync(Guid recipientId, string title, string body, bool sendEmail, OperationContext context, CancellationToken ct);
     Task<IReadOnlyList<Notification>> ListAsync(Guid recipientId, bool unreadOnly, CancellationToken ct);
     Task<Notification> MarkReadAsync(Guid id, OperationContext context, CancellationToken ct);

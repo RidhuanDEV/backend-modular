@@ -37,6 +37,7 @@ services:
       Redis__ConnectionString: redis:6379
       Upload__LocalRoot: /app/uploads
       Upload__Endpoint: ${S3_ENDPOINT_DOCKER-http://s3mock:9090}
+      Telemetry__Endpoint: ${Telemetry__Endpoint_DOCKER:-http://otel-collector:4317}
     ports:
     - ${APP_PORT:-5080}:8080
     volumes:
@@ -109,6 +110,39 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Database__ConnectionString: ${Database__ConnectionString_DOCKER:?Set Database__ConnectionString_DOCKER}
+      Redis__ConnectionString: redis:6379
+      Upload__LocalRoot: /app/uploads
+      Upload__Endpoint: ${S3_ENDPOINT_DOCKER-http://s3mock:9090}
+      Telemetry__Endpoint: ${Telemetry__Endpoint_DOCKER:-http://otel-collector:4317}
+    volumes:
+    - uploads_data:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure
+    entrypoint:
+    - dotnet
+    - /app/worker/ModularBackend.Worker.dll
+    stop_grace_period: 60s
+  otel-collector:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector:0.162.0
+    profiles:
+    - telemetry
+    command:
+    - --config=/etc/otelcol/config.yaml
+    volumes:
+    - ./scripts/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+    - 127.0.0.1:${OTEL_GRPC_PORT:-4317}:4317
+    - 127.0.0.1:${OTEL_HTTP_PORT:-4318}:4318
+    restart: unless-stopped
 volumes:
   postgres_data: null
   uploads_data: null

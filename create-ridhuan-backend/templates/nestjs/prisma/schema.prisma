@@ -51,6 +51,8 @@ model User {
   role          Role           @relation(fields: [roleId], references: [id])
   activityLogs  ActivityLog[]
   uploadedFiles StoredFile[]
+  refreshFamilies RefreshFamily[]
+  notificationCounter NotificationCounter?
   refreshTokens RefreshToken[]
   notifications Notification[] @relation("NotificationRecipient")
   sentNotifications Notification[] @relation("NotificationActor")
@@ -104,6 +106,7 @@ model RefreshToken {
   expiresAt DateTime  @db.Timestamptz(3)
   revokedAt DateTime? @db.Timestamptz(3)
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  family RefreshFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([familyId])
@@ -120,6 +123,9 @@ enum NotificationEmailStatus {
 }
 
 model Notification {
+  sequence BigInt
+  emailJob EmailJob?
+  @@unique([recipientId, sequence])
   id          String                  @id @default(uuid()) @db.Uuid
   recipientId String                  @db.Uuid
   actorId     String?                 @db.Uuid
@@ -134,4 +140,41 @@ model Notification {
   @@index([recipientId, createdAt(sort: Desc)])
   @@index([recipientId, readAt, createdAt(sort: Desc)])
   @@map("notifications")
+}
+
+model RefreshFamily {
+  id String @id @db.Uuid
+  userId String @db.Uuid
+  expiresAt DateTime @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokens RefreshToken[]
+  @@index([expiresAt, revokedAt])
+  @@map("refresh_families")
+}
+
+model NotificationCounter {
+  recipientId String @id @db.Uuid
+  sequence BigInt @default(0)
+  recipient User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  @@map("notification_counters")
+}
+
+model EmailJob {
+  id String @id @default(uuid()) @db.Uuid
+  notificationId String @unique @db.Uuid
+  recipient String @db.VarChar(255)
+  title String @db.VarChar(160)
+  body String @db.VarChar(4000)
+  status String @default("PENDING") @db.VarChar(16)
+  attempts Int @default(0)
+  availableAt DateTime @default(now()) @db.Timestamptz(3)
+  leaseUntil DateTime? @db.Timestamptz(3)
+  leaseId String? @db.Uuid
+  completedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  @@index([status, availableAt, leaseUntil])
+  @@map("email_jobs")
 }

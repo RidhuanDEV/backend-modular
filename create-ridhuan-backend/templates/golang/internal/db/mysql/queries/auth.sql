@@ -14,3 +14,15 @@ UPDATE auth_refresh_tokens SET revoked_at=CURRENT_TIMESTAMP(3) WHERE id=? AND re
 UPDATE auth_refresh_tokens SET revoked_at=CURRENT_TIMESTAMP(3) WHERE family_id=? AND revoked_at IS NULL;
 -- name: DeleteExpiredAuthRefreshTokens :exec
 DELETE FROM auth_refresh_tokens WHERE user_id=? AND expires_at<CURRENT_TIMESTAMP(3);
+
+-- name: LookupAuthRefreshToken :one
+SELECT * FROM auth_refresh_tokens WHERE token_hash=sqlc.arg(token_hash);
+
+-- name: CreateRefreshFamily :exec
+INSERT INTO refresh_families(id,user_id,expires_at) VALUES(sqlc.arg(id),sqlc.arg(user_id),sqlc.arg(expires_at));
+-- name: LockRefreshFamily :one
+SELECT * FROM refresh_families WHERE id=sqlc.arg(id) FOR UPDATE;
+-- name: RevokeRefreshFamilyRecord :exec
+UPDATE refresh_families SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP(3)) WHERE id=sqlc.arg(id);
+-- name: AdvanceRefreshFamily :exec
+UPDATE refresh_families SET expires_at=sqlc.arg(expires_at) WHERE id=sqlc.arg(id);

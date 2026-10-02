@@ -5,6 +5,8 @@
 uploads
 artifacts
 TestResults
+.tmp-consumer*
+consumer-fixtures/
 
 .env.*
 !.env.example

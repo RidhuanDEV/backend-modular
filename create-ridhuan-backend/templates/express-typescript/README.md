@@ -97,3 +97,7 @@ The unified CLI supports `--database postgresql` (default) and `--database mysql
 For a source checkout, copy `.env.mysql.example` to `.env`, configure credentials, and run `docker compose -f docker-compose.mysql.yml up --build -d --wait`. Seed is a separate explicit operation using the same `-f` option. CLI-generated MySQL projects use the ordinary active Compose filename. MySQL bootstrap uses a separate root password and supports quoted/Unicode application passwords without logging them.
 
 For an external MySQL database, use `sslaccept=strict` (or `sslmode=verify-full`) and an absolute `sslcert` CA path in `DATABASE_URL`; both the Prisma adapter and migration connection must verify the server. Local Compose is a development fixture. Back up MySQL with MySQL tooling and PostgreSQL with PostgreSQL tooling, preserving migration history and upload metadata/objects. Test restoration into isolated storage/database before relying on a recovery point.
+
+## Hardening upgrade
+
+Read [HARDENING-UPGRADE.md](docs/HARDENING-UPGRADE.md) before migrating existing data. It documents sliding refresh/logout, ordered SSE replay, async email worker/outbox, retention commands and optional OpenTelemetry. Local PostgreSQL/MySQL regression and generated-consumer checks pass; [verification evidence](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) records the exact runtime and CI boundaries.

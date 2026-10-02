@@ -91,3 +91,7 @@ uv run --locked backend migrate
 The generator creates typed schemas, ORM model, repository, service and GET router, and registers its endpoint, model and composition imports. It uses the locked development Ruff tool to format its output automatically. Existing modules and entity name collisions are refused. Review authorization and create a migration against the selected engine before calling the generated route. For a reusable template that supports both engines, create and validate separate provider migrations. The generated read example caps its response at 100 items; add explicit pagination for your application.
 
 MySQL application passwords are UTF-8. The aiomysql 0.3.2 boundary preserves their UTF-8 bytes despite the driver's internal latin1 conversion; real credential acceptance includes non-Latin passwords. Compose keeps credential bootstrap separate from API migrations.
+
+## Hardening upgrade
+
+Read [HARDENING-UPGRADE.md](docs/HARDENING-UPGRADE.md) before migrating existing data. It documents sliding refresh/logout, ordered SSE replay, async email worker/outbox, retention commands and optional OpenTelemetry. Local PostgreSQL/MySQL regression and generated-consumer checks pass; [verification evidence](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) records the exact runtime and CI boundaries.

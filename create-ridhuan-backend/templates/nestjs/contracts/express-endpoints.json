@@ -16,7 +16,7 @@
       "method": "POST",
       "path": "/api/auth/logout",
       "status": 204,
-      "audit": "none",
+      "audit": "optional",
       "cache": "off",
       "rateLimit": "auth"
     },
@@ -34,7 +34,7 @@
       "method": "POST",
       "path": "/api/auth/refresh",
       "status": 200,
-      "audit": "none",
+      "audit": "optional",
       "cache": "off",
       "rateLimit": "auth"
     },

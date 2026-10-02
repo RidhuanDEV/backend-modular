@@ -10,6 +10,20 @@ import (
 	"database/sql"
 )
 
+const advanceRefreshFamily = `-- name: AdvanceRefreshFamily :exec
+UPDATE refresh_families SET expires_at=$1 WHERE id=$2
+`
+
+type AdvanceRefreshFamilyParams struct {
+	ExpiresAt sql.NullTime `json:"expires_at"`
+	ID        string       `json:"id"`
+}
+
+func (q *Queries) AdvanceRefreshFamily(ctx context.Context, arg AdvanceRefreshFamilyParams) error {
+	_, err := q.db.Exec(ctx, advanceRefreshFamily, arg.ExpiresAt, arg.ID)
+	return err
+}
+
 const createAuthRefreshToken = `-- name: CreateAuthRefreshToken :exec
 INSERT INTO auth_refresh_tokens(family_id, user_id, token_hash, expires_at)
 VALUES ($1, $2, $3, $4)
@@ -29,6 +43,21 @@ func (q *Queries) CreateAuthRefreshToken(ctx context.Context, arg CreateAuthRefr
 		arg.TokenHash,
 		arg.ExpiresAt,
 	)
+	return err
+}
+
+const createRefreshFamily = `-- name: CreateRefreshFamily :exec
+INSERT INTO refresh_families(id,user_id,expires_at) VALUES($1,$2,$3)
+`
+
+type CreateRefreshFamilyParams struct {
+	ID        string       `json:"id"`
+	UserID    string       `json:"user_id"`
+	ExpiresAt sql.NullTime `json:"expires_at"`
+}
+
+func (q *Queries) CreateRefreshFamily(ctx context.Context, arg CreateRefreshFamilyParams) error {
+	_, err := q.db.Exec(ctx, createRefreshFamily, arg.ID, arg.UserID, arg.ExpiresAt)
 	return err
 }
 
@@ -104,6 +133,42 @@ func (q *Queries) FindAuthRefreshTokenByHash(ctx context.Context, tokenHash []by
 	return i, err
 }
 
+const lockRefreshFamily = `-- name: LockRefreshFamily :one
+SELECT id, user_id, created_at, expires_at, revoked_at FROM refresh_families WHERE id=$1 FOR UPDATE
+`
+
+func (q *Queries) LockRefreshFamily(ctx context.Context, id string) (RefreshFamily, error) {
+	row := q.db.QueryRow(ctx, lockRefreshFamily, id)
+	var i RefreshFamily
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const lookupAuthRefreshToken = `-- name: LookupAuthRefreshToken :one
+SELECT id, family_id, user_id, token_hash, expires_at, created_at, revoked_at FROM auth_refresh_tokens WHERE token_hash=$1
+`
+
+func (q *Queries) LookupAuthRefreshToken(ctx context.Context, tokenHash []byte) (AuthRefreshToken, error) {
+	row := q.db.QueryRow(ctx, lookupAuthRefreshToken, tokenHash)
+	var i AuthRefreshToken
+	err := row.Scan(
+		&i.ID,
+		&i.FamilyID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const revokeAuthRefreshFamily = `-- name: RevokeAuthRefreshFamily :exec
 UPDATE auth_refresh_tokens SET revoked_at = now()
 WHERE family_id = $1 AND revoked_at IS NULL
@@ -125,6 +190,15 @@ func (q *Queries) RevokeAuthRefreshToken(ctx context.Context, id string) (int64,
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const revokeRefreshFamilyRecord = `-- name: RevokeRefreshFamilyRecord :exec
+UPDATE refresh_families SET revoked_at=COALESCE(revoked_at,now()) WHERE id=$1
+`
+
+func (q *Queries) RevokeRefreshFamilyRecord(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, revokeRefreshFamilyRecord, id)
+	return err
 }
 
 const userHasPermission = `-- name: UserHasPermission :one

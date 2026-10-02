@@ -86,12 +86,12 @@ func (s *Service) Login(ctx context.Context, p audit.Policy, b model.Credentials
 	}
 	actor := &Actor{ID: row.ID, Email: row.Email, RoleID: row.RoleID}
 	return audit.Mutate(ctx, s.Audit, p, actor, "LOGIN", func(q sqlc.Querier) (model.TokenPair, audit.Change, error) {
-		// Keep the table bounded: drop this user's sessions that can no longer be used.
-		if err := q.DeleteExpiredAuthRefreshTokens(ctx, row.ID); err != nil {
-			return model.TokenPair{}, audit.Change{}, err
-		}
+		// Keep consumed hashes until the family is retained by cleanup.
 		pair, tokenHash, familyID, err := s.issueTokenPair(row.ID, row.Email, row.RoleID, "", time.Now().UTC().Add(refreshTokenTTL))
 		if err != nil {
+			return model.TokenPair{}, audit.Change{}, err
+		}
+		if err = q.CreateRefreshFamily(ctx, sqlc.CreateRefreshFamilyParams{ID: familyID, UserID: row.ID, ExpiresAt: sql.NullTime{Time: pair.RefreshTokenExpiresAt, Valid: true}}); err != nil {
 			return model.TokenPair{}, audit.Change{}, err
 		}
 		err = q.CreateAuthRefreshToken(ctx, sqlc.CreateAuthRefreshTokenParams{FamilyID: familyID, UserID: row.ID, TokenHash: tokenHash, ExpiresAt: sql.NullTime{Time: pair.RefreshTokenExpiresAt, Valid: true}})
@@ -121,88 +121,161 @@ func (s *Service) issueTokenPair(userID, email, roleID, familyID string, refresh
 	return model.TokenPair{AccessToken: accessToken, RefreshToken: refreshToken, AccessTokenExpiresIn: int64(accessTokenTTL.Seconds()), RefreshTokenExpiresAt: refreshExpiresAt.UTC()}, hash[:], familyID, nil
 }
 
-func (s *Service) Refresh(ctx context.Context, p audit.Policy, rawRefreshToken string) (model.TokenPair, error) {
-	if rawRefreshToken == "" {
+type sessionSnapshot struct {
+	ExpiresAt time.Time `json:"expiresAt"`
+	Revoked   bool      `json:"revoked"`
+}
+
+func (s *Service) Refresh(ctx context.Context, p audit.Policy, raw string) (model.TokenPair, error) {
+	hash := sha256.Sum256([]byte(raw))
+	lookup, err := s.Queries.LookupAuthRefreshToken(ctx, hash[:])
+	if errors.Is(err, sql.ErrNoRows) {
 		return model.TokenPair{}, fault.New(fault.Unauthorized, "Invalid refresh token")
 	}
-	hash := sha256.Sum256([]byte(rawRefreshToken))
+	if err != nil {
+		return model.TokenPair{}, fault.DB(err)
+	}
 	var pair model.TokenPair
 	var actor *Actor
-	var entityID string
 	invalid := false
-	err := s.Audit.Pool.Transaction(ctx, func(q sqlc.Querier) error {
+	mutated := false
+	change := audit.Change{}
+	behavior := "TOKEN_REFRESH"
+	err = s.Audit.Pool.Transaction(ctx, func(q sqlc.Querier) error {
+		family, err := q.LockRefreshFamily(ctx, lookup.FamilyID)
+		if errors.Is(err, sql.ErrNoRows) {
+			invalid = true
+			return nil
+		}
+		if err != nil {
+			return err
+		}
 		stored, err := q.FindAuthRefreshTokenByHash(ctx, hash[:])
-		if errors.Is(err, sql.ErrNoRows) {
-			invalid = true
-			return nil
-		}
 		if err != nil {
 			return err
 		}
-		entityID = stored.UserID
-		if stored.RevokedAt.Valid {
-			if err = q.RevokeAuthRefreshFamily(ctx, stored.FamilyID); err != nil {
+		user, err := q.FindActiveUserByID(ctx, family.UserID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		active := err == nil
+		if active {
+			actor = &Actor{ID: user.ID, Email: user.Email, RoleID: user.RoleID}
+		}
+		now := time.Now().UTC()
+		before := sessionSnapshot{family.ExpiresAt.Time.UTC(), family.RevokedAt.Valid}
+		after := before
+		if family.RevokedAt.Valid || !family.ExpiresAt.Time.After(now) || stored.RevokedAt.Valid || !stored.ExpiresAt.Time.After(now) || !active {
+			invalid = true
+			behavior = "REFRESH_REPLAY"
+			after.Revoked = true
+			if err = q.RevokeRefreshFamilyRecord(ctx, family.ID); err != nil {
 				return err
 			}
-			invalid = true
-			if p.Mode == audit.Required {
-				return s.Audit.Write(ctx, q, p, nil, "REFRESH_REPLAY", audit.Change{EntityID: stored.FamilyID})
-			}
-			return nil
-		}
-		if !stored.ExpiresAt.Valid || !stored.ExpiresAt.Time.After(time.Now().UTC()) {
-			if err = q.RevokeAuthRefreshFamily(ctx, stored.FamilyID); err != nil {
+			if err = q.RevokeAuthRefreshFamily(ctx, family.ID); err != nil {
 				return err
 			}
-			invalid = true
-			return nil
-		}
-		user, err := q.FindActiveUserByID(ctx, stored.UserID)
-		if errors.Is(err, sql.ErrNoRows) {
-			if err = q.RevokeAuthRefreshFamily(ctx, stored.FamilyID); err != nil {
+		} else {
+			expires := sql.NullTime{Time: now.Add(refreshTokenTTL), Valid: true}
+			after.ExpiresAt = expires.Time
+			var tokenHash []byte
+			pair, tokenHash, _, err = s.issueTokenPair(user.ID, user.Email, user.RoleID, family.ID, expires.Time)
+			if err != nil {
 				return err
 			}
-			invalid = true
-			return nil
+			if _, err = q.RevokeAuthRefreshToken(ctx, stored.ID); err != nil {
+				return err
+			}
+			if err = q.AdvanceRefreshFamily(ctx, sqlc.AdvanceRefreshFamilyParams{ID: family.ID, ExpiresAt: expires}); err != nil {
+				return err
+			}
+			if err = q.CreateAuthRefreshToken(ctx, sqlc.CreateAuthRefreshTokenParams{FamilyID: family.ID, UserID: user.ID, TokenHash: tokenHash, ExpiresAt: expires}); err != nil {
+				return err
+			}
 		}
+		change, err = audit.Capture(family.ID, &before, &after)
 		if err != nil {
 			return err
 		}
-		actor = &Actor{ID: user.ID, Email: user.Email, RoleID: user.RoleID}
-		var tokenHash []byte
-		pair, tokenHash, _, err = s.issueTokenPair(user.ID, user.Email, user.RoleID, stored.FamilyID, stored.ExpiresAt.Time)
-		if err != nil {
-			return err
-		}
-		affected, err := q.RevokeAuthRefreshToken(ctx, stored.ID)
-		if err != nil {
-			return err
-		}
-		if affected != 1 {
-			return errors.New("refresh token was already consumed")
-		}
-		if err = q.CreateAuthRefreshToken(ctx, sqlc.CreateAuthRefreshTokenParams{FamilyID: stored.FamilyID, UserID: user.ID, TokenHash: tokenHash, ExpiresAt: stored.ExpiresAt}); err != nil {
-			return err
-		}
+		mutated = true
 		if p.Mode == audit.Required {
-			return s.Audit.Write(ctx, q, p, actor, "TOKEN_REFRESH", audit.Change{EntityID: user.ID})
+			return s.Audit.Write(ctx, q, p, actor, behavior, change)
 		}
 		return nil
 	})
 	if err != nil {
 		return model.TokenPair{}, fault.DB(err)
 	}
-	if invalid {
-		return model.TokenPair{}, fault.New(fault.Unauthorized, "Invalid refresh token")
+	if mutated && p.Mode == audit.Optional {
+		s.optionalSessionAudit(ctx, p, actor, behavior, change)
 	}
-	if p.Mode == audit.Optional {
-		detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
-		defer cancel()
-		if err = s.Audit.Write(detached, s.Queries, p, actor, "TOKEN_REFRESH", audit.Change{EntityID: entityID}); err != nil {
-			s.Audit.Log.Warn("optional refresh audit failed", "endpoint", p.ID, "error", err)
-		}
+	if invalid {
+		return model.TokenPair{}, fault.New(fault.Unauthorized, "Invalid or expired refresh token")
 	}
 	return pair, nil
+}
+func (s *Service) Logout(ctx context.Context, p audit.Policy, raw string) error {
+	hash := sha256.Sum256([]byte(raw))
+	lookup, err := s.Queries.LookupAuthRefreshToken(ctx, hash[:])
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fault.DB(err)
+	}
+	changed := false
+	change := audit.Change{}
+	var actor *Actor
+	err = s.Audit.Pool.Transaction(ctx, func(q sqlc.Querier) error {
+		family, err := q.LockRefreshFamily(ctx, lookup.FamilyID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if family.RevokedAt.Valid {
+			return nil
+		}
+		user, err := q.FindActiveUserByID(ctx, family.UserID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if err == nil {
+			actor = &Actor{ID: user.ID, Email: user.Email, RoleID: user.RoleID}
+		}
+		if err = q.RevokeRefreshFamilyRecord(ctx, family.ID); err != nil {
+			return err
+		}
+		if err = q.RevokeAuthRefreshFamily(ctx, family.ID); err != nil {
+			return err
+		}
+		before := sessionSnapshot{family.ExpiresAt.Time.UTC(), false}
+		after := sessionSnapshot{family.ExpiresAt.Time.UTC(), true}
+		change, err = audit.Capture(family.ID, &before, &after)
+		if err != nil {
+			return err
+		}
+		changed = true
+		if p.Mode == audit.Required {
+			return s.Audit.Write(ctx, q, p, actor, "LOGOUT", change)
+		}
+		return nil
+	})
+	if err != nil {
+		return fault.DB(err)
+	}
+	if changed && p.Mode == audit.Optional {
+		s.optionalSessionAudit(ctx, p, actor, "LOGOUT", change)
+	}
+	return nil
+}
+func (s *Service) optionalSessionAudit(ctx context.Context, p audit.Policy, actor *Actor, behavior string, change audit.Change) {
+	detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
+	if err := s.Audit.Write(detached, s.Queries, p, actor, behavior, change); err != nil {
+		s.Audit.Log.Warn("optional session audit failed", "endpoint", p.ID)
+	}
 }
 func (s *Service) Authenticate(ctx context.Context, raw string) (*Actor, error) {
 	deny := func() (*Actor, error) { return nil, fault.New(fault.Unauthorized, "Unauthorized") }

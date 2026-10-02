@@ -3,20 +3,26 @@ import { HttpError } from "../errors/http-error.js";
 import { logger } from "../logger/logger.js";
 import multer from "multer";
 import { Prisma } from "@prisma/client";
+import { currentEndpoint } from "../http/endpoint-context.js";
 
 // Expected Prisma failures that describe the request, not a server bug.
-const prismaClientErrors: Record<string, { status: number; message: string }> = {
-  P2002: { status: 409, message: "Resource already exists" },
-  P2003: { status: 409, message: "Resource is referenced or missing" },
-  P2025: { status: 404, message: "Resource not found" },
-};
+const prismaClientErrors: Record<string, { status: number; message: string }> =
+  {
+    P2002: { status: 409, message: "Resource already exists" },
+    P2003: { status: 409, message: "Resource is referenced or missing" },
+    P2025: { status: 404, message: "Resource not found" },
+  };
 
-function isBodyParserError(err: unknown): err is Error & { status: number; type: string } {
+function isBodyParserError(
+  err: unknown,
+): err is Error & { status: number; type: string } {
   return (
-    typeof err === "object" && err !== null &&
+    typeof err === "object" &&
+    err !== null &&
     typeof (err as { type?: unknown }).type === "string" &&
     typeof (err as { status?: unknown }).status === "number" &&
-    (err as { status: number }).status >= 400 && (err as { status: number }).status < 500
+    (err as { status: number }).status >= 400 &&
+    (err as { status: number }).status < 500
   );
 }
 
@@ -30,7 +36,9 @@ export function errorMiddleware(
 
   if (err instanceof multer.MulterError) {
     const statusCode = err.code === "LIMIT_FILE_SIZE" ? 413 : 400;
-    res.status(statusCode).json({ success: false, message: err.message, errors: [] });
+    res
+      .status(statusCode)
+      .json({ success: false, message: err.message, errors: [] });
     return;
   }
 
@@ -38,8 +46,7 @@ export function errorMiddleware(
     logger.warn({
       requestId,
       statusCode: err.statusCode,
-      message: err.message,
-      path: req.path,
+      endpointId: currentEndpoint()?.endpointId ?? "unregistered",
       method: req.method,
     });
 
@@ -51,23 +58,37 @@ export function errorMiddleware(
     return;
   }
 
-  if (err instanceof Prisma.PrismaClientKnownRequestError && prismaClientErrors[err.code]) {
+  if (
+    err instanceof Prisma.PrismaClientKnownRequestError &&
+    prismaClientErrors[err.code]
+  ) {
     const mapped = prismaClientErrors[err.code]!;
-    logger.warn({ requestId, code: err.code, path: req.path, method: req.method }, mapped.message);
-    res.status(mapped.status).json({ success: false, message: mapped.message, errors: [] });
+    logger.warn(
+      {
+        requestId,
+        code: err.code,
+        endpointId: currentEndpoint()?.endpointId ?? "unregistered",
+        method: req.method,
+      },
+      mapped.message,
+    );
+    res
+      .status(mapped.status)
+      .json({ success: false, message: mapped.message, errors: [] });
     return;
   }
 
   if (isBodyParserError(err)) {
-    const message = err.status === 413 ? "Request body too large" : "Malformed request body";
+    const message =
+      err.status === 413 ? "Request body too large" : "Malformed request body";
     res.status(err.status).json({ success: false, message, errors: [] });
     return;
   }
 
   logger.error({
     requestId,
-    err,
-    path: req.path,
+    errorType: err.name,
+    endpointId: currentEndpoint()?.endpointId ?? "unregistered",
     method: req.method,
   });
 

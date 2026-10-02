@@ -9,7 +9,7 @@ from app.modules.users.models import User
 async def user_by_id(session: AsyncSession, id: UUID, *, lock: bool = False) -> User | None:
     statement = select(User).where(User.id == id, User.deleted_at.is_(None))
     if lock:
-        statement = statement.with_for_update()
+        statement = statement.execution_options(populate_existing=True).with_for_update()
     return await session.scalar(statement)
 
 

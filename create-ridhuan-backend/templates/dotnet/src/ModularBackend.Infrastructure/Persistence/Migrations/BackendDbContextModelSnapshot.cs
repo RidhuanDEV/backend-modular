@@ -80,6 +80,63 @@ namespace ModularBackend.Infrastructure.Persistence.Migrations
                     b.ToTable("activity_logs", (string)null);
                 });
 
+            modelBuilder.Entity("ModularBackend.Domain.EmailJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("AvailableAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("LeaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("NotificationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Recipient")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NotificationId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "AvailableAt", "LeaseUntil");
+
+                    b.ToTable("email_jobs", (string)null);
+                });
+
             modelBuilder.Entity("ModularBackend.Domain.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -108,6 +165,9 @@ namespace ModularBackend.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("RecipientId")
                         .HasColumnType("uuid");
 
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(160)
@@ -117,12 +177,28 @@ namespace ModularBackend.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ActorId");
 
+                    b.HasIndex("RecipientId", "Sequence")
+                        .IsUnique();
+
                     b.HasIndex("RecipientId", "CreatedAt", "Id");
 
                     b.ToTable("notifications", null, t =>
                         {
                             t.HasCheckConstraint("CK_notifications_email_status", "\"EmailStatus\" IN ('NOT_REQUESTED','PENDING','SENT','FAILED')");
                         });
+                });
+
+            modelBuilder.Entity("ModularBackend.Domain.NotificationCounter", b =>
+                {
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("RecipientId");
+
+                    b.ToTable("notification_counters", (string)null);
                 });
 
             modelBuilder.Entity("ModularBackend.Domain.Permission", b =>
@@ -154,6 +230,33 @@ namespace ModularBackend.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("permissions", (string)null);
+                });
+
+            modelBuilder.Entity("ModularBackend.Domain.RefreshFamily", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("RevokedAt", "ExpiresAt");
+
+                    b.ToTable("refresh_families", (string)null);
                 });
 
             modelBuilder.Entity("ModularBackend.Domain.RefreshToken", b =>
@@ -364,6 +467,15 @@ namespace ModularBackend.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
+            modelBuilder.Entity("ModularBackend.Domain.EmailJob", b =>
+                {
+                    b.HasOne("ModularBackend.Domain.Notification", null)
+                        .WithOne()
+                        .HasForeignKey("ModularBackend.Domain.EmailJob", "NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ModularBackend.Domain.Notification", b =>
                 {
                     b.HasOne("ModularBackend.Domain.User", null)
@@ -378,8 +490,32 @@ namespace ModularBackend.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ModularBackend.Domain.NotificationCounter", b =>
+                {
+                    b.HasOne("ModularBackend.Domain.User", null)
+                        .WithOne()
+                        .HasForeignKey("ModularBackend.Domain.NotificationCounter", "RecipientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ModularBackend.Domain.RefreshFamily", b =>
+                {
+                    b.HasOne("ModularBackend.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ModularBackend.Domain.RefreshToken", b =>
                 {
+                    b.HasOne("ModularBackend.Domain.RefreshFamily", null)
+                        .WithMany()
+                        .HasForeignKey("FamilyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("ModularBackend.Domain.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")

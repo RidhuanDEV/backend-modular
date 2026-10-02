@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using ModularBackend.Application;
 using ModularBackend.Domain;
 using MySql.Data.MySqlClient;
+using MySql.EntityFrameworkCore.Extensions;
 using Npgsql;
 
 namespace ModularBackend.Infrastructure.Persistence;
@@ -33,7 +34,17 @@ public sealed class BackendStore(BackendDbContext db) : IBackendStore
     public Task<bool> HasRoleUsersAsync(Guid roleId, CancellationToken ct) => db.Users.IgnoreQueryFilters().AnyAsync(x => x.RoleId == roleId, ct);
     public Task<StoredFile?> FileAsync(Guid id, CancellationToken ct) => db.StoredFiles.SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<bool> IsFileReferencedAsync(string objectKey, CancellationToken ct) => db.StoredFiles.AnyAsync(f => f.ObjectKey == objectKey, ct);
-    public Task<RefreshToken?> RefreshTokenAsync(string tokenHash, CancellationToken ct) => db.RefreshTokens.SingleOrDefaultAsync(x => x.TokenHash == tokenHash, ct);
+    public Task<RefreshToken?> RefreshTokenAsync(string tokenHash, CancellationToken ct) => db.RefreshTokens.AsNoTracking().SingleOrDefaultAsync(x => x.TokenHash == tokenHash, ct);
+    public async Task<RefreshFamily?> LockRefreshFamilyAsync(Guid id, CancellationToken ct) =>
+        (await (db.Database.IsMySql()
+            ? db.RefreshFamilies.FromSqlInterpolated($"SELECT * FROM refresh_families WHERE Id={id.ToString("D")} FOR UPDATE")
+            : db.RefreshFamilies.FromSqlInterpolated($"SELECT * FROM refresh_families WHERE \"Id\"={id} FOR UPDATE")).ToListAsync(ct)).SingleOrDefault();
+    public async Task<RefreshToken?> LockRefreshTokenAsync(Guid id, CancellationToken ct) =>
+        (await (db.Database.IsMySql()
+            ? db.RefreshTokens.FromSqlInterpolated($"SELECT * FROM refresh_tokens WHERE Id={id.ToString("D")} FOR UPDATE")
+            : db.RefreshTokens.FromSqlInterpolated($"SELECT * FROM refresh_tokens WHERE \"Id\"={id} FOR UPDATE")).ToListAsync(ct)).SingleOrDefault();
+    public void AddRefreshFamily(RefreshFamily family) => db.RefreshFamilies.Add(family);
+    public async Task BeginSessionAsync(CancellationToken ct) => transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
     public async Task RevokeRefreshFamilyAsync(Guid familyId, DateTimeOffset revokedAt, CancellationToken ct) => _ = await db.RefreshTokens.Where(x => x.FamilyId == familyId && x.RevokedAt == null).ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, revokedAt), ct);
     public async Task DeleteExpiredRefreshTokensAsync(Guid userId, DateTimeOffset now, CancellationToken ct) => _ = await db.RefreshTokens.Where(x => x.UserId == userId && x.ExpiresAt < now).ExecuteDeleteAsync(ct);
     public void AddUser(User user) => db.Users.Add(user);

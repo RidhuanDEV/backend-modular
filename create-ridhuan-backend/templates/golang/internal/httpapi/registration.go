@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"github.com/RidhuanDEV/golang-backend/internal/telemetry"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"net/http"
@@ -34,6 +35,7 @@ func (s *Server) operation(id EndpointID) huma.Operation {
 }
 func (s *Server) enforce(ep Endpoint) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
+		ctx = huma.WithValue(ctx, telemetry.OperationKey{}, string(ep.ID))
 		r, w := humachi.Unwrap(ctx)
 		if tracked, ok := w.(*statusWriter); ok {
 			tracked.endpointID = string(ep.ID)

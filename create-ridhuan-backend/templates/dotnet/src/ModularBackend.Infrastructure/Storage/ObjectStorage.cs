@@ -57,6 +57,7 @@ public sealed class ObjectStorage(IOptions<UploadOptions> options, ILogger<Objec
     }
     public async Task RemoveAsync(StoredObject storedObject, CancellationToken ct)
     {
+        using var activity = BackendTelemetry.Storage.StartActivity("storage.delete");
         if (storedObject.Storage == "s3") await S3.DeleteObjectAsync(options.Value.Bucket, storedObject.Key, ct);
         else { ct.ThrowIfCancellationRequested(); File.Delete(LocalPath(storedObject.Key)); }
     }

@@ -9,14 +9,14 @@ let app: INestApplication;
 let s3: S3Client;
 before(async () => {
   process.env.UPLOAD_STORAGE = "s3";
-  process.env.S3_ENDPOINT = "http://127.0.0.1:9000";
-  process.env.S3_REGION = "us-east-1";
-  process.env.S3_BUCKET = "uploads";
-  process.env.S3_ACCESS_KEY_ID = "minioadmin";
-  process.env.S3_SECRET_ACCESS_KEY = "minioadmin";
+  process.env.S3_ENDPOINT ??= "http://127.0.0.1:9000";
+  process.env.S3_REGION ??= "us-east-1";
+  process.env.S3_BUCKET ??= "uploads";
+  process.env.S3_ACCESS_KEY_ID ??= "minioadmin";
+  process.env.S3_SECRET_ACCESS_KEY ??= "minioadmin";
   s3 = new S3Client({ endpoint: process.env.S3_ENDPOINT, region: process.env.S3_REGION, forcePathStyle: true,
     credentials: { accessKeyId: process.env.S3_ACCESS_KEY_ID, secretAccessKey: process.env.S3_SECRET_ACCESS_KEY } });
-  try { await s3.send(new CreateBucketCommand({ Bucket: "uploads" })); } catch (error) {
+  try { await s3.send(new CreateBucketCommand({ Bucket: process.env.S3_BUCKET })); } catch (error) {
     if (!(error instanceof Error) || error.name !== "BucketAlreadyOwnedByYou") throw error;
   }
   const { createApp } = await import("../main");

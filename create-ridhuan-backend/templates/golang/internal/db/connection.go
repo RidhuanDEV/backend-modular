@@ -30,16 +30,18 @@ type Connection interface {
 type postgresConnection struct{ pool *pgxpool.Pool }
 
 func WrapPostgreSQL(pool *pgxpool.Pool) Connection           { return &postgresConnection{pool} }
-func (c *postgresConnection) Queries() sqlc.Querier          { return sqlc.New(c.pool) }
+func (c *postgresConnection) Queries() sqlc.Querier          { return &tracedQueries{sqlc.New(c.pool)} }
 func (c *postgresConnection) Ping(ctx context.Context) error { return c.pool.Ping(ctx) }
 func (c *postgresConnection) Close()                         { c.pool.Close() }
 func (c *postgresConnection) Transaction(ctx context.Context, fn func(sqlc.Querier) error) error {
-	return InTx(ctx, c.pool, func(tx pgx.Tx) error { return fn(sqlc.New(c.pool).WithTx(tx)) })
+	return InTx(ctx, c.pool, func(tx pgx.Tx) error { return fn(&tracedQueries{sqlc.New(c.pool).WithTx(tx)}) })
 }
 
 type mysqlConnection struct{ pool *sql.DB }
 
-func (c *mysqlConnection) Queries() sqlc.Querier          { return &mysqlQueries{mysqlsqlc.New(c.pool)} }
+func (c *mysqlConnection) Queries() sqlc.Querier {
+	return &tracedQueries{&mysqlQueries{mysqlsqlc.New(c.pool)}}
+}
 func (c *mysqlConnection) Ping(ctx context.Context) error { return c.pool.PingContext(ctx) }
 func (c *mysqlConnection) Close()                         { _ = c.pool.Close() }
 func (c *mysqlConnection) Transaction(ctx context.Context, fn func(sqlc.Querier) error) error {
@@ -48,7 +50,7 @@ func (c *mysqlConnection) Transaction(ctx context.Context, fn func(sqlc.Querier)
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err = fn(&mysqlQueries{mysqlsqlc.New(tx)}); err != nil {
+	if err = fn(&tracedQueries{&mysqlQueries{mysqlsqlc.New(tx)}}); err != nil {
 		return err
 	}
 	return tx.Commit()

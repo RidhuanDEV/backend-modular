@@ -1,7 +1,9 @@
 using System.Data.Common;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using ModularBackend.Infrastructure.Observability;
 using MySql.Data.MySqlClient;
 using Npgsql;
 
@@ -15,13 +17,15 @@ public static class DatabaseProvider
         {
             return provider switch
             {
-                "postgresql" => !string.IsNullOrWhiteSpace(new NpgsqlConnectionStringBuilder(connection).Database),
-                "mysql" => !string.IsNullOrWhiteSpace(new MySqlConnectionStringBuilder(connection).Database),
+                "postgresql" => Identifier(new NpgsqlConnectionStringBuilder(connection).Database, 63) && Identifier(new NpgsqlConnectionStringBuilder(connection).Username, 63),
+                "mysql" => Identifier(new MySqlConnectionStringBuilder(connection).Database, 64) && Identifier(new MySqlConnectionStringBuilder(connection).UserID, 32),
                 _ => false
             };
         }
         catch (ArgumentException) { return false; }
     }
+
+    private static bool Identifier(string? value, int maximum) => value is not null && value.Length <= maximum && Regex.IsMatch(value, @"^[A-Za-z_][A-Za-z0-9_]*$");
 
     public static void ValidateGeneratedProvider(string provider)
     {
@@ -34,10 +38,10 @@ public static class DatabaseProvider
     public static BackendDbContext Create(string provider, string connection)
     {
         ValidateGeneratedProvider(provider);
-        if (!IsValid(provider, connection)) throw new InvalidOperationException("Invalid database provider/connection string");
+        if (!IsValid(provider, connection)) throw new InvalidOperationException($"Invalid {provider} connection: ASCII username maximum {(provider == "mysql" ? 32 : 63)}, database name maximum {(provider == "mysql" ? 64 : 63)}");
         if (provider == "mysql")
-            return new MySqlBackendDbContext(new DbContextOptionsBuilder<MySqlBackendDbContext>().UseMySQL(connection, options => options.CommandTimeout(10)).AddInterceptors(new MySqlUtcInterceptor()).Options);
-        return new BackendDbContext(new DbContextOptionsBuilder<BackendDbContext>().UseNpgsql(connection, options => options.CommandTimeout(10)).Options);
+            return new MySqlBackendDbContext(new DbContextOptionsBuilder<MySqlBackendDbContext>().UseMySQL(connection, options => options.CommandTimeout(10)).AddInterceptors(new MySqlUtcInterceptor(), new DatabaseTelemetryInterceptor()).Options);
+        return new BackendDbContext(new DbContextOptionsBuilder<BackendDbContext>().UseNpgsql(connection, options => options.CommandTimeout(10)).AddInterceptors(new DatabaseTelemetryInterceptor()).Options);
     }
 }
 

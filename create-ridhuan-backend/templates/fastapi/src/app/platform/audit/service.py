@@ -19,6 +19,7 @@ async def record(
     *,
     before: JsonValue = None,
     after: JsonValue = None,
+    behavior: str | None = None,
 ) -> None:
     if policy.audit == "none":
         return
@@ -26,7 +27,7 @@ async def record(
         user_id=actor,
         actor_id_snapshot=actor,
         module=policy.module,
-        behavior=policy.id.value.split(".", 1)[1].upper(),
+        behavior=behavior or policy.id.value.split(".", 1)[1].upper(),
         entity_id=entity,
         endpoint_id=policy.id.value,
         request_id=request_id,

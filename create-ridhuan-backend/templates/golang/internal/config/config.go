@@ -22,6 +22,7 @@ type PolicyOverride struct {
 	Cache     string `json:"cache"`
 }
 type Config struct {
+	Operations             Operations
 	Environment            string
 	Port                   int
 	DatabaseURL            string
@@ -104,7 +105,7 @@ func Load() (Config, error) {
 		S3AccessKey:       os.Getenv("S3_ACCESS_KEY_ID"),
 		S3SecretKey:       os.Getenv("S3_SECRET_ACCESS_KEY"),
 		OTelServiceName:   getenv("OTEL_SERVICE_NAME", "modular-golang"),
-		OTelEndpoint:      os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		OTelEndpoint:      getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318"),
 		SMTPHost:          os.Getenv("SMTP_HOST"),
 		SMTPUser:          os.Getenv("SMTP_USER"),
 		SMTPPassword:      os.Getenv("SMTP_PASSWORD"),
@@ -213,6 +214,24 @@ func Load() (Config, error) {
 	if parseError != nil || c.DatabaseProvider == "mysql" && parsedDatabase.Scheme != "mysql" || c.DatabaseProvider == "postgresql" && parsedDatabase.Scheme != "postgresql" && parsedDatabase.Scheme != "postgres" {
 		return c, errors.New("DATABASE_URL does not match DB_PROVIDER")
 	}
+	username := ""
+	if parsedDatabase.User != nil {
+		username = parsedDatabase.User.Username()
+	}
+	maximum := 63
+	dbMaximum := 63
+	if c.DatabaseProvider == "mysql" {
+		maximum = 32
+		dbMaximum = 64
+	}
+	identifier := regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	if !identifier.MatchString(username) || len(username) > maximum {
+		return c, fmt.Errorf("%s username must be an ASCII SQL identifier (maximum %d characters)", c.DatabaseProvider, maximum)
+	}
+	databaseName := strings.TrimPrefix(parsedDatabase.Path, "/")
+	if !identifier.MatchString(databaseName) || len(databaseName) > dbMaximum {
+		return c, fmt.Errorf("%s database must be an ASCII SQL identifier (maximum %d characters)", c.DatabaseProvider, dbMaximum)
+	}
 	if data, readError := os.ReadFile("backend-template.json"); readError == nil {
 		var marker struct {
 			DatabaseProvider string `json:"databaseProvider"`
@@ -248,10 +267,17 @@ func Load() (Config, error) {
 		return c, errors.New("S3 region, bucket and credentials are required")
 	}
 	if c.OTelEnabled {
+		if !regexp.MustCompile(`^[A-Za-z0-9._-]{1,80}$`).MatchString(c.OTelServiceName) {
+			return c, errors.New("Invalid OTEL_SERVICE_NAME")
+		}
 		u, e := url.Parse(c.OTelEndpoint)
-		if e != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		if e != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "http" && u.Scheme != "https") {
 			return c, errors.New("OTEL_EXPORTER_OTLP_ENDPOINT must be an HTTP URL when OTel is enabled")
 		}
+	}
+	c.Operations, err = loadOperations()
+	if err != nil {
+		return c, err
 	}
 	return c, nil
 }

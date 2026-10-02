@@ -3,6 +3,7 @@ package ratelimit
 import (
 	"context"
 	"fmt"
+	"github.com/RidhuanDEV/golang-backend/internal/telemetry"
 	"sync"
 	"time"
 
@@ -28,6 +29,8 @@ func New(client *redis.Client, namespace string) *Limiter {
 var fixedWindow = redis.NewScript(`local count=redis.call('INCR', KEYS[1]); if count == 1 then redis.call('PEXPIRE',KEYS[1],ARGV[1]) end; return count`)
 
 func (l *Limiter) Allow(ctx context.Context, group, key string, rate config.Rate) (bool, error) {
+	ctx, span := telemetry.Start(ctx, "redis")
+	defer span.End()
 	window := time.Duration(rate.WindowMS) * time.Millisecond
 	windowID := time.Now().UnixMilli() / rate.WindowMS
 	fullKey := fmt.Sprintf("%s:ratelimit:%s:%s:%d", l.namespace, group, key, windowID)

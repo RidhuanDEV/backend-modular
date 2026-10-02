@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 import time
@@ -9,6 +10,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.api.registry import Policy
 from app.core.errors import ApiError
 from app.core.runtime import Runtime
+from app.platform.telemetry import record_http, request_span
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,41 @@ class PolicyMiddleware:
         ]
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        operation_id = next(
+            (
+                policy.id.value
+                for policy, pattern in self.routes
+                if policy.method == scope["method"] and pattern.fullmatch(scope["path"])
+            ),
+            "unregistered",
+        )
+        status = 500
+        started = time.monotonic()
+
+        async def traced_send(message: Message) -> None:
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+            await send(message)
+
+        with request_span(
+            operation_id,
+            {
+                key.decode("latin-1").lower(): value.decode("latin-1")
+                for key, value in scope.get("headers", [])
+                if key.lower() in (b"traceparent", b"tracestate")
+            },
+        ) as span:
+            try:
+                await self.dispatch(scope, receive, traced_send)
+            finally:
+                span.set_attribute("http.response.status_code", status)
+                record_http(operation_id, status, time.monotonic() - started)
+
+    async def dispatch(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
@@ -80,8 +117,17 @@ class PolicyMiddleware:
             )(scope, receive, send)
             return
 
+        response_started = False
+        response_complete = False
+
         async def response_send(message: Message) -> None:
+            nonlocal response_started, response_complete
             if message["type"] == "http.response.start":
+                response_started = True
+                if policy and policy.id.value == "notification.stream" and message["status"] == 200:
+                    expiry: object = scope.get("state", {}).get("token_expiry")
+                    remaining = max(0, expiry - time.time()) if isinstance(expiry, int) else 0
+                    lifetime.reschedule(asyncio.get_running_loop().time() + min(14 * 60, remaining))
                 logger.info(
                     "HTTP response",
                     extra={
@@ -97,6 +143,8 @@ class PolicyMiddleware:
                     (b"x-content-type-options", b"nosniff"),
                 ]
             await send(message)
+            if message["type"] == "http.response.body" and not message.get("more_body", False):
+                response_complete = True
 
         received = 0
         limit = (
@@ -114,4 +162,15 @@ class PolicyMiddleware:
                     raise ApiError(413, "Request body exceeds limit")
             return message
 
-        await self.app(scope, limited_receive, response_send)
+        try:
+            async with asyncio.timeout(None) as lifetime:
+                await self.app(scope, limited_receive, response_send)
+        except TimeoutError:
+            # Cancellation also interrupts a slow ASGI send and closes the generator.
+            if policy is None or policy.id.value != "notification.stream":
+                raise
+            if response_started and not response_complete:
+                # Complete the HTTP response after the cancelled generator unwinds.
+                # Keep this bounded too: an unread socket must not retain a task.
+                async with asyncio.timeout(1):
+                    await send({"type": "http.response.body", "body": b"", "more_body": False})

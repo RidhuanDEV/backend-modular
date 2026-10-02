@@ -15,7 +15,13 @@ public sealed class AuthController(BackendService service, EndpointRegistry regi
     [HttpPost("login"), Endpoint(EndpointId.AuthLogin), ProducesResponseType<Success<AuthTokensResult>>(200)]
     public async Task<ActionResult<Success<AuthTokensResult>>> Login(LoginRequest input, CancellationToken ct) => Ok(new Success<AuthTokensResult>(await service.LoginAsync(input.Email, input.Password, Context, ct)));
     [HttpPost("refresh"), Endpoint(EndpointId.AuthRefresh), ProducesResponseType<Success<AuthTokensResult>>(200)]
-    public async Task<ActionResult<Success<AuthTokensResult>>> Refresh(RefreshTokenRequest input, CancellationToken ct) => Ok(new Success<AuthTokensResult>(await service.RefreshAsync(input.RefreshToken, ct)));
+    public async Task<ActionResult<Success<AuthTokensResult>>> Refresh(RefreshTokenRequest input, CancellationToken ct) => Ok(new Success<AuthTokensResult>(await service.RefreshAsync(input.RefreshToken, Context, ct)));
+    [HttpPost("logout"), Endpoint(EndpointId.AuthLogout), ProducesResponseType(204)]
+    public async Task<IActionResult> Logout(RefreshTokenRequest input, CancellationToken ct)
+    {
+        await service.LogoutAsync(input.RefreshToken, Context, ct);
+        return NoContent();
+    }
     [HttpGet("me"), Endpoint(EndpointId.AuthMe), ProducesResponseType<Success<AuthUserResult>>(200)]
     public async Task<ActionResult<Success<AuthUserResult>>> Me(CancellationToken ct) => Ok(new Success<AuthUserResult>(await service.MeAsync(Context.Actor?.Id ?? throw new ApiException(401, "Unauthorized"), ct)));
 }

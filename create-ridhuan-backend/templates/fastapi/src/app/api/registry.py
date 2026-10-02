@@ -64,6 +64,32 @@ class Policy:
     authenticated: bool = True
     permission: PermissionName | None = None
 
+    @property
+    def audit_capability(self) -> Literal["mutation", "none"]:
+        return "mutation" if self.id in AUDIT_MUTATIONS else "none"
+
+
+AUDIT_MUTATIONS: frozenset[EndpointId] = frozenset(
+    {
+        EndpointId.REGISTER,
+        EndpointId.LOGIN,
+        EndpointId.REFRESH,
+        EndpointId.LOGOUT,
+        EndpointId.USER_CREATE,
+        EndpointId.USER_UPDATE,
+        EndpointId.USER_DELETE,
+        EndpointId.ROLE_CREATE,
+        EndpointId.ROLE_UPDATE,
+        EndpointId.ROLE_DELETE,
+        EndpointId.ROLE_GRANTS,
+        EndpointId.PERMISSION_CREATE,
+        EndpointId.PERMISSION_UPDATE,
+        EndpointId.PERMISSION_DELETE,
+        EndpointId.UPLOAD_CREATE,
+        EndpointId.NOTIFICATION_CREATE,
+        EndpointId.NOTIFICATION_READ,
+    }
+)
 
 _policies = [
     Policy(EndpointId.HEALTH, "GET", "/health", "system", rate="public", authenticated=False),
@@ -106,10 +132,23 @@ _policies = [
         authenticated=False,
     ),
     Policy(
-        EndpointId.REFRESH, "POST", "/api/auth/refresh", "auth", rate="auth", authenticated=False
+        EndpointId.REFRESH,
+        "POST",
+        "/api/auth/refresh",
+        "auth",
+        audit="optional",
+        rate="auth",
+        authenticated=False,
     ),
     Policy(
-        EndpointId.LOGOUT, "POST", "/api/auth/logout", "auth", 204, rate="auth", authenticated=False
+        EndpointId.LOGOUT,
+        "POST",
+        "/api/auth/logout",
+        "auth",
+        204,
+        audit="optional",
+        rate="auth",
+        authenticated=False,
     ),
     Policy(EndpointId.ME, "GET", "/api/auth/me", "auth"),
     Policy(EndpointId.USER_LIST, "GET", "/api/users", "user", permission="manage_users"),
@@ -281,7 +320,7 @@ def policies(settings: Settings) -> dict[EndpointId, Policy]:
     result = dict(REGISTRY)
     for id, override in overrides.items():
         base = result[id]
-        if override.audit in {"required", "optional"} and base.audit == "none":
+        if override.audit in {"required", "optional"} and base.audit_capability == "none":
             raise ValueError(f"{id} has no audit producer")
         if override.cache == "read" and base.cache != "read":
             raise ValueError(f"{id} has no cache adapter")

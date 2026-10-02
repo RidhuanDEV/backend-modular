@@ -55,3 +55,6 @@ sql:
           - column: "notifications.actor_id"
             nullable: true
             go_type: { type: "string", pointer: true }
+          - column: "email_jobs.lease_id"
+            nullable: true
+            go_type: { type: "string", pointer: true }

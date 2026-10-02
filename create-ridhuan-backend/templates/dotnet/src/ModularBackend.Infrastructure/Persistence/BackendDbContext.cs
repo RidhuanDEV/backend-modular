@@ -17,10 +17,18 @@ public class BackendDbContext : DbContext
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
     public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<RefreshFamily> RefreshFamilies => Set<RefreshFamily>();
+    public DbSet<NotificationCounter> NotificationCounters => Set<NotificationCounter>();
+    public DbSet<EmailJob> EmailJobs => Set<EmailJob>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<CacheGeneration> CacheGenerations => Set<CacheGeneration>();
     protected override void OnModelCreating(ModelBuilder model)
     {
+        model.Entity<RefreshFamily>(b => { b.ToTable("refresh_families"); b.HasKey(x => x.Id); b.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade); b.HasIndex(x => new { x.RevokedAt, x.ExpiresAt }); });
+        model.Entity<RefreshToken>().HasOne<RefreshFamily>().WithMany().HasForeignKey(x => x.FamilyId).OnDelete(DeleteBehavior.Cascade);
+        model.Entity<NotificationCounter>(b => { b.ToTable("notification_counters"); b.HasKey(x => x.RecipientId); b.HasOne<User>().WithOne().HasForeignKey<NotificationCounter>(x => x.RecipientId).OnDelete(DeleteBehavior.Cascade); });
+        model.Entity<Notification>().HasIndex(x => new { x.RecipientId, x.Sequence }).IsUnique();
+        model.Entity<EmailJob>(b => { b.ToTable("email_jobs"); b.HasKey(x => x.Id); b.HasOne<Notification>().WithOne().HasForeignKey<EmailJob>(x => x.NotificationId).OnDelete(DeleteBehavior.Cascade); b.HasIndex(x => x.NotificationId).IsUnique(); b.HasIndex(x => new { x.Status, x.AvailableAt, x.LeaseUntil }); b.Property(x => x.Recipient).HasMaxLength(255).IsRequired(); b.Property(x => x.Title).HasMaxLength(160).IsRequired(); b.Property(x => x.Body).HasMaxLength(4000).IsRequired(); b.Property(x => x.Status).HasMaxLength(16).IsRequired(); });
         model.Entity<CacheGeneration>(b => { b.ToTable("cache_generation"); b.HasKey(x => x.Id); b.HasData(new CacheGeneration { Id = 1, Version = 0 }); });
         model.Entity<User>(b => { b.ToTable("users"); b.HasKey(x => x.Id); b.Property(x => x.Email).IsRequired(); b.Property(x => x.PasswordHash).IsRequired(); b.HasIndex(x => x.Email).IsUnique(); b.HasIndex(x => x.RoleId); b.HasOne(x => x.Role).WithMany().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Restrict); b.HasQueryFilter(x => x.DeletedAt == null); b.Property(x => x.Version).IsRowVersion(); });
         model.Entity<Role>(b => { b.ToTable("roles"); b.HasKey(x => x.Id); b.Property(x => x.Name).HasMaxLength(64).IsRequired(); b.HasIndex(x => x.Name).IsUnique(); b.Property(x => x.Version).IsRowVersion(); });

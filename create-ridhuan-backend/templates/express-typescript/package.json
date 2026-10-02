@@ -17,13 +17,15 @@
     "api-docs": "tsx src/scripts/generate-openapi.ts",
     "api-docs:check": "tsx src/scripts/generate-openapi.ts --check",
     "uploads:cleanup": "node dist/scripts/cleanup-orphan-uploads.js",
-    "test": "npm run build && node --test tests/time-docs-audit.test.mjs tests/rate-limit.test.mjs tests/env-policies.test.mjs tests/storage.test.mjs tests/health-cors.test.mjs tests/input-errors.test.mjs tests/env-loader.test.mjs",
+    "test": "npm run build && node --test tests/time-docs-audit.test.mjs tests/rate-limit.test.mjs tests/env-policies.test.mjs tests/storage.test.mjs tests/health-cors.test.mjs tests/input-errors.test.mjs tests/env-loader.test.mjs tests/hardening-config.test.mjs",
     "test:database": "npm run build && node --test tests/notifications.integration.mjs tests/privilege.integration.mjs",
     "lint": "eslint .",
     "verify:template": "npm run lint && npm run test && npm run api-docs:check && npx prisma validate",
     "prebuild": "prisma generate",
     "predev": "prisma generate",
-    "prisma:migrate:deploy": "prisma migrate deploy"
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "worker": "node dist/scripts/email-worker.js",
+    "cleanup": "node dist/scripts/cleanup-orphan-uploads.js"
   },
   "keywords": [
     "express",
@@ -41,6 +43,11 @@
   "type": "module",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1137.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.222.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+    "@opentelemetry/sdk-metrics": "^2.11.0",
+    "@opentelemetry/sdk-node": "^0.222.0",
     "@prisma/adapter-mariadb": "7.10.0",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",

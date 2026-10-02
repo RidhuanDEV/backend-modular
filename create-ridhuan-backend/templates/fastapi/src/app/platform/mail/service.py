@@ -26,5 +26,5 @@ async def send_notification(settings: Settings, recipient: str, title: str, body
         use_tls=settings.smtp_secure,
         start_tls=not settings.smtp_secure,
         validate_certs=True,
-        timeout=10,
+        timeout=25,
     )

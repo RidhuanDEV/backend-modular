@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"github.com/RidhuanDEV/golang-backend/internal/telemetry"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -18,6 +19,8 @@ func New(client *redis.Client, enabled bool, namespace string) *Cache {
 	return &Cache{client: client, enabled: enabled, namespace: namespace}
 }
 func (c *Cache) Key(ctx context.Context, endpoint, actor, url string) (string, error) {
+	ctx, span := telemetry.Start(ctx, "redis")
+	defer span.End()
 	ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 	defer cancel()
 	if !c.enabled || c.client == nil {
@@ -32,6 +35,8 @@ func (c *Cache) Key(ctx context.Context, endpoint, actor, url string) (string, e
 	return fmt.Sprintf("%s:cache:v%s:%s:%s:%s", c.namespace, version, endpoint, actor, url), nil
 }
 func (c *Cache) Get(ctx context.Context, key string) ([]byte, error) {
+	ctx, span := telemetry.Start(ctx, "redis")
+	defer span.End()
 	ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 	defer cancel()
 	if key == "" {
@@ -44,6 +49,8 @@ func (c *Cache) Get(ctx context.Context, key string) ([]byte, error) {
 	return result, err
 }
 func (c *Cache) Put(ctx context.Context, key string, value []byte) error {
+	ctx, span := telemetry.Start(ctx, "redis")
+	defer span.End()
 	ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 	defer cancel()
 	if key == "" {
@@ -52,6 +59,8 @@ func (c *Cache) Put(ctx context.Context, key string, value []byte) error {
 	return c.client.Set(ctx, key, value, 30*time.Second).Err()
 }
 func (c *Cache) Invalidate(ctx context.Context) error {
+	ctx, span := telemetry.Start(ctx, "redis")
+	defer span.End()
 	ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 	defer cancel()
 	if !c.enabled || c.client == nil {

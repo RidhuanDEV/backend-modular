@@ -6,10 +6,11 @@ using Microsoft.AspNetCore.Mvc.Infrastructure;
 using ModularBackend.Application;
 namespace ModularBackend.Api.Endpoints;
 
-public enum EndpointId { HealthGet, LiveGet, ReadyGet, DocsSpec, DocsModuleSpec, DocsUi, AuthRegister, AuthLogin, AuthRefresh, AuthMe, UserList, UserGet, UserCreate, UserUpdate, UserDelete, RoleList, RoleGet, RoleCreate, RoleUpdate, RoleDelete, RoleAssignPermissions, PermissionList, PermissionGet, PermissionCreate, PermissionUpdate, PermissionDelete, UploadCreate, UploadGet, NotificationCreate, NotificationList, NotificationRead, NotificationStream }
+public enum EndpointId { HealthGet, LiveGet, ReadyGet, DocsSpec, DocsModuleSpec, DocsUi, AuthRegister, AuthLogin, AuthRefresh, AuthLogout, AuthMe, UserList, UserGet, UserCreate, UserUpdate, UserDelete, RoleList, RoleGet, RoleCreate, RoleUpdate, RoleDelete, RoleAssignPermissions, PermissionList, PermissionGet, PermissionCreate, PermissionUpdate, PermissionDelete, UploadCreate, UploadGet, NotificationCreate, NotificationList, NotificationRead, NotificationStream }
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class EndpointAttribute(EndpointId id) : Attribute { public EndpointId Id { get; } = id; }
-public sealed record EndpointPolicy(EndpointId Id, string WireId, string Method, string Path, string Module, bool Public, string Permission, AuditMode Audit, RateLimitGroup RateLimit, CacheMode Cache, int Status);
+public enum AuditCapability { None, Read, Transaction }
+public sealed record EndpointPolicy(EndpointId Id, string WireId, string Method, string Path, string Module, bool Public, string Permission, AuditMode Audit, RateLimitGroup RateLimit, CacheMode Cache, int Status) { public AuditCapability AuditCapability { get; init; } = Method == "GET" ? AuditCapability.Read : AuditCapability.Transaction; }
 public sealed record PolicyOverride(AuditMode? Audit, RateLimitGroup? RateLimit, CacheMode? Cache);
 public sealed class EndpointRegistry
 {
@@ -22,7 +23,8 @@ new(EndpointId.DocsModuleSpec, "docs.moduleSpec", "GET", "/docs/specs/{module}.j
 new(EndpointId.DocsUi, "docs.ui", "GET", "/docs", "docs", true, "", AuditMode.None, RateLimitGroup.Public, CacheMode.Off, 200),
 new(EndpointId.AuthRegister, "auth.register", "POST", "/api/auth/register", "auth", true, "", AuditMode.Required, RateLimitGroup.Auth, CacheMode.Off, 201),
 new(EndpointId.AuthLogin, "auth.login", "POST", "/api/auth/login", "auth", true, "", AuditMode.Optional, RateLimitGroup.Auth, CacheMode.Off, 200),
-new(EndpointId.AuthRefresh, "auth.refresh", "POST", "/api/auth/refresh", "auth", true, "", AuditMode.None, RateLimitGroup.Auth, CacheMode.Off, 200),
+new(EndpointId.AuthRefresh, "auth.refresh", "POST", "/api/auth/refresh", "auth", true, "", AuditMode.Optional, RateLimitGroup.Auth, CacheMode.Off, 200),
+new(EndpointId.AuthLogout, "auth.logout", "POST", "/api/auth/logout", "auth", true, "", AuditMode.Optional, RateLimitGroup.Auth, CacheMode.Off, 204),
 new(EndpointId.AuthMe, "auth.me", "GET", "/api/auth/me", "auth", false, "", AuditMode.None, RateLimitGroup.Internal, CacheMode.Off, 200),
 new(EndpointId.UserList, "user.list", "GET", "/api/users", "user", false, "manage_users", AuditMode.None, RateLimitGroup.Internal, CacheMode.Read, 200),
 new(EndpointId.UserGet, "user.get", "GET", "/api/users/{id}", "user", false, "manage_users", AuditMode.None, RateLimitGroup.Internal, CacheMode.Read, 200),
@@ -61,7 +63,7 @@ new(EndpointId.NotificationStream, "notification.stream", "GET", "/api/notificat
             {
                 var original = Defaults.SingleOrDefault(p => p.WireId == wireId) ?? throw new InvalidOperationException("Unknown endpoint policy");
                 var updated = original with { Audit = policy.Audit ?? original.Audit, RateLimit = policy.RateLimit ?? original.RateLimit, Cache = policy.Cache ?? original.Cache };
-                if (updated.Method == "GET" && updated.Audit == AuditMode.Required) throw new InvalidOperationException("Required GET audit unsupported");
+                if (updated.AuditCapability != AuditCapability.Transaction && updated.Audit == AuditMode.Required) throw new InvalidOperationException("Required GET audit unsupported");
                 if (updated.Cache == CacheMode.Read && (updated.Method != "GET" || updated.Module is "auth" or "system" or "docs")) throw new InvalidOperationException("Unsafe cache policy");
                 definitions[original.Id] = updated;
             }

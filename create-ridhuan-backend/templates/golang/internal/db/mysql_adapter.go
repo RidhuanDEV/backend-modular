@@ -8,6 +8,13 @@ import (
 	"github.com/google/uuid"
 )
 
+func (m *mysqlQueries) EmailBacklogCount(ctx context.Context) (int64, error) {
+	return m.q.EmailBacklogCount(ctx)
+}
+func (m *mysqlQueries) EmailBacklogOldest(ctx context.Context) (sql.NullTime, error) {
+	return m.q.EmailBacklogOldest(ctx)
+}
+
 type mysqlQueries struct{ q *mysqlsqlc.Queries }
 
 var _ sqlc.Querier = (*mysqlQueries)(nil)
@@ -113,7 +120,7 @@ func (m *mysqlQueries) CreateAuthRefreshToken(ctx context.Context, arg sqlc.Crea
 }
 
 func (m *mysqlQueries) CreateNotification(ctx context.Context, arg sqlc.CreateNotificationParams) error {
-	return m.q.CreateNotification(ctx, mysqlsqlc.CreateNotificationParams{ID: arg.ID, RecipientID: arg.RecipientID, ActorID: arg.ActorID, Title: arg.Title, Body: arg.Body, EmailStatus: arg.EmailStatus})
+	return m.q.CreateNotification(ctx, mysqlsqlc.CreateNotificationParams{ID: arg.ID, RecipientID: arg.RecipientID, ActorID: arg.ActorID, Title: arg.Title, Body: arg.Body, EmailStatus: arg.EmailStatus, Sequence: arg.Sequence})
 }
 
 func (m *mysqlQueries) DeleteExpiredAuthRefreshTokens(ctx context.Context, userID string) error {
@@ -266,4 +273,137 @@ func (m *mysqlQueries) SoftDeleteUser(ctx context.Context, id string) error {
 
 func (m *mysqlQueries) UserHasPermission(ctx context.Context, arg sqlc.UserHasPermissionParams) (bool, error) {
 	return m.q.UserHasPermission(ctx, mysqlsqlc.UserHasPermissionParams{ID: arg.ID, Name: arg.Name})
+}
+
+func (m *mysqlQueries) AdvanceRefreshFamily(ctx context.Context, arg sqlc.AdvanceRefreshFamilyParams) error {
+	return m.q.AdvanceRefreshFamily(ctx, mysqlsqlc.AdvanceRefreshFamilyParams{ExpiresAt: arg.ExpiresAt, ID: arg.ID})
+}
+
+func (m *mysqlQueries) ClaimEmail(ctx context.Context, arg sqlc.ClaimEmailParams) error {
+	return m.q.ClaimEmail(ctx, mysqlsqlc.ClaimEmailParams{LeaseID: arg.LeaseID, LeaseUntil: arg.LeaseUntil, ID: arg.ID})
+}
+
+func (m *mysqlQueries) ClaimableEmail(ctx context.Context, now sql.NullTime) (sqlc.EmailJob, error) {
+	row, err := m.q.ClaimableEmail(ctx, mysqlsqlc.ClaimableEmailParams{Now: now})
+	return sqlc.EmailJob(row), err
+}
+
+func (m *mysqlQueries) CleanupAudit(ctx context.Context, arg sqlc.CleanupAuditParams) ([]string, error) {
+	rows, err := m.q.CleanupAudit(ctx, mysqlsqlc.CleanupAuditParams{Cutoff: arg.Cutoff, Limit: arg.BatchSize})
+	result := make([]string, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, string(row))
+	}
+	return result, err
+}
+
+func (m *mysqlQueries) CleanupEmail(ctx context.Context, arg sqlc.CleanupEmailParams) ([]string, error) {
+	rows, err := m.q.CleanupEmail(ctx, mysqlsqlc.CleanupEmailParams{Cutoff: arg.Cutoff, Limit: arg.BatchSize})
+	result := make([]string, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, string(row))
+	}
+	return result, err
+}
+
+func (m *mysqlQueries) CleanupFamilies(ctx context.Context, arg sqlc.CleanupFamiliesParams) ([]string, error) {
+	rows, err := m.q.CleanupFamilies(ctx, mysqlsqlc.CleanupFamiliesParams{Cutoff: arg.Cutoff, Limit: arg.BatchSize})
+	result := make([]string, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, string(row))
+	}
+	return result, err
+}
+
+func (m *mysqlQueries) CompleteEmail(ctx context.Context, arg sqlc.CompleteEmailParams) error {
+	return m.q.CompleteEmail(ctx, mysqlsqlc.CompleteEmailParams{Status: arg.Status, AvailableAt: arg.AvailableAt, CompletedAt: arg.CompletedAt, ID: arg.ID})
+}
+
+func (m *mysqlQueries) CreateRefreshFamily(ctx context.Context, arg sqlc.CreateRefreshFamilyParams) error {
+	return m.q.CreateRefreshFamily(ctx, mysqlsqlc.CreateRefreshFamilyParams{ID: arg.ID, UserID: arg.UserID, ExpiresAt: arg.ExpiresAt})
+}
+
+func (m *mysqlQueries) DeleteAudit(ctx context.Context, id string) error {
+	return m.q.DeleteAudit(ctx, id)
+}
+
+func (m *mysqlQueries) DeleteEmail(ctx context.Context, id string) error {
+	return m.q.DeleteEmail(ctx, id)
+}
+
+func (m *mysqlQueries) DeleteFamily(ctx context.Context, id string) error {
+	return m.q.DeleteFamily(ctx, id)
+}
+
+func (m *mysqlQueries) EnqueueEmail(ctx context.Context, arg sqlc.EnqueueEmailParams) error {
+	return m.q.EnqueueEmail(ctx, mysqlsqlc.EnqueueEmailParams{ID: arg.ID, NotificationID: arg.NotificationID, Recipient: arg.Recipient, Title: arg.Title, Body: arg.Body})
+}
+
+func (m *mysqlQueries) EnsureNotificationCounter(ctx context.Context, recipientID string) error {
+	return m.q.EnsureNotificationCounter(ctx, recipientID)
+}
+
+func (m *mysqlQueries) IncrementNotificationCounter(ctx context.Context, recipientID string) error {
+	return m.q.IncrementNotificationCounter(ctx, recipientID)
+}
+
+func (m *mysqlQueries) LockEmail(ctx context.Context, id string) (sqlc.EmailJob, error) {
+	row, err := m.q.LockEmail(ctx, id)
+	return sqlc.EmailJob(row), err
+}
+
+func (m *mysqlQueries) LockRefreshFamily(ctx context.Context, id string) (sqlc.RefreshFamily, error) {
+	row, err := m.q.LockRefreshFamily(ctx, id)
+	return sqlc.RefreshFamily(row), err
+}
+
+func (m *mysqlQueries) LookupAuthRefreshToken(ctx context.Context, tokenHash []byte) (sqlc.AuthRefreshToken, error) {
+	row, err := m.q.LookupAuthRefreshToken(ctx, tokenHash)
+	return sqlc.AuthRefreshToken(row), err
+}
+
+func (m *mysqlQueries) NotificationBacklog(ctx context.Context, arg sqlc.NotificationBacklogParams) ([]sqlc.Notification, error) {
+	var hasCursor int64
+	if arg.HasCursor {
+		hasCursor = 1
+	}
+	var unreadOnly int64
+	if arg.UnreadOnly {
+		unreadOnly = 1
+	}
+	rows, err := m.q.NotificationBacklog(ctx, mysqlsqlc.NotificationBacklogParams{RecipientID: arg.RecipientID, HasCursor: hasCursor, Sequence: arg.Sequence, UnreadOnly: unreadOnly})
+	result := make([]sqlc.Notification, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, sqlc.Notification(row))
+	}
+	return result, err
+}
+
+func (m *mysqlQueries) NotificationCursor(ctx context.Context, arg sqlc.NotificationCursorParams) (int64, error) {
+	return m.q.NotificationCursor(ctx, mysqlsqlc.NotificationCursorParams{ID: arg.ID, RecipientID: arg.RecipientID})
+}
+
+func (m *mysqlQueries) NotificationPage(ctx context.Context, arg sqlc.NotificationPageParams) ([]sqlc.Notification, error) {
+	var hasCursor int64
+	if arg.HasCursor {
+		hasCursor = 1
+	}
+	rows, err := m.q.NotificationPage(ctx, mysqlsqlc.NotificationPageParams{RecipientID: arg.RecipientID, HasCursor: hasCursor, Sequence: arg.Sequence})
+	result := make([]sqlc.Notification, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, sqlc.Notification(row))
+	}
+	return result, err
+}
+
+func (m *mysqlQueries) NotificationSequence(ctx context.Context, recipientID string) (int64, error) {
+	return m.q.NotificationSequence(ctx, recipientID)
+}
+
+func (m *mysqlQueries) RenewEmail(ctx context.Context, arg sqlc.RenewEmailParams) (int64, error) {
+	return m.q.RenewEmail(ctx, mysqlsqlc.RenewEmailParams{LeaseUntil: arg.LeaseUntil, ID: arg.ID, LeaseID: arg.LeaseID})
+}
+
+func (m *mysqlQueries) RevokeRefreshFamilyRecord(ctx context.Context, id string) error {
+	return m.q.RevokeRefreshFamilyRecord(ctx, id)
 }

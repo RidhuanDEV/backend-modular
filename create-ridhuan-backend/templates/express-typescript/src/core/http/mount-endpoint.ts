@@ -12,6 +12,7 @@ import { env } from "../../config/env.js";
 import { logger } from "../logger/logger.js";
 import { currentEndpoint, runWithEndpoint } from "./endpoint-context.js";
 import { auditLogRepository } from "../audit/audit-log.repository.js";
+import { httpTrace } from "../observability/telemetry.js";
 
 const mounted = new Set<EndpointId>();
 
@@ -25,6 +26,7 @@ export function mountEndpoint(
   const policy = endpointPolicy(id);
   if (!env.UPLOAD_ENABLED && policy.module === "upload") return;
   const before: RequestHandler[] = [
+    (req, res, next) => httpTrace(() => id, req, res, next),
     (_req, _res, next) => {
       runWithEndpoint(id, next);
     },
@@ -77,7 +79,13 @@ export function mountEndpoint(
       try {
         await write();
       } catch (err) {
-        logger.error({ err, endpointId: id }, "Optional audit write failed");
+        logger.error(
+          {
+            errorType: err instanceof Error ? err.name : "unknown",
+            endpointId: id,
+          },
+          "Optional audit write failed",
+        );
       }
     }
   };

@@ -2,6 +2,7 @@ import json
 import logging
 
 from app.core.clock import now
+from app.platform.telemetry import trace_fields
 
 
 class JsonFormatter(logging.Formatter):
@@ -12,6 +13,7 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
+            **trace_fields(),
         }
         for key in (
             "request_id",
@@ -20,6 +22,8 @@ class JsonFormatter(logging.Formatter):
             "status",
             "duration_ms",
             "notification_id",
+            "job_id",
+            "attempt",
             "error_type",
         ):
             value: object = getattr(record, key, None)

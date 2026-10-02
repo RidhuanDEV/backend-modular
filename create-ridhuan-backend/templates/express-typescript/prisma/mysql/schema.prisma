@@ -63,6 +63,8 @@ model User {
   role          Role           @relation(fields: [roleId], references: [id])
   activityLogs  ActivityLog[]
   uploadedFiles StoredFile[]
+  refreshFamilies RefreshFamily[]
+  notificationCounter NotificationCounter?
   refreshTokens RefreshToken[]
   receivedNotifications Notification[] @relation("NotificationRecipient")
   sentNotifications Notification[] @relation("NotificationActor")
@@ -78,6 +80,9 @@ enum NotificationEmailStatus {
 }
 
 model Notification {
+  sequence BigInt
+  emailJob EmailJob?
+  @@unique([recipientId, sequence])
   id String @id @default(uuid()) @db.Char(36)
   recipientId String @db.Char(36)
   actorId String? @db.Char(36)
@@ -142,8 +147,43 @@ model RefreshToken {
   revokedAt DateTime? @db.DateTime(3)
   createdAt DateTime  @default(now()) @db.DateTime(3)
 
+  family RefreshFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([familyId])
+}
+
+model RefreshFamily {
+  id String @id @db.Char(36)
+  userId String @db.Char(36)
+  expiresAt DateTime @db.DateTime(3)
+  revokedAt DateTime? @db.DateTime(3)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokens RefreshToken[]
+  @@index([expiresAt, revokedAt])
+}
+
+model NotificationCounter {
+  recipientId String @id @db.Char(36)
+  sequence BigInt @default(0)
+  recipient User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+}
+
+model EmailJob {
+  id String @id @default(uuid()) @db.Char(36)
+  notificationId String @unique @db.Char(36)
+  recipient String @db.VarChar(255)
+  title String @db.VarChar(160)
+  body String @db.VarChar(4000)
+  status String @default("PENDING") @db.VarChar(16)
+  attempts Int @default(0)
+  availableAt DateTime @default(now()) @db.DateTime(3)
+  leaseUntil DateTime? @db.DateTime(3)
+  leaseId String? @db.Char(36)
+  completedAt DateTime? @db.DateTime(3)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  @@index([status, availableAt, leaseUntil])
 }

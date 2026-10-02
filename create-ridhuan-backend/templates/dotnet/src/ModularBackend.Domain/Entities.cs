@@ -27,6 +27,34 @@ public sealed class RefreshToken
     public DateTimeOffset? RevokedAt { get; set; }
     public string? ReplacedByTokenHash { get; set; }
 }
+public sealed class RefreshFamily
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
+}
+public sealed class NotificationCounter
+{
+    public Guid RecipientId { get; set; }
+    public long Sequence { get; set; }
+}
+public sealed class EmailJob
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid NotificationId { get; set; }
+    public required string Recipient { get; set; }
+    public required string Title { get; set; }
+    public required string Body { get; set; }
+    public string Status { get; set; } = "PENDING";
+    public int Attempts { get; set; }
+    public DateTimeOffset AvailableAt { get; set; }
+    public Guid? LeaseId { get; set; }
+    public DateTimeOffset? LeaseUntil { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+}
 public sealed class Role : Entity
 {
     public required string Name { get; set; }
@@ -71,6 +99,7 @@ public sealed class StoredFile
 }
 public sealed class Notification
 {
+    public long Sequence { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid RecipientId { get; set; }
     public Guid? ActorId { get; set; }

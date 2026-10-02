@@ -18,7 +18,6 @@ import (
 	"github.com/RidhuanDEV/golang-backend/internal/storage"
 	"github.com/RidhuanDEV/golang-backend/internal/telemetry"
 	"github.com/redis/go-redis/v9"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func main() {
@@ -92,9 +91,6 @@ func run() error {
 		return err
 	}
 	var handler http.Handler = server.Router
-	if c.OTelEnabled {
-		handler = otelhttp.NewHandler(handler, "http.server")
-	}
 	httpServer := &http.Server{Addr: fmt.Sprintf(":%d", c.Port), Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	logger.Info("HTTP server listening", "port", c.Port)
 	return serve(ctx, httpServer, httpServer.ListenAndServe)

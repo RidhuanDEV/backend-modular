@@ -31,6 +31,14 @@ const (
 	RateInternal RateGroup = "internal"
 )
 
+type AuditCapability string
+
+const (
+	AuditTransaction AuditCapability = "transaction"
+	AuditRead        AuditCapability = "read"
+	AuditUnsupported AuditCapability = "none"
+)
+
 type EndpointID string
 type Endpoint struct {
 	ID                                        EndpointID
@@ -40,41 +48,43 @@ type Endpoint struct {
 	Cache                                     CacheMode
 	Rate                                      RateGroup
 	Status                                    int
+	AuditCapability                           AuditCapability
 }
 
 var Definitions = []Endpoint{
-	{"health.get", "GET", "/health", "system", "Health check", "", true, AuditNone, CacheOff, RatePublic, 200},
-	{"live.get", "GET", "/live", "system", "Process liveness", "", true, AuditNone, CacheOff, RatePublic, 200},
-	{"ready.get", "GET", "/ready", "system", "Dependency readiness", "", true, AuditNone, CacheOff, RatePublic, 200},
-	{"docs.ui", "GET", "/docs", "docs", "API documentation", "", true, AuditNone, CacheOff, RatePublic, 200},
-	{"docs.spec", "GET", "/docs/openapi.json", "docs", "OpenAPI specification", "", true, AuditNone, CacheOff, RatePublic, 200},
-	{"docs.moduleSpec", "GET", "/docs/specs/{module}.json", "docs", "Module specification", "", true, AuditNone, CacheOff, RatePublic, 200},
-	{"auth.register", "POST", "/api/auth/register", "auth", "Register account", "", true, AuditRequired, CacheOff, RateAuth, 201},
-	{"auth.login", "POST", "/api/auth/login", "auth", "Login", "", true, AuditOptional, CacheOff, RateAuth, 200},
-	{"auth.refresh", "POST", "/api/auth/refresh", "auth", "Rotate refresh token", "", true, AuditRequired, CacheOff, RateAuth, 200},
-	{"auth.me", "GET", "/api/auth/me", "auth", "Current user", "", false, AuditNone, CacheOff, RateInternal, 200},
-	{"user.list", "GET", "/api/users", "user", "List users", "manage_users", false, AuditNone, CacheRead, RateInternal, 200},
-	{"user.get", "GET", "/api/users/{id}", "user", "Get user", "manage_users", false, AuditNone, CacheRead, RateInternal, 200},
-	{"user.create", "POST", "/api/users", "user", "Create user", "manage_users", false, AuditRequired, CacheOff, RateInternal, 201},
-	{"user.update", "PATCH", "/api/users/{id}", "user", "Update user", "manage_users", false, AuditRequired, CacheOff, RateInternal, 200},
-	{"user.delete", "DELETE", "/api/users/{id}", "user", "Delete user", "manage_users", false, AuditRequired, CacheOff, RateInternal, 204},
-	{"role.list", "GET", "/api/roles", "roles", "List roles", "manage_roles", false, AuditNone, CacheRead, RateInternal, 200},
-	{"role.get", "GET", "/api/roles/{id}", "roles", "Get role", "manage_roles", false, AuditNone, CacheRead, RateInternal, 200},
-	{"role.create", "POST", "/api/roles", "roles", "Create role", "manage_roles", false, AuditRequired, CacheOff, RateInternal, 201},
-	{"role.update", "PATCH", "/api/roles/{id}", "roles", "Update role", "manage_roles", false, AuditRequired, CacheOff, RateInternal, 200},
-	{"role.delete", "DELETE", "/api/roles/{id}", "roles", "Delete role", "manage_roles", false, AuditRequired, CacheOff, RateInternal, 204},
-	{"role.assignPermissions", "POST", "/api/roles/{id}/permissions", "roles", "Assign permissions", "manage_roles", false, AuditRequired, CacheOff, RateInternal, 200},
-	{"permission.list", "GET", "/api/permissions", "permissions", "List permissions", "manage_permissions", false, AuditNone, CacheRead, RateInternal, 200},
-	{"permission.get", "GET", "/api/permissions/{id}", "permissions", "Get permission", "manage_permissions", false, AuditNone, CacheRead, RateInternal, 200},
-	{"permission.create", "POST", "/api/permissions", "permissions", "Create permission", "manage_permissions", false, AuditRequired, CacheOff, RateInternal, 201},
-	{"permission.update", "PATCH", "/api/permissions/{id}", "permissions", "Update permission", "manage_permissions", false, AuditRequired, CacheOff, RateInternal, 200},
-	{"permission.delete", "DELETE", "/api/permissions/{id}", "permissions", "Delete permission", "manage_permissions", false, AuditRequired, CacheOff, RateInternal, 204},
-	{"upload.create", "POST", "/api/upload", "upload", "Upload file", "manage_uploads", false, AuditRequired, CacheOff, RateInternal, 201},
-	{"upload.get", "GET", "/api/upload/{id}", "upload", "Get file metadata", "manage_uploads", false, AuditNone, CacheRead, RateInternal, 200},
-	{"notification.create", "POST", "/api/notifications", "notifications", "Create notification", "manage_notifications", false, AuditRequired, CacheOff, RateInternal, 201},
-	{"notification.list", "GET", "/api/notifications", "notifications", "List own notifications", "", false, AuditNone, CacheOff, RateInternal, 200},
-	{"notification.read", "PATCH", "/api/notifications/{id}/read", "notifications", "Mark own notification read", "", false, AuditRequired, CacheOff, RateInternal, 200},
-	{"notification.stream", "GET", "/api/notifications/stream", "notifications", "Stream own notifications", "", false, AuditNone, CacheOff, RateInternal, 200},
+	{"health.get", "GET", "/health", "system", "Health check", "", true, AuditNone, CacheOff, RatePublic, 200, AuditRead},
+	{"live.get", "GET", "/live", "system", "Process liveness", "", true, AuditNone, CacheOff, RatePublic, 200, AuditRead},
+	{"ready.get", "GET", "/ready", "system", "Dependency readiness", "", true, AuditNone, CacheOff, RatePublic, 200, AuditRead},
+	{"docs.ui", "GET", "/docs", "docs", "API documentation", "", true, AuditNone, CacheOff, RatePublic, 200, AuditRead},
+	{"docs.spec", "GET", "/docs/openapi.json", "docs", "OpenAPI specification", "", true, AuditNone, CacheOff, RatePublic, 200, AuditRead},
+	{"docs.moduleSpec", "GET", "/docs/specs/{module}.json", "docs", "Module specification", "", true, AuditNone, CacheOff, RatePublic, 200, AuditRead},
+	{"auth.register", "POST", "/api/auth/register", "auth", "Register account", "", true, AuditRequired, CacheOff, RateAuth, 201, AuditTransaction},
+	{"auth.login", "POST", "/api/auth/login", "auth", "Login", "", true, AuditOptional, CacheOff, RateAuth, 200, AuditTransaction},
+	{"auth.refresh", "POST", "/api/auth/refresh", "auth", "Rotate refresh token", "", true, AuditRequired, CacheOff, RateAuth, 200, AuditTransaction},
+	{"auth.logout", "POST", "/api/auth/logout", "auth", "Revoke refresh family", "", true, AuditOptional, CacheOff, RateAuth, 204, AuditTransaction},
+	{"auth.me", "GET", "/api/auth/me", "auth", "Current user", "", false, AuditNone, CacheOff, RateInternal, 200, AuditRead},
+	{"user.list", "GET", "/api/users", "user", "List users", "manage_users", false, AuditNone, CacheRead, RateInternal, 200, AuditRead},
+	{"user.get", "GET", "/api/users/{id}", "user", "Get user", "manage_users", false, AuditNone, CacheRead, RateInternal, 200, AuditRead},
+	{"user.create", "POST", "/api/users", "user", "Create user", "manage_users", false, AuditRequired, CacheOff, RateInternal, 201, AuditTransaction},
+	{"user.update", "PATCH", "/api/users/{id}", "user", "Update user", "manage_users", false, AuditRequired, CacheOff, RateInternal, 200, AuditTransaction},
+	{"user.delete", "DELETE", "/api/users/{id}", "user", "Delete user", "manage_users", false, AuditRequired, CacheOff, RateInternal, 204, AuditTransaction},
+	{"role.list", "GET", "/api/roles", "roles", "List roles", "manage_roles", false, AuditNone, CacheRead, RateInternal, 200, AuditRead},
+	{"role.get", "GET", "/api/roles/{id}", "roles", "Get role", "manage_roles", false, AuditNone, CacheRead, RateInternal, 200, AuditRead},
+	{"role.create", "POST", "/api/roles", "roles", "Create role", "manage_roles", false, AuditRequired, CacheOff, RateInternal, 201, AuditTransaction},
+	{"role.update", "PATCH", "/api/roles/{id}", "roles", "Update role", "manage_roles", false, AuditRequired, CacheOff, RateInternal, 200, AuditTransaction},
+	{"role.delete", "DELETE", "/api/roles/{id}", "roles", "Delete role", "manage_roles", false, AuditRequired, CacheOff, RateInternal, 204, AuditTransaction},
+	{"role.assignPermissions", "POST", "/api/roles/{id}/permissions", "roles", "Assign permissions", "manage_roles", false, AuditRequired, CacheOff, RateInternal, 200, AuditTransaction},
+	{"permission.list", "GET", "/api/permissions", "permissions", "List permissions", "manage_permissions", false, AuditNone, CacheRead, RateInternal, 200, AuditRead},
+	{"permission.get", "GET", "/api/permissions/{id}", "permissions", "Get permission", "manage_permissions", false, AuditNone, CacheRead, RateInternal, 200, AuditRead},
+	{"permission.create", "POST", "/api/permissions", "permissions", "Create permission", "manage_permissions", false, AuditRequired, CacheOff, RateInternal, 201, AuditTransaction},
+	{"permission.update", "PATCH", "/api/permissions/{id}", "permissions", "Update permission", "manage_permissions", false, AuditRequired, CacheOff, RateInternal, 200, AuditTransaction},
+	{"permission.delete", "DELETE", "/api/permissions/{id}", "permissions", "Delete permission", "manage_permissions", false, AuditRequired, CacheOff, RateInternal, 204, AuditTransaction},
+	{"upload.create", "POST", "/api/upload", "upload", "Upload file", "manage_uploads", false, AuditRequired, CacheOff, RateInternal, 201, AuditTransaction},
+	{"upload.get", "GET", "/api/upload/{id}", "upload", "Get file metadata", "manage_uploads", false, AuditNone, CacheRead, RateInternal, 200, AuditRead},
+	{"notification.create", "POST", "/api/notifications", "notifications", "Create notification", "manage_notifications", false, AuditRequired, CacheOff, RateInternal, 201, AuditTransaction},
+	{"notification.list", "GET", "/api/notifications", "notifications", "List own notifications", "", false, AuditNone, CacheOff, RateInternal, 200, AuditRead},
+	{"notification.read", "PATCH", "/api/notifications/{id}/read", "notifications", "Mark own notification read", "", false, AuditRequired, CacheOff, RateInternal, 200, AuditTransaction},
+	{"notification.stream", "GET", "/api/notifications/stream", "notifications", "Stream own notifications", "", false, AuditNone, CacheOff, RateInternal, 200, AuditUnsupported},
 }
 
 func Resolve(c config.Config) (map[EndpointID]Endpoint, error) {
@@ -98,8 +108,11 @@ func Resolve(c config.Config) (map[EndpointID]Endpoint, error) {
 				if mode != AuditRequired && mode != AuditOptional && mode != AuditNone {
 					return nil, fmt.Errorf("invalid audit policy for %s", base.ID)
 				}
-				if base.Method == http.MethodGet && mode == AuditRequired {
+				if base.AuditCapability != AuditTransaction && mode == AuditRequired {
 					return nil, fmt.Errorf("required GET audit producer missing for %s", base.ID)
+				}
+				if mode != AuditNone && base.AuditCapability == AuditUnsupported {
+					return nil, fmt.Errorf("audit producer missing for %s", base.ID)
 				}
 				base.Audit = mode
 			}

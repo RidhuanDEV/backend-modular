@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import Settings
 from app.platform.cache.models import CacheGeneration
+from app.platform.telemetry import instrument
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class Cache:
         )
         return f"{self.settings.redis_namespace}:cache:{version or 0}:{suffix}"
 
+    @instrument("redis")
     async def get[T: BaseModel](self, key: str, model: type[T]) -> T | None:
         if not self.settings.cache_enabled:
             return None
@@ -33,6 +35,7 @@ class Cache:
             logger.warning("Optional cache read unavailable")
             return None
 
+    @instrument("redis")
     async def set(self, key: str, model: BaseModel) -> None:
         if not self.settings.cache_enabled:
             return

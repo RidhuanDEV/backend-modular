@@ -63,6 +63,8 @@ model User {
   role          Role           @relation(fields: [roleId], references: [id])
   activityLogs  ActivityLog[]
   uploadedFiles StoredFile[]
+  refreshFamilies RefreshFamily[]
+  notificationCounter NotificationCounter?
   refreshTokens RefreshToken[]
   receivedNotifications Notification[] @relation("NotificationRecipient")
   sentNotifications Notification[] @relation("NotificationActor")
@@ -78,6 +80,9 @@ enum NotificationEmailStatus {
 }
 
 model Notification {
+  sequence BigInt
+  emailJob EmailJob?
+  @@unique([recipientId, sequence])
   id String @id @default(uuid())
   recipientId String
   actorId String?
@@ -142,8 +147,43 @@ model RefreshToken {
   revokedAt DateTime? @db.Timestamptz(3)
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
 
+  family RefreshFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([familyId])
+}
+
+model RefreshFamily {
+  id String @id
+  userId String
+  expiresAt DateTime @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokens RefreshToken[]
+  @@index([expiresAt, revokedAt])
+}
+
+model NotificationCounter {
+  recipientId String @id
+  sequence BigInt @default(0)
+  recipient User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+}
+
+model EmailJob {
+  id String @id @default(uuid())
+  notificationId String @unique
+  recipient String @db.VarChar(255)
+  title String @db.VarChar(160)
+  body String @db.VarChar(4000)
+  status String @default("PENDING") @db.VarChar(16)
+  attempts Int @default(0)
+  availableAt DateTime @default(now()) @db.Timestamptz(3)
+  leaseUntil DateTime? @db.Timestamptz(3)
+  leaseId String?
+  completedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  @@index([status, availableAt, leaseUntil])
 }

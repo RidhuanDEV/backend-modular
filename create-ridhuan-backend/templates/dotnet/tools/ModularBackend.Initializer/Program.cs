@@ -17,7 +17,12 @@ if (!Regex.IsMatch(name, @"^[A-Z_a-z][A-Z_a-z0-9]*(\.[A-Z_a-z][A-Z_a-z0-9]*)*$")
 string Ask(string label, string fallback) { if (defaults) return fallback; Console.Write($"{label} [{fallback}]: "); var input = Console.ReadLine(); return string.IsNullOrWhiteSpace(input) ? fallback : input; }
 var port = Ask("HTTP port", "5080"); if (!int.TryParse(port, out var parsedPort) || parsedPort is < 1 or > 65535) throw new ArgumentException("Invalid port");
 var database = Ask(provider + " database", name.ToLowerInvariant().Replace('.', '_'));
-if (!Regex.IsMatch(database, @"^[a-z_][a-z0-9_]*$")) throw new ArgumentException("Database requires lowercase SQL identifier");
+var databaseLimit = provider == "mysql" ? 64 : 63;
+if (!Regex.IsMatch(database, @"^[a-z_][a-z0-9_]*$") || database.Length > databaseLimit) throw new ArgumentException($"{provider} database requires ASCII SQL identifier, maximum {databaseLimit} characters");
+var databaseUser = Ask(provider + " username", provider == "mysql" ? "backend" : "modular_net");
+var userLimit = provider == "mysql" ? 32 : 63;
+if (!Regex.IsMatch(databaseUser, @"^[A-Za-z_][A-Za-z0-9_]*$") || databaseUser.Length > userLimit) throw new ArgumentException($"{provider} username requires ASCII SQL identifier, maximum {userLimit} characters");
+if (provider == "mysql" && databaseUser.Equals("root", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Use a dedicated MySQL application user");
 var redisChoice = Ask("Use Redis (yes/no)", "no").ToLowerInvariant();
 if (redisChoice is not ("yes" or "no")) throw new ArgumentException("Choose yes or no for Redis");
 var useRedis = redisChoice == "yes";
@@ -62,6 +67,7 @@ using (var configuration = JsonDocument.Parse(await File.ReadAllTextAsync(Path.C
 
 var dbPassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)); var jwt = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)); var bootstrap = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)); var s3Secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
 var env = await File.ReadAllTextAsync(Path.Combine(target, ".env.example"));
+env = env.Replace("Username=modular_net;", "Username=" + databaseUser + ";").Replace("POSTGRES_USER=modular_net", "POSTGRES_USER=" + databaseUser).Replace("User ID=backend;", "User ID=" + databaseUser + ";").Replace("MYSQL_USER=backend", "MYSQL_USER=" + databaseUser);
 env = env.Replace("CHANGE_ME_DATABASE_PASSWORD", dbPassword).Replace("CHANGE_ME_GENERATE_AT_LEAST_32_RANDOM_BYTES", jwt).Replace("CHANGE_ME_BOOTSTRAP_PASSWORD", bootstrap).Replace("CHANGE_ME_S3_ACCESS_KEY", "development").Replace("CHANGE_ME_S3_SECRET_KEY", s3Secret).Replace("Database=modular_net;", "Database=" + database + ";").Replace("POSTGRES_DB=modular_net", "POSTGRES_DB=" + database).Replace("MYSQL_DATABASE=modular_net", "MYSQL_DATABASE=" + database).Replace("CHANGE_ME_ADMIN_DATABASE_PASSWORD", Convert.ToHexString(RandomNumberGenerator.GetBytes(24))).Replace("Rate__Store=memory", "Rate__Store=" + (useRedis ? "redis" : "memory")).Replace("Cache__Enabled=false", "Cache__Enabled=" + useRedis.ToString().ToLowerInvariant()).Replace("Upload__Storage=local", "Upload__Storage=" + storage).Replace("Upload__Endpoint=http://127.0.0.1:19000", "Upload__Endpoint=" + endpoint).Replace("Upload__Bucket=uploads", "Upload__Bucket=" + bucket).Replace("COMPOSE_PROFILES=", "COMPOSE_PROFILES=" + string.Join(',', new[] { useRedis ? "redis" : "", storage == "s3" && endpoint == "http://127.0.0.1:19000" ? "s3" : "" }.Where(v => v.Length > 0)));
 if (storage == "s3" && endpoint.Length == 0) env = env.Replace("Upload__AccessKey=development", "Upload__AccessKey=").Replace("Upload__SecretKey=" + s3Secret, "Upload__SecretKey=");
 if (storage == "s3" && endpoint != "http://127.0.0.1:19000") env += "\nS3_ENDPOINT_DOCKER=" + endpoint + "\n";

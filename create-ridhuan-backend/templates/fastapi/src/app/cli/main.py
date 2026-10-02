@@ -17,16 +17,21 @@ from app.cli.generate import generate_module
 from app.cli.seed import seed
 from app.core.clock import now
 from app.core.event_loop import run
+from app.core.logging import configure_logging
 from app.core.settings import Settings
 from app.database.engine import create_database, sessions
 from app.main import create_app
 from app.modules.uploads.models import StoredFile
+from app.platform.jobs.cleanup import cleanup_rows
+from app.platform.jobs.worker import worker
 from app.platform.storage.service import Storage
+from app.platform.telemetry import cleanup_items, setup, shutdown
 
 
 class Arguments(argparse.Namespace):
     command: str
     apply: bool
+    dry_run: bool
     name: str | None
     revision: str
 
@@ -40,13 +45,18 @@ def migration_config(settings: Settings) -> Config:
 
 
 async def cleanup(settings: Settings, apply: bool) -> None:
+    setup(settings)
     engine = create_database(settings)
     storage = Storage(settings)
     cutoff = now() - timedelta(hours=settings.upload_orphan_grace_hours)
     try:
+        await cleanup_rows(sessions(engine), settings, apply)
         # Inventory is bounded by storage paging. Recheck metadata immediately before deletion.
         iterator = storage.objects()
+        candidates = 0
         while True:
+            if candidates >= settings.cleanup_batch_size:
+                break
             item = await asyncio.to_thread(next, iterator, None)
             if item is None:
                 break
@@ -60,11 +70,24 @@ async def cleanup(settings: Settings, apply: bool) -> None:
                     is None
                 ):
                     print(f"{'delete' if apply else 'candidate'}: {item.key}")
+                    candidates += 1
                     if apply:
-                        await storage.delete(item.key)
+                        # A fresh query immediately before touching storage prevents stale inventory decisions.
+                        async with sessions(engine)() as check:
+                            if (
+                                await check.scalar(
+                                    select(StoredFile.id).where(StoredFile.object_key == item.key)
+                                )
+                                is None
+                            ):
+                                await storage.delete(item.key)
+                                cleanup_items("upload", 1, True)
+                    else:
+                        cleanup_items("upload", 1, False)
     finally:
         await engine.dispose()
         await storage.close()
+        await asyncio.to_thread(shutdown)
 
 
 def main() -> None:
@@ -73,6 +96,7 @@ def main() -> None:
         "command",
         choices=[
             "serve",
+            "worker",
             "migrate",
             "seed",
             "cleanup",
@@ -84,7 +108,9 @@ def main() -> None:
     )
     parser.add_argument("name", nargs="?")
     parser.add_argument("--revision", default="head", help="migrate up to an Alembic revision")
-    parser.add_argument("--apply", action="store_true")
+    cleanup_mode = parser.add_mutually_exclusive_group()
+    cleanup_mode.add_argument("--apply", action="store_true")
+    cleanup_mode.add_argument("--dry-run", action="store_true")
     args = Arguments()
     parser.parse_args(namespace=args)
     if args.command == "generate-module":
@@ -93,6 +119,7 @@ def main() -> None:
         generate_module(args.name)
         return
     settings = Settings()
+    configure_logging()
     if args.command == "serve":
         uvicorn.run(
             "app.main:create_app",
@@ -127,6 +154,8 @@ def main() -> None:
         run(seed(settings))
     elif args.command == "cleanup":
         run(cleanup(settings, args.apply))
+    elif args.command == "worker":
+        run(worker(settings))
     elif args.command == "openapi":
         print(json.dumps(create_app(settings).openapi(), indent=2))
 

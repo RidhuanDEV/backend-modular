@@ -6,7 +6,10 @@ import { requestIdMiddleware } from "./core/middleware/request-id.middleware.js"
 import { accessLogMiddleware } from "./core/middleware/access-log.middleware.js";
 import { errorMiddleware } from "./core/middleware/error.middleware.js";
 import { setupSwagger } from "./docs/swagger.js";
-import { mountEndpoint, assertEndpointCoverage } from "./core/http/mount-endpoint.js";
+import {
+  mountEndpoint,
+  assertEndpointCoverage,
+} from "./core/http/mount-endpoint.js";
 import { registerAuthRoutes } from "./modules/auth/auth.routes.js";
 import { registerUserRoutes } from "./modules/user/user.routes.js";
 import { registerRoleRoutes } from "./modules/roles/role.routes.js";
@@ -24,11 +27,19 @@ const app = express();
 
 app.set("trust proxy", env.TRUST_PROXY_HOPS);
 app.use(helmet());
-const allowedOrigins = new Set(env.CORS_ORIGINS.length ? env.CORS_ORIGINS : ["http://localhost:5173", "http://localhost:3000"]);
-app.use(cors({
-  origin: (origin, callback) => callback(null, origin === undefined || allowedOrigins.has(origin)),
-  credentials: false,
-}));
+const allowedOrigins = new Set(
+  env.CORS_ORIGINS.length
+    ? env.CORS_ORIGINS
+    : ["http://localhost:5173", "http://localhost:3000"],
+);
+app.use(
+  cors({
+    origin: (origin, callback) =>
+      callback(null, origin === undefined || allowedOrigins.has(origin)),
+    credentials: false,
+    exposedHeaders: ["X-Request-ID", "X-Next-Cursor"],
+  }),
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(requestIdMiddleware);

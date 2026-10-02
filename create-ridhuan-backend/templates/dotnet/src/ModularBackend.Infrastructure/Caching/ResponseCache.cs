@@ -36,17 +36,18 @@ public sealed class ResponseCache(RedisConnection redis, BackendDbContext db, IO
             var raw = await redis.Database.StringGetAsync(cacheKey).WaitAsync(ct);
             if (!raw.IsNull) { var result = JsonSerializer.Deserialize<T>(raw.ToString(), Json); if (result is not null && valid(result)) return result; }
         }
-        catch (Exception ex) when (ex is RedisException or JsonException or ArgumentException) { logger.LogDebug("Cache read miss: {ErrorType}", ex.GetType().Name); }
+        catch (Exception ex) when (ex is RedisException or RedisTimeoutException or JsonException or ArgumentException) { logger.LogDebug("Cache read miss: {ErrorType}", ex.GetType().Name); }
         var fresh = await factory(ct);
         if (cacheKey is not null)
             try { await redis.Database.StringSetAsync(cacheKey, JsonSerializer.Serialize(fresh, Json), TimeSpan.FromSeconds(options.Value.TtlSeconds)).WaitAsync(ct); }
-            catch (RedisException) { logger.LogDebug("Cache write unavailable"); }
+            catch (Exception ex) when (ex is RedisException or RedisTimeoutException) { logger.LogDebug("Cache write unavailable"); }
         return fresh;
     }
     public async Task InvalidateAsync(CancellationToken ct)
     {
         if (!options.Value.Enabled) return;
+        using var activity = BackendTelemetry.Redis.StartActivity("cache.invalidate");
         try { await redis.Database.StringIncrementAsync(options.Value.Prefix + ":generation").WaitAsync(ct); }
-        catch (Exception ex) when (ex is RedisException or OperationCanceledException) { logger.LogWarning("Cache invalidation unavailable; cached values expire at TTL"); }
+        catch (Exception ex) when (ex is RedisException or RedisTimeoutException or OperationCanceledException) { logger.LogWarning("Cache invalidation unavailable; cached values expire at TTL"); }
     }
 }

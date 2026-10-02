@@ -160,7 +160,7 @@ Integration test memerlukan PostgreSQL dan membuat database sementara yang dapat
 
 ## Keamanan dan batasan
 
-- Access token berlaku 15 menit. `POST /api/auth/login` dan `POST /api/auth/refresh` memberikan refresh token yang dirotasi setiap pemakaian; kirim `{ "refreshToken": "..." }` untuk memperbarui token. Perlakukan refresh token sebagai kredensial dan simpan dengan aman. Server hanya menyimpan hash; tiap token berlaku hingga 30 hari dan keluarga token berakhir setelah 90 hari. Pemakaian ulang mencabut keluarga aktif. Respons user auth hanya berisi `id`, `email`, dan `roleId`.
+- Access token berlaku 15 menit. `POST /api/auth/login` dan `POST /api/auth/refresh` memberikan refresh token yang dirotasi setiap pemakaian; kirim `{ "refreshToken": "..." }` untuk memperbarui token. Perlakukan refresh token sebagai kredensial dan simpan dengan aman. Server hanya menyimpan hash; setiap rotasi yang berhasil memperpanjang sesi 30 hari tanpa batas absolut. Pemakaian ulang mencabut keluarga aktif. Respons user auth hanya berisi `id`, `email`, dan `roleId`.
 - Upload dan metadata file dilindungi izin khusus `manage_uploads`.
 - `GET /api/upload/{id}` memberi metadata file yang dilindungi, bukan bytes. Alur download/presigned URL belum tersedia.
 - Profil S3 di Compose dan CI menggunakan [Adobe S3Mock](https://github.com/adobe/S3Mock), fixture pengujian dengan dukungan sebagian API S3 dan bukan untuk production. Gunakan layanan S3 kompatibel yang dikelola/dipelihara untuk deployment.
@@ -177,3 +177,7 @@ Target template adalah [.NET 10 LTS](https://dotnet.microsoft.com/en-us/platform
 Baca [Contributing](CONTRIBUTING.md), [Security policy](SECURITY.md), dan [Changelog](CHANGELOG.md). Rilis template mengikuti SemVer; project yang sudah dibuat tidak otomatis menerima update template. Laporkan kerentanan secara privat melalui [GitHub Security Advisories](https://github.com/RidhuanDEV/NET-backend/security/advisories/new).
 
 Lisensi project: [MIT](LICENSE).
+
+## Verifikasi enhancement
+
+Lihat [panduan upgrade hardening](docs/HARDENING-UPGRADE.md). Pengujian lokal PostgreSQL/MySQL, consumer tarball Windows/Linux, auth concurrent, SSE, worker, retention dan telemetry telah lulus. [Laporan verifikasi](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) mencatat batas pengujian dan hasil CI. Load test dan pemulihan backup production belum diverifikasi.

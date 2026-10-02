@@ -157,7 +157,7 @@ Integration tests require PostgreSQL and create a temporary database that the te
 
 ## Security and known limits
 
-- Access tokens expire after 15 minutes. `POST /api/auth/login` and `POST /api/auth/refresh` return a rotating refresh token; send `{ "refreshToken": "..." }` to refresh. Treat refresh tokens as credentials and store them securely. The server stores only their hashes, each token lives up to 30 days, and its family expires after 90 days. Reuse revokes the active family. Auth user responses contain only `id`, `email`, and `roleId`.
+- Access tokens expire after 15 minutes. `POST /api/auth/login` and `POST /api/auth/refresh` return a rotating refresh token; send `{ "refreshToken": "..." }` to refresh. Treat refresh tokens as credentials and store them securely. The server stores only their hashes, each token lives up to 30 days, and each successful rotation extends its family another 30 days without an absolute cap. Reuse revokes the active family. Auth user responses contain only `id`, `email`, and `roleId`.
 - Uploads and file metadata are protected by the dedicated `manage_uploads` permission.
 - `GET /api/upload/{id}` returns protected file metadata, not file bytes. There is no download endpoint or presigned URL flow in this starter.
 - The optional S3 Compose profile and CI use [Adobe S3Mock](https://github.com/adobe/S3Mock), a test fixture that implements a subset of S3 and is not for production. Use a managed or maintained S3-compatible service for deployment.
@@ -192,3 +192,7 @@ The unified CLI supports `--database postgresql` (default) and `--database mysql
 For a source checkout, copy `.env.mysql.example` to `.env`, configure credentials, and run `docker compose -f compose.mysql.yaml up --build -d --wait`. Seed is a separate explicit operation using the same `-f` option. CLI-generated MySQL projects use the ordinary active Compose filename. MySQL bootstrap uses a separate root password and supports quoted/Unicode application passwords without logging them.
 
 For external MySQL, use `SslMode=VerifyFull` and the official Connector/NET CA options in `Database__ConnectionString`. Review the Oracle provider license in [DEPENDENCIES.md](DEPENDENCIES.md). Local Compose is a development fixture. Follow [operations](docs/OPERATIONS.md) for provider-specific backup/restore and failed migration recovery.
+
+## Hardening upgrade
+
+Read [HARDENING-UPGRADE.md](docs/HARDENING-UPGRADE.md) before migrating existing data. It documents sliding refresh/logout, ordered SSE replay, async email worker/outbox, retention commands and optional OpenTelemetry. Local PostgreSQL/MySQL regression and generated-consumer checks pass; [verification evidence](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) records the exact runtime and CI boundaries.

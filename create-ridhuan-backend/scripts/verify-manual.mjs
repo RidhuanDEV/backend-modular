@@ -91,7 +91,11 @@ export async function verifyManual(project, id, provider = 'postgresql') {
       for (const script of ['prisma:migrate:deploy', 'seed']) {
         const saved = Object.fromEntries([...assigned].map(key => [key, process.env[key]]));
         for (const key of assigned) delete process.env[key];
-        try { assert.equal(command('npm', ['run', script], project).status, 0, `Manual ${script} failed`); }
+        try {
+          const result=command('npm', ['run', script], project);
+          const detail=(result.stdout+'\n'+result.stderr).replaceAll(password,'[fixture-password]').replaceAll(encodeURIComponent(password),'[fixture-password]').replaceAll(url,'[fixture-url]');
+          assert.equal(result.status, 0, `Manual ${script} failed: ${detail}`);
+        }
         finally { for (const [key, current] of Object.entries(saved)) { if (current === undefined) delete process.env[key]; else process.env[key] = current; } }
       }
       executable = process.execPath; args = [id === 'nestjs' ? 'dist/main.js' : 'dist/server.js'];

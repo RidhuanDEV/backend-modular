@@ -32,7 +32,7 @@ public sealed class EndpointLimiter(IOptions<RateOptions> options, RedisConnecti
             var count = (long)await redis.Database.ScriptEvaluateAsync("local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('PEXPIRE',KEYS[1],ARGV[1]); end; return n", [options.Value.Prefix + ":rate:" + key], [window.WindowMs]).WaitAsync(ct);
             return count <= window.Max ? 200 : 429;
         }
-        catch (RedisException)
+        catch (Exception ex) when (ex is RedisException or RedisTimeoutException)
         {
             var now = Environment.TickCount64; var previous = Interlocked.Read(ref lastFailureLog);
             if (now - previous > 30000 && Interlocked.CompareExchange(ref lastFailureLog, now, previous) == previous) logger.LogWarning("Redis limiter unavailable; auth fails closed");

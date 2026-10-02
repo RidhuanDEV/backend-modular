@@ -32,6 +32,21 @@ type AuthRefreshToken struct {
 	RevokedAt sql.NullTime `json:"revoked_at"`
 }
 
+type EmailJob struct {
+	ID             string       `json:"id"`
+	NotificationID string       `json:"notification_id"`
+	Recipient      string       `json:"recipient"`
+	Title          string       `json:"title"`
+	Body           string       `json:"body"`
+	Status         string       `json:"status"`
+	Attempts       int32        `json:"attempts"`
+	AvailableAt    sql.NullTime `json:"available_at"`
+	LeaseID        *string      `json:"lease_id"`
+	LeaseUntil     sql.NullTime `json:"lease_until"`
+	CompletedAt    sql.NullTime `json:"completed_at"`
+	CreatedAt      sql.NullTime `json:"created_at"`
+}
+
 type Notification struct {
 	ID          string       `json:"id"`
 	RecipientID string       `json:"recipient_id"`
@@ -41,6 +56,12 @@ type Notification struct {
 	EmailStatus string       `json:"email_status"`
 	ReadAt      sql.NullTime `json:"read_at"`
 	CreatedAt   sql.NullTime `json:"created_at"`
+	Sequence    int64        `json:"sequence"`
+}
+
+type NotificationCounter struct {
+	RecipientID string `json:"recipient_id"`
+	Sequence    int64  `json:"sequence"`
 }
 
 type Permission struct {
@@ -48,6 +69,14 @@ type Permission struct {
 	Name      string       `json:"name"`
 	CreatedAt sql.NullTime `json:"created_at"`
 	UpdatedAt sql.NullTime `json:"updated_at"`
+}
+
+type RefreshFamily struct {
+	ID        string       `json:"id"`
+	UserID    string       `json:"user_id"`
+	CreatedAt sql.NullTime `json:"created_at"`
+	ExpiresAt sql.NullTime `json:"expires_at"`
+	RevokedAt sql.NullTime `json:"revoked_at"`
 }
 
 type Role struct {

@@ -48,8 +48,18 @@ func TestNotificationsPersistAndRestrictRecipient(t *testing.T) {
 	if stream.StatusCode != 200 || !strings.HasPrefix(stream.Header.Get("Content-Type"), "text/event-stream") {
 		t.Fatalf("unexpected SSE response: %d %s", stream.StatusCode, stream.Header.Get("Content-Type"))
 	}
-	line, err := bufio.NewReader(stream.Body).ReadString('\n')
-	if err != nil || !strings.Contains(line, "notification") {
+	reader := bufio.NewReader(stream.Body)
+	for {
+		line, readErr := reader.ReadString('\n')
+		if readErr != nil {
+			t.Fatalf("missing notification cursor %s: %v", created.ID, readErr)
+		}
+		if strings.TrimSpace(line) == "id: "+created.ID {
+			break
+		}
+	}
+	line, err := reader.ReadString('\n')
+	if err != nil || strings.TrimSpace(line) != "event: notification" {
 		t.Fatalf("missing notification SSE event: %q %v", line, err)
 	}
 	read := decodeBody[notification.Item](t, call(t, server, "PATCH", "/api/notifications/"+created.ID+"/read", token, nil, 200))

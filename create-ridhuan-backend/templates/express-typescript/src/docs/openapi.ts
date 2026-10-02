@@ -83,6 +83,43 @@ export function generateOpenApi(moduleName?: string): JsonObject {
     };
     if (endpoint.access.kind === "internal")
       operation["security"] = [{ bearerAuth: [] }];
+    if (id === "notification.list")
+      operation["responses"] = {
+        200: {
+          description: "Ordered notification page",
+          headers: {
+            "X-Next-Cursor": {
+              description: "UUID cursor for next page, absent on final page",
+              schema: { type: "string", format: "uuid" },
+            },
+          },
+          content: {
+            "application/json": {
+              schema: endpoint.response ? jsonSchema(endpoint.response) : {},
+            },
+          },
+        },
+      };
+    if (id === "notification.stream") {
+      operation["parameters"] = [
+        {
+          name: "Last-Event-ID",
+          in: "header",
+          required: false,
+          schema: { type: "string", format: "uuid" },
+          description:
+            "Last notification UUID belonging to the authenticated recipient",
+        },
+      ];
+      operation["responses"] = {
+        200: {
+          description:
+            "Notification SSE; UUID event IDs, heartbeat 15s, polling 3s, ordered replay in batches of 50",
+          content: { "text/event-stream": { schema: { type: "string" } } },
+        },
+        400: { description: "Unknown or foreign cursor" },
+      };
+    }
     if (endpoint.body)
       operation["requestBody"] = {
         required: true,

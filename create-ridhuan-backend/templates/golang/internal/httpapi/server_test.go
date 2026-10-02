@@ -64,7 +64,7 @@ func TestRegistryAndOpenAPI(t *testing.T) {
 		expected := 401
 		if ep.Public {
 			expected = ep.Status
-			if ep.ID == "auth.register" || ep.ID == "auth.login" || ep.ID == "auth.refresh" {
+			if ep.ID == "auth.register" || ep.ID == "auth.login" || ep.ID == "auth.refresh" || ep.ID == "auth.logout" {
 				expected = 400
 			}
 		}
@@ -98,6 +98,25 @@ func TestUnknownPolicyRejected(t *testing.T) {
 	c.Policies["missing.endpoint"] = config.PolicyOverride{Audit: "none"}
 	if _, err := Resolve(c); err == nil {
 		t.Fatal("unknown endpoint policy accepted")
+	}
+}
+
+func TestAuditCapabilityOverrides(t *testing.T) {
+	for _, item := range []struct {
+		endpoint, mode string
+		valid          bool
+	}{
+		{"user.get", "required", false}, {"notification.stream", "optional", false},
+		{"auth.refresh", "required", true}, {"auth.logout", "required", true},
+	} {
+		t.Run(item.endpoint+item.mode, func(t *testing.T) {
+			c := testConfig()
+			c.Policies[item.endpoint] = config.PolicyOverride{Audit: item.mode}
+			_, err := Resolve(c)
+			if (err == nil) != item.valid {
+				t.Fatalf("expected accepted=%v, got %v", item.valid, err)
+			}
+		})
 	}
 }
 

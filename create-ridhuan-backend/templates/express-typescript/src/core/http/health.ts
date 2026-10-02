@@ -16,7 +16,7 @@ export async function checkReadiness(dependencies: ReadinessDependencies, timeou
   try {
     return await Promise.race([
       Promise.all(checks).then(() => true).catch((error: unknown) => {
-        logger.warn({ error }, "Readiness dependency failed");
+        logger.warn({ errorType: error instanceof Error ? error.name : "UnknownError" }, "Readiness dependency failed");
         return false;
       }),
       new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), timeoutMs); }),

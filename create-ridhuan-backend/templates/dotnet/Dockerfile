@@ -5,6 +5,7 @@ RUN dotnet restore --locked-mode
 RUN dotnet publish src/ModularBackend.Api -c Release --no-restore -o /out/api
 RUN dotnet publish tools/ModularBackend.Migrator -c Release --no-restore -o /out/migrator
 RUN dotnet publish tools/ModularBackend.Seeder -c Release --no-restore -o /out/seeder
+RUN dotnet publish tools/ModularBackend.Worker -c Release --no-restore -o /out/worker
 RUN dotnet publish tools/ModularBackend.UploadCleanup -c Release --no-restore -o /out/cleanup
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.12 AS runtime

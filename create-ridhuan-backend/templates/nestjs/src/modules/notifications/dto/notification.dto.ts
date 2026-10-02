@@ -1,4 +1,22 @@
-import { IsBoolean, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from "class-validator";
+import { ApiPropertyOptional } from "@nestjs/swagger";
+
+export class NotificationQueryDto {
+  @ApiPropertyOptional({
+    format: "uuid",
+    description: "Previous X-Next-Cursor header",
+  })
+  @IsOptional()
+  @IsUUID()
+  cursor?: string;
+}
 
 export class CreateNotificationDto {
   @IsUUID() recipientId!: string;

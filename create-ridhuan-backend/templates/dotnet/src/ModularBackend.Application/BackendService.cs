@@ -91,10 +91,10 @@ public sealed class BackendService(IBackendStore store, IPasswordService passwor
     private static string NewRefreshToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     private static string HashRefreshToken(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     private AuthTokensResult IssuePair(User user, string refreshToken) => new(tokens.Issue(user), refreshToken, "Bearer", 900);
-    private (RefreshToken Entity, string Plaintext) CreateRefreshToken(Guid userId, Guid? familyId = null, DateTimeOffset? familyExpiresAt = null)
+    private (RefreshToken Entity, string Plaintext) CreateRefreshToken(Guid userId, Guid? familyId = null)
     {
-        var now = clock.GetUtcNow(); var raw = NewRefreshToken(); var familyExpiry = familyExpiresAt ?? now.AddDays(90);
-        return (new RefreshToken { TokenHash = HashRefreshToken(raw), FamilyId = familyId ?? Guid.NewGuid(), UserId = userId, CreatedAt = now, ExpiresAt = now.AddDays(30) < familyExpiry ? now.AddDays(30) : familyExpiry, FamilyExpiresAt = familyExpiry }, raw);
+        var now = clock.GetUtcNow(); var raw = NewRefreshToken(); var familyExpiry = now.AddDays(30);
+        return (new RefreshToken { TokenHash = HashRefreshToken(raw), FamilyId = familyId ?? Guid.NewGuid(), UserId = userId, CreatedAt = now, ExpiresAt = familyExpiry, FamilyExpiresAt = familyExpiry }, raw);
     }
     public async Task<AuthTokensResult> LoginAsync(string email, string password, OperationContext ctx, CancellationToken ct)
     {
@@ -103,40 +103,72 @@ public sealed class BackendService(IBackendStore store, IPasswordService passwor
         if (user is null || user.DeletedAt is not null || !passwords.Verify(user, password)) throw new ApiException(401, "Invalid email or password");
         var (refresh, plaintext) = CreateRefreshToken(user.Id);
         await store.BeginAsync(ct);
-        try { await store.DeleteExpiredRefreshTokensAsync(user.Id, clock.GetUtcNow(), ct); store.AddRefreshToken(refresh); if (ctx.Audit == AuditMode.Required) store.AddAudit(Audit(ctx with { Actor = new(user.Id, user.Email, user.RoleId) }, "LOGIN", user.Id, null, JsonSerializer.Serialize(new PermissionSummary(user.Id, user.Email)))); await store.CommitAsync(ct, invalidateCache: false); }
+        try { store.AddRefreshFamily(new RefreshFamily { Id = refresh.FamilyId, UserId = user.Id, CreatedAt = refresh.CreatedAt, ExpiresAt = refresh.ExpiresAt }); store.AddRefreshToken(refresh); if (ctx.Audit == AuditMode.Required) store.AddAudit(Audit(ctx with { Actor = new(user.Id, user.Email, user.RoleId) }, "LOGIN", user.Id, null, JsonSerializer.Serialize(new PermissionSummary(user.Id, user.Email)))); await store.CommitAsync(ct, invalidateCache: false); }
         catch { await store.RollbackAsync(CancellationToken.None); throw; }
         if (ctx.Audit == AuditMode.Optional) await OptionalAuditAsync(Audit(ctx with { Actor = new(user.Id, user.Email, user.RoleId) }, "LOGIN", user.Id, null, null));
         return IssuePair(user, plaintext);
     }
-    public async Task<AuthTokensResult> RefreshAsync(string suppliedToken, CancellationToken ct)
+    public async Task<AuthTokensResult> RefreshAsync(string suppliedToken, OperationContext ctx, CancellationToken ct)
     {
-        var now = clock.GetUtcNow(); var currentHash = HashRefreshToken(suppliedToken);
-        await store.BeginAsync(ct);
+        var lookup = await store.RefreshTokenAsync(HashRefreshToken(suppliedToken), ct);
+        if (lookup is null) throw new ApiException(401, "Invalid refresh token");
+        User? user = null; string? plaintext = null; ActivityLog? entry = null;
+        await store.BeginSessionAsync(ct);
         try
         {
-            var current = await store.RefreshTokenAsync(currentHash, ct);
-            if (current is null) { await store.RollbackAsync(CancellationToken.None); throw new ApiException(401, "Invalid refresh token"); }
-            if (current.RevokedAt is not null)
+            var family = await store.LockRefreshFamilyAsync(lookup.FamilyId, ct);
+            var current = await store.LockRefreshTokenAsync(lookup.Id, ct);
+            var now = clock.GetUtcNow();
+            if (family is null || current is null) throw new ApiException(401, "Invalid refresh token");
+            var before = JsonSerializer.Serialize(new { family.ExpiresAt, Revoked = family.RevokedAt is not null });
+            user = await store.UserAsync(current.UserId, ct);
+            ctx = ctx with { Actor = user is null ? null : new(user.Id, user.Email, user.RoleId) };
+            if (family.RevokedAt is not null || family.ExpiresAt <= now || current.RevokedAt is not null || current.ExpiresAt <= now || user is null || user.DeletedAt is not null)
             {
-                await store.RevokeRefreshFamilyAsync(current.FamilyId, now, ct);
-                await store.CommitAsync(ct, invalidateCache: false);
-                throw new ApiException(401, "Refresh token reuse detected");
+                family.RevokedAt ??= now;
+                await store.RevokeRefreshFamilyAsync(family.Id, now, ct);
+                entry = Audit(ctx, "REFRESH_REPLAY", family.Id, before, JsonSerializer.Serialize(new { family.ExpiresAt, Revoked = true }));
+                user = null;
             }
-            var user = await store.UserAsync(current.UserId, ct);
-            if (current.ExpiresAt <= now || current.FamilyExpiresAt <= now || user is null || user.DeletedAt is not null)
+            else
             {
-                await store.RevokeRefreshFamilyAsync(current.FamilyId, now, ct);
-                await store.CommitAsync(ct, invalidateCache: false);
-                throw new ApiException(401, "Refresh token expired or inactive");
+                var (replacement, raw) = CreateRefreshToken(user.Id, family.Id);
+                plaintext = raw; family.ExpiresAt = replacement.ExpiresAt;
+                current.RevokedAt = now; current.ReplacedByTokenHash = replacement.TokenHash;
+                store.AddRefreshToken(replacement);
+                entry = Audit(ctx, "TOKEN_REFRESH", family.Id, before, JsonSerializer.Serialize(new { family.ExpiresAt, Revoked = false }));
             }
-            var (replacement, plaintext) = CreateRefreshToken(user.Id, current.FamilyId, current.FamilyExpiresAt);
-            current.RevokedAt = now; current.ReplacedByTokenHash = replacement.TokenHash;
-            store.AddRefreshToken(replacement);
+            if (ctx.Audit == AuditMode.Required) store.AddAudit(entry);
             await store.CommitAsync(ct, invalidateCache: false);
-            return IssuePair(user, plaintext);
         }
-        catch (ApiException) { await store.RollbackAsync(CancellationToken.None); throw; }
         catch { await store.RollbackAsync(CancellationToken.None); throw; }
+        if (ctx.Audit == AuditMode.Optional && entry is not null) await OptionalAuditAsync(entry);
+        if (user is null || plaintext is null) throw new ApiException(401, "Invalid or expired refresh token");
+        return IssuePair(user, plaintext);
+    }
+    public async Task LogoutAsync(string suppliedToken, OperationContext ctx, CancellationToken ct)
+    {
+        var lookup = await store.RefreshTokenAsync(HashRefreshToken(suppliedToken), ct);
+        if (lookup is null) return;
+        ActivityLog? entry = null;
+        await store.BeginSessionAsync(ct);
+        try
+        {
+            var family = await store.LockRefreshFamilyAsync(lookup.FamilyId, ct);
+            if (family is not null && family.RevokedAt is null)
+            {
+                var before = JsonSerializer.Serialize(new { family.ExpiresAt, Revoked = false });
+                var user = await store.UserAsync(family.UserId, ct);
+                ctx = ctx with { Actor = user is null ? null : new(user.Id, user.Email, user.RoleId) };
+                family.RevokedAt = clock.GetUtcNow();
+                await store.RevokeRefreshFamilyAsync(family.Id, family.RevokedAt.Value, ct);
+                entry = Audit(ctx, "LOGOUT", family.Id, before, JsonSerializer.Serialize(new { family.ExpiresAt, Revoked = true }));
+                if (ctx.Audit == AuditMode.Required) store.AddAudit(entry);
+            }
+            await store.CommitAsync(ct, invalidateCache: false);
+        }
+        catch { await store.RollbackAsync(CancellationToken.None); throw; }
+        if (ctx.Audit == AuditMode.Optional && entry is not null) await OptionalAuditAsync(entry);
     }
     public async Task<AuthUserResult> MeAsync(Guid id, CancellationToken ct) => AuthMap(await store.UserAsync(id, ct) ?? throw new ApiException(404, "User not found"));
     public async Task<UserResult> UserAsync(Guid id, CancellationToken ct) => Map(await store.UserAsync(id, ct) ?? throw new ApiException(404, "User not found"));

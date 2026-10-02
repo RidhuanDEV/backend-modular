@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.core.settings import Settings
+from app.platform.telemetry import instrument_database
 
 
 def create_database(settings: Settings) -> AsyncEngine:
@@ -40,7 +41,7 @@ def create_database(settings: Settings) -> AsyncEngine:
         connect_args["ssl"] = ssl.create_default_context(
             cafile=str(settings.database_ca_file) if settings.database_ca_file else None
         )
-    return create_async_engine(
+    engine = create_async_engine(
         url,
         connect_args=connect_args,
         pool_pre_ping=True,
@@ -48,6 +49,9 @@ def create_database(settings: Settings) -> AsyncEngine:
         max_overflow=5,
         pool_timeout=3,
     )
+    if settings.otel_enabled:
+        instrument_database(engine)
+    return engine
 
 
 def sessions(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

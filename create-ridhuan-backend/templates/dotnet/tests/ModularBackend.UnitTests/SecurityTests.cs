@@ -1,5 +1,6 @@
 using ModularBackend.Application;
 using ModularBackend.Domain;
+using ModularBackend.Infrastructure.Persistence;
 using ModularBackend.Infrastructure.Security;
 
 namespace ModularBackend.UnitTests;
@@ -7,6 +8,18 @@ namespace ModularBackend.UnitTests;
 [TestClass]
 public sealed class SecurityTests
 {
+    [TestMethod]
+    [DataRow("mysql", 32, 64, true)]
+    [DataRow("mysql", 33, 64, false)]
+    [DataRow("mysql", 32, 65, false)]
+    [DataRow("postgresql", 63, 63, true)]
+    [DataRow("postgresql", 64, 63, false)]
+    [DataRow("postgresql", 63, 64, false)]
+    public void ProviderIdentifierLimitsAreIndependent(string provider, int userLength, int databaseLength, bool accepted)
+    {
+        var connection = $"{(provider == "mysql" ? "Server" : "Host")}=localhost;Database={new string('d', databaseLength)};{(provider == "mysql" ? "User ID" : "Username")}={new string('u', userLength)};Password=fixture";
+        Assert.AreEqual(accepted, DatabaseProvider.IsValid(provider, connection));
+    }
     [TestMethod]
     public void OfficialIdentityHashVerifiesAndRejectsWrongPassword()
     {

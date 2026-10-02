@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -31,11 +32,13 @@ from app.platform.cache.service import Cache
 from app.platform.rate_limit.service import Limiter
 from app.platform.redis import redis_client
 from app.platform.storage.service import Storage
+from app.platform.telemetry import setup, shutdown
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     configure_logging()
+    setup(settings)
     engine = create_database(settings)
     redis = redis_client(settings)
     run = Runtime(
@@ -60,6 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await redis.aclose()
             await engine.dispose()
             await run.storage.close()
+            await asyncio.to_thread(shutdown)
 
     app = FastAPI(
         title="Modular FastAPI",
@@ -77,6 +81,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_credentials=False,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID", "Last-Event-ID"],
+        expose_headers=["X-Request-ID", "X-Next-Cursor"],
     )
     feature_routers = (auth, users, roles, permissions, uploads, notifications, probes)
     for router in feature_routers:

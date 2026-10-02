@@ -40,6 +40,7 @@ export interface EndpointDefinition {
   summary: string;
   access: Access;
   audit: AuditMode;
+  auditCapability: "transaction" | "read" | "none";
   rateLimit: RateLimitGroup;
   cache: CacheMode;
   status: number;
@@ -108,17 +109,28 @@ const pagination = z.object({
 const success = (data: ZodType) =>
   z.object({ success: z.literal(true), data, meta: pagination.optional() });
 const noContent = z.undefined();
-const notification = z.object({ id: z.uuid(), recipientId: z.uuid(), title: z.string(), body: z.string(),
+const notification = z.object({
+  id: z.uuid(),
+  recipientId: z.uuid(),
+  title: z.string(),
+  body: z.string(),
   emailStatus: z.enum(["NOT_REQUESTED", "PENDING", "SENT", "FAILED"]),
-  readAt: isoDate.nullable(), createdAt: isoDate });
+  readAt: isoDate.nullable(),
+  createdAt: isoDate,
+});
 const notificationId = z.object({ id: z.uuid() });
-const createNotification = z.object({ recipientId: z.uuid(), title: z.string().trim().min(1).max(160),
-  body: z.string().trim().min(1).max(4000), sendEmail: z.boolean().default(false) });
+const createNotification = z.object({
+  recipientId: z.uuid(),
+  title: z.string().trim().min(1).max(160),
+  body: z.string().trim().min(1).max(4000),
+  sendEmail: z.boolean().default(false),
+});
 export { createNotification };
 
 export const endpointRegistry = {
   "health.get": {
     method: "GET",
+    auditCapability: "read",
     path: "/health",
     module: "system",
     summary: "Health check",
@@ -131,6 +143,7 @@ export const endpointRegistry = {
   },
   "live.get": {
     method: "GET",
+    auditCapability: "read",
     path: "/live",
     module: "system",
     summary: "Process liveness",
@@ -143,6 +156,7 @@ export const endpointRegistry = {
   },
   "ready.get": {
     method: "GET",
+    auditCapability: "read",
     path: "/ready",
     module: "system",
     summary: "Required dependency readiness",
@@ -155,6 +169,7 @@ export const endpointRegistry = {
   },
   "docs.spec": {
     method: "GET",
+    auditCapability: "read",
     path: "/docs/openapi.json",
     module: "docs",
     summary: "OpenAPI specification",
@@ -166,6 +181,7 @@ export const endpointRegistry = {
   },
   "docs.moduleSpec": {
     method: "GET",
+    auditCapability: "read",
     path: "/docs/specs/:module.json",
     module: "docs",
     summary: "Module OpenAPI specification",
@@ -178,6 +194,7 @@ export const endpointRegistry = {
   },
   "docs.ui": {
     method: "GET",
+    auditCapability: "read",
     path: "/docs",
     module: "docs",
     summary: "API documentation UI",
@@ -190,6 +207,7 @@ export const endpointRegistry = {
   },
   "auth.register": {
     method: "POST",
+    auditCapability: "transaction",
     path: "/api/auth/register",
     module: "auth",
     summary: "Register account",
@@ -203,6 +221,7 @@ export const endpointRegistry = {
   },
   "auth.login": {
     method: "POST",
+    auditCapability: "transaction",
     path: "/api/auth/login",
     module: "auth",
     summary: "Login",
@@ -216,11 +235,12 @@ export const endpointRegistry = {
   },
   "auth.refresh": {
     method: "POST",
+    auditCapability: "transaction",
     path: "/api/auth/refresh",
     module: "auth",
     summary: "Rotate refresh token and issue a new access token",
     access: { kind: "public" },
-    audit: "none",
+    audit: "optional",
     rateLimit: "auth",
     cache: "off",
     status: 200,
@@ -229,11 +249,12 @@ export const endpointRegistry = {
   },
   "auth.logout": {
     method: "POST",
+    auditCapability: "transaction",
     path: "/api/auth/logout",
     module: "auth",
     summary: "Revoke refresh token",
     access: { kind: "public" },
-    audit: "none",
+    audit: "optional",
     rateLimit: "auth",
     cache: "off",
     status: 204,
@@ -241,6 +262,7 @@ export const endpointRegistry = {
   },
   "auth.me": {
     method: "GET",
+    auditCapability: "read",
     path: "/api/auth/me",
     module: "auth",
     summary: "Current user",
@@ -253,6 +275,7 @@ export const endpointRegistry = {
   },
   "user.list": {
     method: "GET",
+    auditCapability: "read",
     path: "/api/users",
     module: "user",
     summary: "List users",
@@ -266,6 +289,7 @@ export const endpointRegistry = {
   },
   "user.get": {
     method: "GET",
+    auditCapability: "read",
     path: "/api/users/:id",
     module: "user",
     summary: "Get user",
@@ -279,6 +303,7 @@ export const endpointRegistry = {
   },
   "user.create": {
     method: "POST",
+    auditCapability: "transaction",
     path: "/api/users",
     module: "user",
     summary: "Create user",
@@ -292,6 +317,7 @@ export const endpointRegistry = {
   },
   "user.update": {
     method: "PATCH",
+    auditCapability: "transaction",
     path: "/api/users/:id",
     module: "user",
     summary: "Update user",
@@ -306,6 +332,7 @@ export const endpointRegistry = {
   },
   "user.delete": {
     method: "DELETE",
+    auditCapability: "transaction",
     path: "/api/users/:id",
     module: "user",
     summary: "Delete user",
@@ -319,6 +346,7 @@ export const endpointRegistry = {
   },
   "role.list": {
     method: "GET",
+    auditCapability: "read",
     path: "/api/roles",
     module: "roles",
     summary: "List roles",
@@ -331,6 +359,7 @@ export const endpointRegistry = {
   },
   "role.get": {
     method: "GET",
+    auditCapability: "read",
     path: "/api/roles/:id",
     module: "roles",
     summary: "Get role",
@@ -344,6 +373,7 @@ export const endpointRegistry = {
   },
   "role.create": {
     method: "POST",
+    auditCapability: "transaction",
     path: "/api/roles",
     module: "roles",
     summary: "Create role",
@@ -357,6 +387,7 @@ export const endpointRegistry = {
   },
   "role.update": {
     method: "PATCH",
+    auditCapability: "transaction",
     path: "/api/roles/:id",
     module: "roles",
     summary: "Update role",
@@ -371,6 +402,7 @@ export const endpointRegistry = {
   },
   "role.delete": {
     method: "DELETE",
+    auditCapability: "transaction",
     path: "/api/roles/:id",
     module: "roles",
     summary: "Delete role",
@@ -384,6 +416,7 @@ export const endpointRegistry = {
   },
   "role.assignPermissions": {
     method: "POST",
+    auditCapability: "transaction",
     path: "/api/roles/:id/permissions",
     module: "roles",
     summary: "Assign permissions",
@@ -398,6 +431,7 @@ export const endpointRegistry = {
   },
   "permission.list": {
     method: "GET",
+    auditCapability: "read",
     path: "/api/permissions",
     module: "permissions",
     summary: "List permissions",
@@ -410,6 +444,7 @@ export const endpointRegistry = {
   },
   "permission.get": {
     method: "GET",
+    auditCapability: "read",
     path: "/api/permissions/:id",
     module: "permissions",
     summary: "Get permission",
@@ -423,6 +458,7 @@ export const endpointRegistry = {
   },
   "permission.create": {
     method: "POST",
+    auditCapability: "transaction",
     path: "/api/permissions",
     module: "permissions",
     summary: "Create permission",
@@ -436,6 +472,7 @@ export const endpointRegistry = {
   },
   "permission.update": {
     method: "PATCH",
+    auditCapability: "transaction",
     path: "/api/permissions/:id",
     module: "permissions",
     summary: "Update permission",
@@ -450,6 +487,7 @@ export const endpointRegistry = {
   },
   "permission.delete": {
     method: "DELETE",
+    auditCapability: "transaction",
     path: "/api/permissions/:id",
     module: "permissions",
     summary: "Delete permission",
@@ -463,6 +501,7 @@ export const endpointRegistry = {
   },
   "upload.create": {
     method: "POST",
+    auditCapability: "transaction",
     path: "/api/upload",
     module: "upload",
     summary: "Upload file",
@@ -476,6 +515,7 @@ export const endpointRegistry = {
   },
   "upload.get": {
     method: "GET",
+    auditCapability: "read",
     path: "/api/upload/:id",
     module: "upload",
     summary: "Get file metadata",
@@ -487,21 +527,60 @@ export const endpointRegistry = {
     params: z.object({ id: z.uuid() }),
     response: success(file),
   },
-  "notification.create": { method: "POST", path: "/api/notifications", module: "notifications",
-    summary: "Create notification", access: { kind: "internal", permission: "manage_notifications" },
-    audit: "required", rateLimit: "internal", cache: "off", status: 201,
-    body: createNotification, response: success(notification) },
-  "notification.list": { method: "GET", path: "/api/notifications", module: "notifications",
-    summary: "List own notifications", access: { kind: "internal" },
-    audit: "none", rateLimit: "internal", cache: "off", status: 200,
-    response: success(z.array(notification)) },
-  "notification.read": { method: "PATCH", path: "/api/notifications/:id/read", module: "notifications",
-    summary: "Mark own notification read", access: { kind: "internal" },
-    audit: "required", rateLimit: "internal", cache: "off", status: 200,
-    params: notificationId, response: success(notification) },
-  "notification.stream": { method: "GET", path: "/api/notifications/stream", module: "notifications",
-    summary: "Stream own notifications", access: { kind: "internal" },
-    audit: "none", rateLimit: "internal", cache: "off", status: 200 },
+  "notification.create": {
+    method: "POST",
+    auditCapability: "transaction",
+    path: "/api/notifications",
+    module: "notifications",
+    summary: "Create notification",
+    access: { kind: "internal", permission: "manage_notifications" },
+    audit: "required",
+    rateLimit: "internal",
+    cache: "off",
+    status: 201,
+    body: createNotification,
+    response: success(notification),
+  },
+  "notification.list": {
+    method: "GET",
+    auditCapability: "read",
+    path: "/api/notifications",
+    module: "notifications",
+    summary: "List own notifications",
+    access: { kind: "internal" },
+    audit: "none",
+    rateLimit: "internal",
+    cache: "off",
+    status: 200,
+    query: z.object({ cursor: z.uuid().optional() }),
+    response: success(z.array(notification)),
+  },
+  "notification.read": {
+    method: "PATCH",
+    auditCapability: "transaction",
+    path: "/api/notifications/:id/read",
+    module: "notifications",
+    summary: "Mark own notification read",
+    access: { kind: "internal" },
+    audit: "required",
+    rateLimit: "internal",
+    cache: "off",
+    status: 200,
+    params: notificationId,
+    response: success(notification),
+  },
+  "notification.stream": {
+    method: "GET",
+    auditCapability: "read",
+    path: "/api/notifications/stream",
+    module: "notifications",
+    summary: "Stream own notifications",
+    access: { kind: "internal" },
+    audit: "none",
+    rateLimit: "internal",
+    cache: "off",
+    status: 200,
+  },
 } as const satisfies Record<string, EndpointDefinition>;
 
 export type EndpointId = keyof typeof endpointRegistry;
@@ -524,14 +603,12 @@ for (const id of Object.keys(overrides)) {
 export function endpointPolicy(id: EndpointId): EndpointDefinition {
   const base: EndpointDefinition = endpointRegistry[id];
   const override = overrides[id];
-  if (
-    override?.audit === "required" &&
-    base.audit === "none" &&
-    base.method === "GET"
-  )
+  if (override?.audit === "required" && base.auditCapability !== "transaction")
     throw new Error(
       `Read-only endpoint ${id} needs an audit producer before required mode`,
     );
+  if (override?.audit === "optional" && base.auditCapability === "none")
+    throw new Error(`Endpoint ${id} has no audit producer`);
   return {
     ...base,
     ...(override?.audit ? { audit: override.audit } : {}),

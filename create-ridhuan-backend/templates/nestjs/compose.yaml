@@ -75,6 +75,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_SECURE: ${SMTP_SECURE:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT_DOCKER:-http://otel-collector:4318}
     ports:
     - ${APP_PORT:-3000}:3000
     volumes:
@@ -97,6 +98,7 @@ services:
       interval: 10s
       timeout: 3s
       retries: 12
+    env_file: .env
   redis:
     image: redis:8.6.1-alpine
     profiles:
@@ -165,6 +167,74 @@ services:
       minio:
         condition: service_healthy
     restart: 'no'
+  worker:
+    build: .
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?Set DATABASE_URL_DOCKER}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_ISSUER: ${JWT_ISSUER:-modular-nestjs}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-modular-nestjs-api}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      ENDPOINT_POLICIES_JSON: ${ENDPOINT_POLICIES_JSON:-{}}
+      APP_INSTANCE_COUNT: ${APP_INSTANCE_COUNT:-1}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
+      RATE_LIMIT_STORE: ${RATE_LIMIT_STORE:-memory}
+      RATE_LIMIT_AUTH_WINDOW_MS: ${RATE_LIMIT_AUTH_WINDOW_MS:-900000}
+      RATE_LIMIT_AUTH_MAX: ${RATE_LIMIT_AUTH_MAX:-20}
+      RATE_LIMIT_PUBLIC_WINDOW_MS: ${RATE_LIMIT_PUBLIC_WINDOW_MS:-900000}
+      RATE_LIMIT_PUBLIC_MAX: ${RATE_LIMIT_PUBLIC_MAX:-100}
+      RATE_LIMIT_INTERNAL_WINDOW_MS: ${RATE_LIMIT_INTERNAL_WINDOW_MS:-900000}
+      RATE_LIMIT_INTERNAL_MAX: ${RATE_LIMIT_INTERNAL_MAX:-300}
+      REDIS_URL: ${REDIS_URL_DOCKER:-redis://redis:6379}
+      REDIS_NAMESPACE: ${REDIS_NAMESPACE:-modular-nestjs}
+      CACHE_ENABLED: ${CACHE_ENABLED:-false}
+      UPLOAD_ENABLED: ${UPLOAD_ENABLED:-true}
+      UPLOAD_STORAGE: ${UPLOAD_STORAGE:-local}
+      UPLOAD_LOCAL_DIR: /app/uploads
+      UPLOAD_MAX_BYTES: ${UPLOAD_MAX_BYTES:-10485760}
+      UPLOAD_ALLOWED_MIME: ${UPLOAD_ALLOWED_MIME:-image/png,image/jpeg,application/pdf}
+      UPLOAD_ORPHAN_GRACE_HOURS: ${UPLOAD_ORPHAN_GRACE_HOURS:-24}
+      S3_ENDPOINT: ${S3_ENDPOINT_DOCKER:-http://minio:9000}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-uploads}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-minioadmin}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT_DOCKER:-http://otel-collector:4318}
+    volumes:
+    - uploads_data:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file: .env
+    restart: on-failure
+    command:
+    - node
+    - dist/tools/email-worker.js
+    stop_grace_period: 60s
+  otel-collector:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector:0.162.0
+    profiles:
+    - telemetry
+    command:
+    - --config=/etc/otelcol/config.yaml
+    volumes:
+    - ./scripts/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+    - 127.0.0.1:${OTEL_GRPC_PORT:-4317}:4317
+    - 127.0.0.1:${OTEL_HTTP_PORT:-4318}:4318
+    restart: unless-stopped
 volumes:
   postgres_data: null
   uploads_data: null

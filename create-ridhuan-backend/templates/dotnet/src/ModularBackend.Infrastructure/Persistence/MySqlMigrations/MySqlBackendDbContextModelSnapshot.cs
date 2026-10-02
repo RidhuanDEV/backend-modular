@@ -83,6 +83,64 @@ namespace ModularBackend.Infrastructure.Persistence.MySqlMigrations
                     b.ToTable("activity_logs", (string)null);
                 });
 
+            modelBuilder.Entity("ModularBackend.Domain.EmailJob", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("varchar(36)");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("AvailableAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("varchar(4000)");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("LeaseId")
+                        .HasColumnType("varchar(36)");
+
+                    b.Property<DateTime?>("LeaseUntil")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("NotificationId")
+                        .IsRequired()
+                        .HasColumnType("varchar(36)");
+
+                    b.Property<string>("Recipient")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("varchar(160)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NotificationId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "AvailableAt", "LeaseUntil");
+
+                    b.ToTable("email_jobs", (string)null);
+                });
+
             modelBuilder.Entity("ModularBackend.Domain.Notification", b =>
                 {
                     b.Property<string>("Id")
@@ -112,6 +170,9 @@ namespace ModularBackend.Infrastructure.Persistence.MySqlMigrations
                         .IsRequired()
                         .HasColumnType("varchar(36)");
 
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(160)
@@ -121,12 +182,28 @@ namespace ModularBackend.Infrastructure.Persistence.MySqlMigrations
 
                     b.HasIndex("ActorId");
 
+                    b.HasIndex("RecipientId", "Sequence")
+                        .IsUnique();
+
                     b.HasIndex("RecipientId", "CreatedAt", "Id");
 
                     b.ToTable("notifications", null, t =>
                         {
                             t.HasCheckConstraint("CK_notifications_email_status", "`EmailStatus` IN ('NOT_REQUESTED','PENDING','SENT','FAILED')");
                         });
+                });
+
+            modelBuilder.Entity("ModularBackend.Domain.NotificationCounter", b =>
+                {
+                    b.Property<string>("RecipientId")
+                        .HasColumnType("varchar(36)");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("RecipientId");
+
+                    b.ToTable("notification_counters", (string)null);
                 });
 
             modelBuilder.Entity("ModularBackend.Domain.Permission", b =>
@@ -156,6 +233,34 @@ namespace ModularBackend.Infrastructure.Persistence.MySqlMigrations
                         .IsUnique();
 
                     b.ToTable("permissions", (string)null);
+                });
+
+            modelBuilder.Entity("ModularBackend.Domain.RefreshFamily", b =>
+                {
+                    b.Property<string>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("varchar(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("varchar(36)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("RevokedAt", "ExpiresAt");
+
+                    b.ToTable("refresh_families", (string)null);
                 });
 
             modelBuilder.Entity("ModularBackend.Domain.RefreshToken", b =>
@@ -366,6 +471,15 @@ namespace ModularBackend.Infrastructure.Persistence.MySqlMigrations
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
+            modelBuilder.Entity("ModularBackend.Domain.EmailJob", b =>
+                {
+                    b.HasOne("ModularBackend.Domain.Notification", null)
+                        .WithOne()
+                        .HasForeignKey("ModularBackend.Domain.EmailJob", "NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ModularBackend.Domain.Notification", b =>
                 {
                     b.HasOne("ModularBackend.Domain.User", null)
@@ -380,8 +494,32 @@ namespace ModularBackend.Infrastructure.Persistence.MySqlMigrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ModularBackend.Domain.NotificationCounter", b =>
+                {
+                    b.HasOne("ModularBackend.Domain.User", null)
+                        .WithOne()
+                        .HasForeignKey("ModularBackend.Domain.NotificationCounter", "RecipientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ModularBackend.Domain.RefreshFamily", b =>
+                {
+                    b.HasOne("ModularBackend.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ModularBackend.Domain.RefreshToken", b =>
                 {
+                    b.HasOne("ModularBackend.Domain.RefreshFamily", null)
+                        .WithMany()
+                        .HasForeignKey("FamilyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("ModularBackend.Domain.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")

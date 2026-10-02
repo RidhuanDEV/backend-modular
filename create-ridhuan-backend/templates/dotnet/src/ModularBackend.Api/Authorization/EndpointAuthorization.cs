@@ -20,6 +20,7 @@ public sealed class EndpointFilter(EndpointRegistry registry, IAuthorizationServ
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var policy = registry.Get(context.HttpContext);
+        System.Diagnostics.Activity.Current?.SetTag("operationId", policy.WireId);
         using var scope = logger.BeginScope(new Dictionary<string, string> { ["EndpointId"] = policy.WireId, ["ActorId"] = context.HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous" });
         if (!policy.Public)
         {

@@ -13,6 +13,7 @@ services:
       UPLOAD_LOCAL_DIR: /app/uploads
       NODE_ENV: production
       DB_PROVIDER: mysql
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT_DOCKER:-http://otel-collector:4318}
     volumes:
     - uploads_data:/app/uploads
     depends_on:
@@ -29,8 +30,7 @@ services:
       - CMD
       - node
       - -e
-      - 'fetch(''http://127.0.0.1:3000/ready'').then(r => process.exit(r.ok ? 0 :
-        1)).catch(() => process.exit(1))'
+      - 'fetch(''http://127.0.0.1:3000/ready'').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))'
       interval: 10s
       timeout: 3s
       retries: 3
@@ -139,14 +139,50 @@ services:
     healthcheck:
       test:
       - CMD-SHELL
-      - MYSQL_PWD="$${MYSQL_PASSWORD}" mysql -h 127.0.0.1 -u "$${MYSQL_USER}" "$${MYSQL_DATABASE}"
-        -e "SELECT 1"
+      - MYSQL_PWD="$${MYSQL_PASSWORD}" mysql -h 127.0.0.1 -u "$${MYSQL_USER}" "$${MYSQL_DATABASE}" -e "SELECT 1"
       interval: 5s
       timeout: 3s
       retries: 30
     entrypoint:
     - /bin/bash
     - /opt/template/mysql-entrypoint.sh
+  worker:
+    build:
+      context: .
+      args:
+        DB_PROVIDER: mysql
+    env_file: .env
+    environment:
+      PORT: '3000'
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?Set DATABASE_URL_DOCKER}
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: ${S3_ENDPOINT_DOCKER:-http://minio:9000}
+      UPLOAD_LOCAL_DIR: /app/uploads
+      NODE_ENV: production
+      DB_PROVIDER: mysql
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT_DOCKER:-http://otel-collector:4318}
+    volumes:
+    - uploads_data:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure
+    command:
+    - node
+    - dist/scripts/email-worker.js
+    stop_grace_period: 60s
+  otel-collector:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector:0.162.0
+    profiles:
+    - telemetry
+    command:
+    - --config=/etc/otelcol/config.yaml
+    volumes:
+    - ./scripts/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+    - 127.0.0.1:${OTEL_GRPC_PORT:-4317}:4317
+    - 127.0.0.1:${OTEL_HTTP_PORT:-4318}:4318
+    restart: unless-stopped
 volumes:
   redis_data: null
   minio_data: null

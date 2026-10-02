@@ -57,6 +57,20 @@ func run() error {
 	}
 	dbName := ask(reader, *provider+" database name", strings.ReplaceAll(filepath.Base(name), "-", "_"))
 	dbUser := ask(reader, *provider+" username", "backend")
+	databaseMaximum := 63
+	if *provider == "mysql" {
+		databaseMaximum = 64
+	}
+	if len(dbName) > databaseMaximum {
+		return fmt.Errorf("%s database name exceeds %d characters", *provider, databaseMaximum)
+	}
+	maximum := 63
+	if *provider == "mysql" {
+		maximum = 32
+	}
+	if len(dbUser) > maximum {
+		return fmt.Errorf("%s username exceeds %d characters", *provider, maximum)
+	}
 	dbPassword := os.Getenv("RIDHUAN_DB_PASSWORD")
 	if dbPassword == "" {
 		dbPassword = randomSecret()

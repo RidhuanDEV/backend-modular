@@ -10,7 +10,7 @@ import (
 )
 
 const createNotification = `-- name: CreateNotification :exec
-INSERT INTO notifications(id,recipient_id,actor_id,title,body,email_status) VALUES($1,$2,$3,$4,$5,$6)
+INSERT INTO notifications(id,recipient_id,actor_id,title,body,email_status,sequence) VALUES($1,$2,$3,$4,$5,$6,$7)
 `
 
 type CreateNotificationParams struct {
@@ -20,6 +20,7 @@ type CreateNotificationParams struct {
 	Title       string  `json:"title"`
 	Body        string  `json:"body"`
 	EmailStatus string  `json:"email_status"`
+	Sequence    int64   `json:"sequence"`
 }
 
 func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) error {
@@ -30,12 +31,23 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 		arg.Title,
 		arg.Body,
 		arg.EmailStatus,
+		arg.Sequence,
 	)
 	return err
 }
 
+const ensureNotificationCounter = `-- name: EnsureNotificationCounter :exec
+INSERT INTO notification_counters(recipient_id,sequence) VALUES($1,0)
+ON CONFLICT(recipient_id) DO NOTHING
+`
+
+func (q *Queries) EnsureNotificationCounter(ctx context.Context, recipientID string) error {
+	_, err := q.db.Exec(ctx, ensureNotificationCounter, recipientID)
+	return err
+}
+
 const findNotification = `-- name: FindNotification :one
-SELECT id, recipient_id, actor_id, title, body, email_status, read_at, created_at FROM notifications WHERE id=$1
+SELECT id, recipient_id, actor_id, title, body, email_status, read_at, created_at, sequence FROM notifications WHERE id=$1
 `
 
 func (q *Queries) FindNotification(ctx context.Context, id string) (Notification, error) {
@@ -50,12 +62,22 @@ func (q *Queries) FindNotification(ctx context.Context, id string) (Notification
 		&i.EmailStatus,
 		&i.ReadAt,
 		&i.CreatedAt,
+		&i.Sequence,
 	)
 	return i, err
 }
 
+const incrementNotificationCounter = `-- name: IncrementNotificationCounter :exec
+UPDATE notification_counters SET sequence=sequence+1 WHERE recipient_id=$1
+`
+
+func (q *Queries) IncrementNotificationCounter(ctx context.Context, recipientID string) error {
+	_, err := q.db.Exec(ctx, incrementNotificationCounter, recipientID)
+	return err
+}
+
 const listOwnNotifications = `-- name: ListOwnNotifications :many
-SELECT id, recipient_id, actor_id, title, body, email_status, read_at, created_at FROM notifications WHERE recipient_id=$1 AND ($2::boolean=false OR read_at IS NULL) ORDER BY created_at DESC,id DESC LIMIT 50
+SELECT id, recipient_id, actor_id, title, body, email_status, read_at, created_at, sequence FROM notifications WHERE recipient_id=$1 AND ($2::boolean=false OR read_at IS NULL) ORDER BY created_at DESC,id DESC LIMIT 50
 `
 
 type ListOwnNotificationsParams struct {
@@ -81,6 +103,7 @@ func (q *Queries) ListOwnNotifications(ctx context.Context, arg ListOwnNotificat
 			&i.EmailStatus,
 			&i.ReadAt,
 			&i.CreatedAt,
+			&i.Sequence,
 		); err != nil {
 			return nil, err
 		}
@@ -93,7 +116,7 @@ func (q *Queries) ListOwnNotifications(ctx context.Context, arg ListOwnNotificat
 }
 
 const lockOwnNotification = `-- name: LockOwnNotification :one
-SELECT id, recipient_id, actor_id, title, body, email_status, read_at, created_at FROM notifications WHERE id=$1 AND recipient_id=$2 FOR UPDATE
+SELECT id, recipient_id, actor_id, title, body, email_status, read_at, created_at, sequence FROM notifications WHERE id=$1 AND recipient_id=$2 FOR UPDATE
 `
 
 type LockOwnNotificationParams struct {
@@ -113,8 +136,128 @@ func (q *Queries) LockOwnNotification(ctx context.Context, arg LockOwnNotificati
 		&i.EmailStatus,
 		&i.ReadAt,
 		&i.CreatedAt,
+		&i.Sequence,
 	)
 	return i, err
+}
+
+const notificationBacklog = `-- name: NotificationBacklog :many
+SELECT id, recipient_id, actor_id, title, body, email_status, read_at, created_at, sequence FROM notifications WHERE recipient_id=$1
+ AND (($2::boolean= true AND sequence > $3::bigint)
+ OR ($2::boolean= false AND read_at IS NULL))
+ AND ($4::boolean=false OR read_at IS NULL)
+ ORDER BY sequence LIMIT 50
+`
+
+type NotificationBacklogParams struct {
+	RecipientID string `json:"recipient_id"`
+	HasCursor   bool   `json:"has_cursor"`
+	Sequence    int64  `json:"sequence"`
+	UnreadOnly  bool   `json:"unread_only"`
+}
+
+func (q *Queries) NotificationBacklog(ctx context.Context, arg NotificationBacklogParams) ([]Notification, error) {
+	rows, err := q.db.Query(ctx, notificationBacklog,
+		arg.RecipientID,
+		arg.HasCursor,
+		arg.Sequence,
+		arg.UnreadOnly,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Notification{}
+	for rows.Next() {
+		var i Notification
+		if err := rows.Scan(
+			&i.ID,
+			&i.RecipientID,
+			&i.ActorID,
+			&i.Title,
+			&i.Body,
+			&i.EmailStatus,
+			&i.ReadAt,
+			&i.CreatedAt,
+			&i.Sequence,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const notificationCursor = `-- name: NotificationCursor :one
+SELECT sequence FROM notifications WHERE id=$1 AND recipient_id=$2
+`
+
+type NotificationCursorParams struct {
+	ID          string `json:"id"`
+	RecipientID string `json:"recipient_id"`
+}
+
+func (q *Queries) NotificationCursor(ctx context.Context, arg NotificationCursorParams) (int64, error) {
+	row := q.db.QueryRow(ctx, notificationCursor, arg.ID, arg.RecipientID)
+	var sequence int64
+	err := row.Scan(&sequence)
+	return sequence, err
+}
+
+const notificationPage = `-- name: NotificationPage :many
+SELECT id, recipient_id, actor_id, title, body, email_status, read_at, created_at, sequence FROM notifications WHERE recipient_id=$1
+ AND ($2::boolean= false OR sequence < $3::bigint)
+ ORDER BY sequence DESC LIMIT 51
+`
+
+type NotificationPageParams struct {
+	RecipientID string `json:"recipient_id"`
+	HasCursor   bool   `json:"has_cursor"`
+	Sequence    int64  `json:"sequence"`
+}
+
+func (q *Queries) NotificationPage(ctx context.Context, arg NotificationPageParams) ([]Notification, error) {
+	rows, err := q.db.Query(ctx, notificationPage, arg.RecipientID, arg.HasCursor, arg.Sequence)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Notification{}
+	for rows.Next() {
+		var i Notification
+		if err := rows.Scan(
+			&i.ID,
+			&i.RecipientID,
+			&i.ActorID,
+			&i.Title,
+			&i.Body,
+			&i.EmailStatus,
+			&i.ReadAt,
+			&i.CreatedAt,
+			&i.Sequence,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const notificationSequence = `-- name: NotificationSequence :one
+SELECT sequence FROM notification_counters WHERE recipient_id=$1
+`
+
+func (q *Queries) NotificationSequence(ctx context.Context, recipientID string) (int64, error) {
+	row := q.db.QueryRow(ctx, notificationSequence, recipientID)
+	var sequence int64
+	err := row.Scan(&sequence)
+	return sequence, err
 }
 
 const readNotification = `-- name: ReadNotification :exec

@@ -18,12 +18,10 @@ using ModularBackend.Application;
 using ModularBackend.Infrastructure.Caching;
 using ModularBackend.Infrastructure.Configuration;
 using ModularBackend.Infrastructure.Mail;
+using ModularBackend.Infrastructure.Observability;
 using ModularBackend.Infrastructure.Persistence;
 using ModularBackend.Infrastructure.Security;
 using ModularBackend.Infrastructure.Storage;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 var isDocumentGeneration = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
@@ -43,8 +41,8 @@ if (isDocumentGeneration)
         ["ENDPOINT_POLICIES_JSON"] = "{}"
     });
 }
-builder.Logging.ClearProviders(); builder.Logging.AddJsonConsole();
-builder.Services.AddOptions<DatabaseOptions>().BindConfiguration("Database").ValidateDataAnnotations().Validate(o => DatabaseProvider.IsValid(o.Provider, o.ConnectionString), "Invalid database provider/connection string").ValidateOnStart();
+builder.Logging.AddBackendJsonLogs();
+builder.Services.AddOptions<DatabaseOptions>().BindConfiguration("Database").ValidateDataAnnotations().Validate(o => DatabaseProvider.IsValid(o.Provider, o.ConnectionString), "Invalid provider/connection: PostgreSQL ASCII username/database max63; MySQL ASCII username max32/database max64").ValidateOnStart();
 builder.Services.AddOptions<JwtOptions>().BindConfiguration("Jwt").ValidateDataAnnotations().Validate(o => !o.Secret.Contains("CHANGE_ME", StringComparison.OrdinalIgnoreCase) && Encoding.UTF8.GetByteCount(o.Secret) >= 32, "JWT secret must be generated").ValidateOnStart();
 builder.Services.AddOptions<CacheOptions>().BindConfiguration("Cache").ValidateDataAnnotations().ValidateOnStart();
 builder.Services.AddOptions<RedisOptions>().BindConfiguration("Redis").Validate(o => !(builder.Configuration.GetValue<bool>("Cache:Enabled") || builder.Configuration["Rate:Store"] == "redis") || !string.IsNullOrWhiteSpace(o.ConnectionString), "Redis connection string required").ValidateOnStart();
@@ -62,6 +60,8 @@ builder.Services.AddOptions<UploadOptions>().BindConfiguration("Upload").Validat
 builder.Services.AddOptions<ModularBackend.Infrastructure.Configuration.CorsOptions>().BindConfiguration("Cors").Validate(o => (!builder.Environment.IsProduction() || o.Origins.Length > 0) && o.Origins.All(ValidOrigin), "Explicit valid CORS origins required in production").ValidateOnStart();
 builder.Services.AddOptions<TelemetryOptions>().BindConfiguration("Telemetry").Validate(o => !o.Enabled || Uri.TryCreate(o.Endpoint, UriKind.Absolute, out var url) && url.Scheme is "http" or "https", "Invalid telemetry endpoint").ValidateOnStart();
 builder.Services.AddOptions<ProxyOptions>().BindConfiguration("Proxy").Validate(o => o.ForwardLimit is > 0 and <= 10 && o.KnownProxies.All(ip => System.Net.IPAddress.TryParse(ip, out _)), "Explicit valid proxy IPs required").ValidateOnStart();
+builder.Services.AddOptions<WorkerOptions>().BindConfiguration("Worker").ValidateDataAnnotations().Validate(o => o.RenewSeconds * 2 < o.LeaseSeconds, "Invalid worker lease renewal").ValidateOnStart();
+builder.Services.AddOptions<CleanupOptions>().BindConfiguration("Cleanup").ValidateDataAnnotations().Validate(o => !o.AuditEnabled || builder.Configuration["Cleanup:AuditDays"] is not null, "Audit cleanup requires explicit Cleanup:AuditDays").ValidateOnStart();
 builder.Services.AddOptions<SmtpOptions>().BindConfiguration("Smtp").Validate(o => !o.Enabled || o.Host.Length > 0 && o.From.Length > 0 && (o.User.Length == 0) == (o.Password.Length == 0) && System.Net.Mail.MailAddress.TryCreate(o.From, out _), "Invalid SMTP configuration").ValidateOnStart();
 builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(o =>
 {
@@ -77,10 +77,10 @@ var databaseProvider = builder.Configuration["Database:Provider"] ?? "postgresql
 if (!isDocumentGeneration) DatabaseProvider.ValidateGeneratedProvider(databaseProvider);
 if (databaseProvider == "mysql")
 {
-    builder.Services.AddDbContext<MySqlBackendDbContext>((services, options) => options.UseMySQL(services.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString, mysql => mysql.CommandTimeout(10)).AddInterceptors(new MySqlUtcInterceptor()));
+    builder.Services.AddDbContext<MySqlBackendDbContext>((services, options) => options.UseMySQL(services.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString, mysql => mysql.CommandTimeout(10)).AddInterceptors(new MySqlUtcInterceptor(), new DatabaseTelemetryInterceptor()));
     builder.Services.AddScoped<BackendDbContext>(services => services.GetRequiredService<MySqlBackendDbContext>());
 }
-else builder.Services.AddDbContext<BackendDbContext>((services, options) => options.UseNpgsql(services.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString, npgsql => npgsql.CommandTimeout(10)));
+else builder.Services.AddDbContext<BackendDbContext>((services, options) => options.UseNpgsql(services.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString, npgsql => npgsql.CommandTimeout(10)).AddInterceptors(new DatabaseTelemetryInterceptor()));
 builder.Services.AddScoped<IBackendStore, BackendStore>(); builder.Services.AddScoped<BackendService>(); builder.Services.AddScoped<UploadService>();
 builder.Services.AddScoped<INotificationStore, NotificationStore>(); builder.Services.AddScoped<NotificationService>(); builder.Services.AddSingleton<INotificationMailSender, SmtpNotificationSender>();
 builder.Services.AddSingleton<IPasswordService, PasswordService>(); builder.Services.AddSingleton<ITokenService, TokenService>();
@@ -121,7 +121,7 @@ builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = (builder.Con
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
 {
     var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? (builder.Environment.IsDevelopment() ? ["http://localhost:5173", "http://localhost:3000"] : []);
-    p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod();
+    p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().WithExposedHeaders("X-Request-ID", "X-Next-Cursor");
 }));
 foreach (var documentName in new[] { "v1", "auth", "user", "roles", "permissions", "upload", "notifications", "system", "docs" })
 {
@@ -131,8 +131,7 @@ foreach (var documentName in new[] { "v1", "auth", "user", "roles", "permissions
         o.AddSchemaTransformer<ContractSchemaTransformer>(); o.AddOperationTransformer<PolicyTransformer>(); o.AddDocumentTransformer<DocumentTransformer>();
     });
 }
-var telemetry = builder.Configuration.GetSection("Telemetry").Get<TelemetryOptions>() ?? new();
-if (telemetry.Enabled) builder.Services.AddOpenTelemetry().ConfigureResource(r => r.AddService(telemetry.ServiceName)).WithTracing(t => t.AddSource("Npgsql", "ModularBackend.Storage", "ModularBackend.Redis").AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddOtlpExporter(o => o.Endpoint = new Uri(telemetry.Endpoint))).WithMetrics(m => m.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddOtlpExporter(o => o.Endpoint = new Uri(telemetry.Endpoint)));
+builder.Services.AddBackendTelemetry(builder.Configuration);
 var app = builder.Build();
 app.UseMiddleware<ErrorMiddleware>(); app.UseForwardedHeaders(); app.UseRouting(); app.UseCors(); app.UseWhen(http => http.GetEndpoint()?.Metadata.GetMetadata<EndpointAttribute>() is { } endpoint && !http.RequestServices.GetRequiredService<EndpointRegistry>().Policies[endpoint.Id].Public, branch => branch.UseAuthentication()); app.UseMiddleware<RateMiddleware>(); app.UseAuthorization();
 app.UseStatusCodePages(async c => { if (c.HttpContext.Response.ContentLength is null) await c.HttpContext.Response.WriteAsJsonAsync(new Failure("Request failed", [])); });

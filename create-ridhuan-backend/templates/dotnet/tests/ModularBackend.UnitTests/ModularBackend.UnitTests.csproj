@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ModularBackend.Api\ModularBackend.Api.csproj" />
+    <Compile Include="../Shared/TestHost.cs" Link="TestHost.cs" />
   </ItemGroup>
 
 </Project>

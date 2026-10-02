@@ -54,6 +54,7 @@ jobs:
       - run: npm ci
       - run: npm run prepare:templates
       - run: npm run build
+      - run: npm run test:hardening:runner
       - run: npm test
       - run: npm pack
       - uses: actions/upload-artifact@v4
@@ -164,6 +165,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)" node scripts/verify-compose.mjs '${{ matrix.template }}' '${{ matrix.database }}'
+      - name: Confirm task-owned Docker cleanup isolation
+        if: always()
+        run: node scripts/test-hardening-runner.mjs --docker
   publish:
     if: github.event_name == 'workflow_dispatch' && inputs.publish
     needs: [package, consumer, macos-smoke, compose]

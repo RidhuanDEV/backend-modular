@@ -19,10 +19,13 @@ import (
 	"github.com/RidhuanDEV/golang-backend/internal/db"
 	"github.com/RidhuanDEV/golang-backend/internal/notification"
 	"github.com/RidhuanDEV/golang-backend/internal/ratelimit"
+	"github.com/RidhuanDEV/golang-backend/internal/telemetry"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type requestIDKey struct{}
@@ -100,6 +103,9 @@ func NewServer(c config.Config, pool db.Connection, client *redis.Client, servic
 func (s *Server) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		traceCtx, span := telemetry.Server(otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header)))
+		defer span.End()
+		r = r.WithContext(traceCtx)
 		tracked := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		id := r.Header.Get("X-Request-ID")
 		if id == "" || len(id) > 128 {
@@ -117,8 +123,9 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 			if _, ok := s.Config.CORSOrigins[origin]; ok {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Vary", "Origin")
+				w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID,X-Next-Cursor")
 				w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Request-ID")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Request-ID,Last-Event-ID")
 			}
 		}
 		if r.Method == http.MethodOptions {
@@ -130,7 +137,13 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 				s.Logger.Error("panic recovered", "error", recovered, "requestId", id)
 				writeError(tracked, internal())
 			}
-			s.Logger.Info("http request", "method", r.Method, "path", r.URL.Path, "status", tracked.status, "endpointId", tracked.endpointID, "actorId", tracked.actorID, "requestId", id, "durationMs", time.Since(start).Milliseconds())
+			operation := tracked.endpointID
+			if operation == "" {
+				operation = "unmapped"
+			}
+			telemetry.Label(span, operation, tracked.status)
+			telemetry.HTTP(traceCtx, operation, tracked.status, time.Since(start))
+			s.Logger.Info("http request", "method", r.Method, "status", tracked.status, "endpointId", operation, "actorId", tracked.actorID, "requestId", id, "durationMs", time.Since(start).Milliseconds(), "traceId", span.SpanContext().TraceID().String(), "spanId", span.SpanContext().SpanID().String())
 		}()
 		timeout := 30 * time.Second
 		if r.URL.Path == "/api/notifications/stream" {

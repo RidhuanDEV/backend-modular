@@ -5,6 +5,7 @@ from redis.asyncio.retry import Retry
 from redis.backoff import NoBackoff
 
 from app.core.settings import Settings
+from app.platform.telemetry import instrument
 
 
 def redis_client(settings: Settings) -> Redis:
@@ -28,6 +29,7 @@ def redis_client(settings: Settings) -> Redis:
     )
 
 
+@instrument("redis")
 async def execute(redis: Redis, *arguments: str | int) -> str | int:
     # redis-py 7.4.1 execute_command has no return annotation. This is the SDK
     # boundary; callers must narrow the response, never propagate an unknown type.

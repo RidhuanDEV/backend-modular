@@ -721,7 +721,11 @@
           "Microsoft.Extensions.Caching.StackExchangeRedis": "[10.0.12, )",
           "ModularBackend.Application": "[1.0.0, )",
           "MySql.EntityFrameworkCore": "[10.0.9, )",
-          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )",
+          "OpenTelemetry.Exporter.OpenTelemetryProtocol": "[1.19.1, )",
+          "OpenTelemetry.Extensions.Hosting": "[1.19.1, )",
+          "OpenTelemetry.Instrumentation.AspNetCore": "[1.19.0, )",
+          "OpenTelemetry.Instrumentation.Http": "[1.19.0, )"
         }
       },
       "AWSSDK.S3": {

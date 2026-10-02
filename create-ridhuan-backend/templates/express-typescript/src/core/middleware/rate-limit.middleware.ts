@@ -6,6 +6,7 @@ import RedisStore from "rate-limit-redis";
 import type { RedisReply } from "rate-limit-redis";
 import { redis } from "../../config/redis.js";
 import { env } from "../../config/env.js";
+import { observed } from "../observability/telemetry.js";
 
 function isRedisData(value: unknown): value is string | number | boolean {
   return (
@@ -43,7 +44,10 @@ function createLimiter(group: RateLimitGroup): RateLimitRequestHandler {
               throw new Error("Redis rate limit store is unavailable");
             const command = args[0];
             if (!command) throw new Error("Missing Redis command");
-            const reply = await redis.call(command, ...args.slice(1));
+            const connection = redis;
+            const reply = await observed("redis", () =>
+              connection.call(command, ...args.slice(1)),
+            );
             if (isRedisData(reply)) return reply;
             if (Array.isArray(reply) && reply.every(isRedisData)) return reply;
             throw new Error("Unsupported Redis rate limit reply");
@@ -56,7 +60,8 @@ function createLimiter(group: RateLimitGroup): RateLimitRequestHandler {
     limit: config.limit,
     standardHeaders: "draft-8",
     legacyHeaders: false,
-    skip: (req) => group === "public" && ["/health", "/live", "/ready"].includes(req.path),
+    skip: (req) =>
+      group === "public" && ["/health", "/live", "/ready"].includes(req.path),
     passOnStoreError: group !== "auth",
     keyGenerator: (req) =>
       group === "internal" && req.user

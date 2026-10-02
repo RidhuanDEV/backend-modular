@@ -9,6 +9,7 @@ services:
       S3_ENDPOINT: ${S3_ENDPOINT_DOCKER:-http://minio:9000}
       UPLOAD_LOCAL_DIR: /app/uploads
       NODE_ENV: production
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT_DOCKER:-http://otel-collector:4318}
     volumes:
     - uploads_data:/app/uploads
     depends_on:
@@ -126,6 +127,39 @@ services:
       minio:
         condition: service_healthy
     restart: 'no'
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      PORT: '3000'
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?Set DATABASE_URL_DOCKER}
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: ${S3_ENDPOINT_DOCKER:-http://minio:9000}
+      UPLOAD_LOCAL_DIR: /app/uploads
+      NODE_ENV: production
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT_DOCKER:-http://otel-collector:4318}
+    volumes:
+    - uploads_data:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: on-failure
+    command:
+    - node
+    - dist/scripts/email-worker.js
+    stop_grace_period: 60s
+  otel-collector:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector:0.162.0
+    profiles:
+    - telemetry
+    command:
+    - --config=/etc/otelcol/config.yaml
+    volumes:
+    - ./scripts/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+    - 127.0.0.1:${OTEL_GRPC_PORT:-4317}:4317
+    - 127.0.0.1:${OTEL_HTTP_PORT:-4318}:4318
+    restart: unless-stopped
 volumes:
   postgres_data: null
   redis_data: null

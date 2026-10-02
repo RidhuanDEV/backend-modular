@@ -19,6 +19,9 @@ func (s *Server) mountAuth() {
 		pair, err := s.Auth.Refresh(ctx, s.policy(ctx, "auth.refresh"), input.Body.RefreshToken)
 		return ok(tokenResponse(pair)), err
 	})
+	register[RefreshInput, struct{}](s, "auth.logout", func(ctx context.Context, input *RefreshInput, _ *Actor) (Success[struct{}], error) {
+		return Success[struct{}]{}, s.Auth.Logout(ctx, s.policy(ctx, "auth.logout"), input.Body.RefreshToken)
+	})
 	register[Empty, AuthUser](s, "auth.me", func(ctx context.Context, input *Empty, actor *Actor) (Success[AuthUser], error) {
 		user, err := s.Auth.Me(ctx, actor)
 		return ok(publicAuthUser(user)), err

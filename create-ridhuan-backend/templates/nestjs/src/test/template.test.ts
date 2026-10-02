@@ -4,8 +4,10 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import request from "supertest";
 import type { INestApplication } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import type { AppConfig } from "../config/env.validation";
 import { validateEnvironment } from "../config/env.validation";
-import { endpointRegistry } from "../common/endpoint/endpoint.registry";
+import { endpointRegistry, EndpointPolicyService } from "../common/endpoint/endpoint.registry";
 import { TimeService } from "../platform/time/time.service";
 
 let app: INestApplication;
@@ -23,17 +25,42 @@ before(async () => {
 after(async () => { if (app) await app.close(); });
 
 test("production requires explicit CORS origins", () => {
-  assert.throws(() => validateEnvironment({ NODE_ENV: "production", DATABASE_URL: "postgresql://localhost/example",
+  assert.throws(() => validateEnvironment({ NODE_ENV: "production", DATABASE_URL: "postgresql://fixture_user:fixture_password@localhost/example",
     JWT_SECRET: "local_secret_0123456789_abcdefghijklmnop" }), /CORS_ORIGINS/);
 });
 
+test("provider username and database limits are independent", () => {
+  for (const provider of ["mysql", "postgresql"] as const) {
+    const userLimit = provider === "mysql" ? 32 : 63;
+    const databaseLimit = provider === "mysql" ? 64 : 63;
+    const configuration = (user: number, database: number) => ({
+      NODE_ENV: "test", DB_PROVIDER: provider,
+      DATABASE_URL: `${provider}://${"u".repeat(user)}:fixture@localhost:5432/${"d".repeat(database)}`,
+      JWT_SECRET: "identifier_fixture_secret_0123456789abcdef",
+    });
+    assert.doesNotThrow(() => validateEnvironment(configuration(userLimit, databaseLimit)));
+    assert.throws(() => validateEnvironment(configuration(userLimit + 1, databaseLimit)), /username/);
+    assert.throws(() => validateEnvironment(configuration(userLimit, databaseLimit + 1)), /database/);
+  }
+});
+
+test("registry rejects missing audit producers and accepts auth transactions", () => {
+  const policy = (raw: string) => new EndpointPolicyService(new ConfigService<AppConfig, true>(validateEnvironment({
+    DATABASE_URL: "postgresql://fixture_user:fixture_password@localhost/fixture_db",
+    JWT_SECRET: "identifier_fixture_secret_0123456789abcdef", ENDPOINT_POLICIES_JSON: raw,
+  })));
+  assert.throws(() => policy('{"user.get":{"audit":"required"}}'), /producer/);
+  assert.throws(() => policy('{"docs.spec":{"audit":"optional"}}'), /producer/);
+  assert.doesNotThrow(() => policy('{"auth.refresh":{"audit":"required"},"auth.logout":{"audit":"required"}}'));
+});
+
 test("Redis namespace is explicit and safe for shared servers", () => {
-  assert.throws(() => validateEnvironment({ DATABASE_URL: "postgresql://localhost/example",
+  assert.throws(() => validateEnvironment({ DATABASE_URL: "postgresql://fixture_user:fixture_password@localhost/example",
     JWT_SECRET: "local_secret_0123456789_abcdefghijklmnop", REDIS_NAMESPACE: "other project:" }), /REDIS_NAMESPACE/);
 });
 
 test("SMTP supports explicit TLS and validates enabled credentials", () => {
-  const base = { DATABASE_URL: "postgresql://localhost/example", JWT_SECRET: "local_secret_0123456789_abcdefghijklmnop" };
+  const base = { DATABASE_URL: "postgresql://fixture_user:fixture_password@localhost/example", JWT_SECRET: "local_secret_0123456789_abcdefghijklmnop" };
   assert.equal(validateEnvironment({ ...base, SMTP_SECURE: "true" }).SMTP_SECURE, true);
   assert.equal(validateEnvironment(base).SMTP_SECURE, false);
   assert.throws(() => validateEnvironment({ ...base, SMTP_ENABLED: "true" }), /SMTP/);

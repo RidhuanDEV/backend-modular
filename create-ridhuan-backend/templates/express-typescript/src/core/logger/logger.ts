@@ -1,5 +1,6 @@
 import pino, { type LoggerOptions } from "pino";
 import { env } from "../../config/env.js";
+import { traceFields } from "../observability/telemetry.js";
 
 const options: LoggerOptions = {
   level: env.NODE_ENV === "production" ? "info" : "debug",
@@ -9,6 +10,16 @@ const options: LoggerOptions = {
     },
   },
   timestamp: pino.stdTimeFunctions.isoTime,
+  mixin: traceFields,
+  redact: [
+    "req.headers.authorization",
+    "authorization",
+    "token",
+    "refreshToken",
+    "password",
+    "tokenHash",
+    "smtp.password",
+  ],
 };
 
 let usePretty = env.NODE_ENV !== "production";

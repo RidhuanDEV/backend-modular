@@ -1,6 +1,7 @@
+import re
 from pathlib import Path
 from typing import Literal, Self
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -58,6 +59,19 @@ class Settings(BaseSettings):
     smtp_from: str = ""
     admin_email: str = "admin@example.test"
     admin_password: SecretStr | None = None
+    worker_concurrency: int = Field(default=2, ge=1, le=16)
+    worker_poll_seconds: int = Field(default=3, ge=1)
+    worker_lease_seconds: int = Field(default=60, ge=30)
+    worker_renew_seconds: int = Field(default=20, ge=1)
+    worker_max_attempts: int = Field(default=5, ge=1, le=5)
+    cleanup_batch_size: int = Field(default=500, ge=1, le=5000)
+    cleanup_session_days: int = Field(default=30, ge=1)
+    cleanup_outbox_days: int = Field(default=30, ge=1)
+    cleanup_audit_enabled: bool = False
+    cleanup_audit_days: int = Field(default=365, ge=1)
+    otel_enabled: bool = False
+    otel_service_name: str = "modular-fastapi"
+    otel_exporter_otlp_endpoint: str = "http://localhost:4318"
 
     @property
     def origins(self) -> list[str]:
@@ -65,6 +79,33 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_deployment(self) -> Self:
+        username = unquote(urlsplit(self.database_url.get_secret_value()).username or "")
+        maximum = 32 if self.db_provider == "mysql" else 63
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", username) or len(username) > maximum:
+            raise ValueError(
+                f"{self.db_provider} username requires ASCII and at most {maximum} characters"
+            )
+        database = unquote(urlsplit(self.database_url.get_secret_value()).path.lstrip("/"))
+        db_maximum = 64 if self.db_provider == "mysql" else 63
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", database) or len(database) > db_maximum:
+            raise ValueError(
+                f"{self.db_provider} database requires an ASCII identifier and at most {db_maximum} characters"
+            )
+        if self.cleanup_audit_enabled and "cleanup_audit_days" not in self.model_fields_set:
+            raise ValueError("CLEANUP_AUDIT_DAYS must be explicit when audit deletion is enabled")
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", self.otel_service_name):
+            raise ValueError("Invalid OTEL_SERVICE_NAME")
+        telemetry_url = urlsplit(self.otel_exporter_otlp_endpoint)
+        if (
+            telemetry_url.scheme not in {"http", "https"}
+            or not telemetry_url.hostname
+            or telemetry_url.username
+            or telemetry_url.query
+            or telemetry_url.fragment
+        ):
+            raise ValueError("Invalid OTEL_EXPORTER_OTLP_ENDPOINT")
+        if self.worker_renew_seconds * 2 >= self.worker_lease_seconds:
+            raise ValueError("WORKER_RENEW_SECONDS must be less than half the lease duration")
         if len(self.jwt_secret.get_secret_value().encode()) < 32:
             raise ValueError("JWT_SECRET requires at least 32 bytes")
         scheme = urlsplit(self.database_url.get_secret_value()).scheme

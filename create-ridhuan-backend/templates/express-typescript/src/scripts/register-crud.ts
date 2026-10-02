@@ -69,7 +69,7 @@ import { ${permissionConst} } from "../../constants/permissions.constants.js";
   ] as const;
   const lines = entries.map(
     ([suffix, method, pathSuffix, permission, audit, cache, status, schemas]) =>
-      `  "${name}${suffix}": { method: "${method}", path: "/api/${plural}${pathSuffix}", module: "${name}", summary: "${pascal} ${suffix.slice(1)}", access: { kind: "internal", permission: ${permissionConst}.${permission} }, audit: "${audit}", rateLimit: "internal", cache: "${cache}", status: ${status}, ${schemas} },`,
+      `  "${name}${suffix}": { method: "${method}", auditCapability: "${method === "GET" ? "read" : "transaction"}", path: "/api/${plural}${pathSuffix}", module: "${name}", summary: "${pascal} ${suffix.slice(1)}", access: { kind: "internal", permission: ${permissionConst}.${permission} }, audit: "${audit}", rateLimit: "internal", cache: "${cache}", status: ${status}, ${schemas} },`,
   );
   const importMarker = "const isoDate =";
   const endMarker = "} as const satisfies Record<string, EndpointDefinition>;";
