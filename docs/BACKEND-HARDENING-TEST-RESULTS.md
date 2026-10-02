@@ -1,6 +1,6 @@
 # Task 9 — Current verification evidence
 
-Status: **local Task 9 verification complete; commit/push and remote CI verification next**, authorized on 2026-10-02. The local evidence below concerns this implementation and development tarballs; earlier release results are not used as evidence.
+Status: **local Task 9 verification complete; all six repositories committed and pushed to main; all native and final CLI CI gates passed on 2026-10-03**. The local evidence below concerns this implementation and development tarballs; earlier release results are not used as evidence.
 
 ## Native and Windows consumer gates
 
@@ -67,6 +67,26 @@ Later runtime fixes, now verified:
 - FastAPI: pip-audit reports no known vulnerabilities (editable application distribution skipped).
 - Go govulncheck: zero reachable symbols/imported packages affected. One module-only advisory, `GO-2026-5932`, concerns unmaintained `golang.org/x/crypto/openpgp` (not imported/called here, no fixed version). This is not represented as a zero-advisory module graph.
 
+## GitHub verification and release revisions
+
+The first complete CLI run after source push passed packaging, twenty generated consumer jobs (Windows/Linux × five frameworks × two databases), ten complete Compose jobs, and macOS smoke. [Successful run at e1c99e9](https://github.com/RidhuanDEV/backend-modular/actions/runs/37025182132). npm publishing was skipped as intended.
+
+Two native CI setup regressions were collected and fixed:
+
+- Express's old migration test asserted a fixed count of four. It now compares all applied migration identities with the source directories and checks the new family/counter/outbox columns on fresh and legacy-upgrade databases. The isolated native rerun passes and [Express CI at 55198bb](https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre/actions/runs/37025140937) passes.
+- NestJS's native Compose smoke supplied interpolation through `.env.example` but did not create the service `.env` file. Its disposable CI fixture now copies the example, starts both API and worker, checks health/live/ready plus the running worker, and removes its own Compose volumes/images and MinIO container. Application source and env contracts are unchanged. The first added root probe incorrectly expected an unregistered `/` route; it was corrected to the registered `/health` compatibility endpoint. Both updated native and CLI runs pass; their revisions and evidence are recorded below.
+
+| Repository | Main source revision | CI evidence |
+| --- | --- | --- |
+| Express | `55198bbe68c079a0432eb7ba1cd30a4241c16ed7` | [PASS](https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre/actions/runs/37025140937) |
+| NestJS | `fa179269ba8b4fd37d60487913d2f98a9ae7b2ca` | [PASS](https://github.com/RidhuanDEV/modular-nestjs/actions/runs/37072401925) |
+| Go | `dadd6dc8972b9c07ce9ebbc5f8571f8668276441` | [PASS](https://github.com/RidhuanDEV/golang-backend/actions/runs/37024494403) |
+| .NET | `afef88a6fe5c75fb0f9307f8cabca682787b50fe` | [PASS](https://github.com/RidhuanDEV/NET-backend/actions/runs/37024501526) |
+| FastAPI | `2de7aad9ca64ac3eedfb719687278a5889d69f6a` | [PASS](https://github.com/RidhuanDEV/modular-fastapi/actions/runs/37024506089) |
+| Unified CLI/root | `6d1375b4b2699afd1e7fa24a1ac33ef3c908e9a8` | [PASS](https://github.com/RidhuanDEV/backend-modular/actions/runs/37072429538) |
+
+Root documentation receives a later docs-only commit; the source revision above identifies the actual CI-tested artifact. All native references are reachable on their repository's main branch. No npm version bump/publication is part of this task.
+
 ## Follow-up collection on 2026-10-02
 
 - The first resumed collecting stage finished all eleven selected cases: four passed and seven failed. Independent cases continued after each failure, with a nonzero aggregate result. The failures below were repaired together and affected reruns passed; earlier failures are retained as history.
@@ -82,8 +102,8 @@ Later runtime fixes, now verified:
 
 - Native database suites pass for all frameworks on both providers. All ten complete expanded Compose combinations now pass; partial or interrupted runs were not promoted to full passes.
 - Ten Windows and ten Linux development-tarball consumer combinations pass. The final .NET source repair is covered again on both operating systems/providers (fourteen unit and three contract tests each). Windows manual HTTP consumer checks also passed for all ten combinations before the targeted final repairs; final repaired HTTP behavior is covered by Compose.
-- Both sqlc provider ports reproduce their hashes; .NET format verification passes and model consistency is exercised by native provider integration. All 31 tracked historical migration files (including EF designers) remain byte-equivalent after newline normalization. Archive allowlist, 653 native source snapshot checksums, private-key exclusion and four local env credential exclusion checks pass for the current development archive. The archive contains 679 files. Repeat the checksum check if repacked.
-- Remote Windows/Linux CI and macOS smoke will be checked after the authorized commit/push. npm publication is a separate action.
+- Both sqlc provider ports reproduce their hashes; .NET format verification passes and model consistency is exercised by native provider integration. All 31 tracked historical migration files (including EF designers) remain byte-equivalent after newline normalization. Archive allowlist, 653 native source snapshot checksums, private-key exclusion and four local env credential exclusion checks pass for the current development archive. The archive contains 679 files. The final clean candidate was repacked and all three collecting package/source/runner gates passed again on 2026-10-03.
+- Remote Windows/Linux consumer, macOS smoke and all ten Compose CI jobs passed at e1c99e9. The final provenance-only source reference refresh passes at 6d1375b: twenty Windows/Linux consumers, ten Compose jobs, macOS smoke and packaging all succeed. npm publication is a separate action.
 
 Local detailed logs are in TEMP and are not public package contents. Final collecting reports are `hardening-repaired-matrix-20261002` (NestJS/Go and Linux fixes), `hardening-dotnet-sse-runtime-20261002` (5/5 final .NET Compose/Linux cases), `hardening-dotnet-sse-host-20261002` (2/2 final Windows cases), `hardening-audit-final-20261002` and `hardening-distribution-final-20261002`. Each saves its plan before execution and its per-case results afterwards. Fixtures remove only their owned resources; unrelated local services are preserved.
 
@@ -91,9 +111,11 @@ Local detailed logs are in TEMP and are not public package contents. Final colle
 
 Docker Desktop initially stopped during image/consumer verification when D: had only 17 MB free. Reproducible .NET bin outputs were preserved in the task-specific TEMP backup on C: to recover approximately 1.8 GB; source and env files were unchanged. After user disk/RAM recovery, all interrupted cases were rerun successfully and sequentially. The final stages maintained more than 3 GB free on D:. No global volume/system prune was used.
 
-## Verified local archive identity
+## Verified package identities
 
-The runtime-tested development archive has SHA-256 `be13c691efa0c51fe1d7586c6a74763a4208dfd78e7a1eb0c0cc65f748a5b399`. After the five native source commits, a clean-provenance CLI candidate was packed with SHA-256 `80dda0c296fa826403a4ef7cc7769d5fc3a8f4e47a33b1a03fff4bc5f047aec1`. Its source commits match the published Git repositories; the intervening differences are documentation and provenance. Version remains `1.4.0`; this candidate has not been published to npm. The earlier inspected archive `5b086006ff2edf5702bef200b73e93a9275c2a08ff6ed37d3568f88529694e59` is historical evidence only.
+The runtime-tested development archive has SHA-256 `be13c691efa0c51fe1d7586c6a74763a4208dfd78e7a1eb0c0cc65f748a5b399`. After the five native source commits, a clean-provenance CLI candidate was packed with SHA-256 `80dda0c296fa826403a4ef7cc7769d5fc3a8f4e47a33b1a03fff4bc5f047aec1`. After the native CI fixture repairs, an intermediate clean candidate SHA-256 is `cb10f11bb803722657d946718e7c53611c3cbead29b070a72985283782a3eb2b`. All three collecting package/source/runner checks pass for it. Source commits match the pushed Git repositories; changes since the runtime-tested package are documentation and provenance, and the latest native fixes affect only CI/testing scripts. Version remains `1.4.0`; this candidate has not been published to npm. The earlier inspected archive `5b086006ff2edf5702bef200b73e93a9275c2a08ff6ed37d3568f88529694e59` is historical evidence only.
+
+The final GitHub CI artifact at 6d1375b has SHA-256 `8c0f8c42c9991cd84fcace14ed0dd5e1ef4338883f7a46e07468536eb7b2fa9c`. All final consumer and Compose CI jobs use that uploaded artifact. Source manifests have clean provenance; npm publication is skipped.
 
 ## Verification boundaries
 
@@ -101,7 +123,7 @@ The runtime-tested development archive has SHA-256 `be13c691efa0c51fe1d7586c6a74
 - The paused TCP client scenario checks cancellation and API responsiveness, not indefinite saturation of every operating-system socket buffer.
 - Runtime upload cleanup checks old referenced objects, the 24-hour grace period, dry-run and concurrent cleaners. An insert precisely between the two reference lookups is not controlled in this suite; the final reference lookup is source-verified.
 - Session-age fixtures make the family creation date older than 120 days and exercise rotation against server UTC. They do not wait 120 wall-clock days. Retry timestamps and abandoned leases are advanced in the disposable database rather than waiting 600 seconds or 30 days.
-- Remote GitHub Windows/Linux/macOS jobs are being checked following the authorized source push. Production load, deployment and backup restore are outside this evidence.
+- Remote GitHub Windows/Linux/macOS jobs and all ten Compose jobs pass at the source revision recorded above. Production load, deployment and backup restore are outside this evidence.
 - Local .NET build binaries were preserved under `%TEMP%/ridhuan-hardening-build-backup-20261002` on C:. Rebuilding recreates them; source, migrations, lockfiles and env files were not removed.
 
 ## Historical resume order after disk/Docker recovery

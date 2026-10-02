@@ -1,6 +1,6 @@
 # Rencana Hardening dan Enhancement Lima Template Backend
 
-Status: **implementasi selesai; review diterima dan Task 9 pengujian berjalan sejak 2026-10-02**. Tasks 1–8 are implemented in source. Current passing and pending gates are recorded in the test results; no commit, push, version bump or npm publication.
+Status: **implementasi, review, pengujian lokal, commit dan push ke main selesai; seluruh CI final lulus pada 2026-10-03**. Tasks 1–8 are implemented; Task 9 local gates and the initial complete Windows/Linux/macOS CI matrix pass. Native CI fixture repairs and final run evidence are recorded in the test results. npm version bump/publication is a separate release action.
 
 ## Accepted decisions
 
@@ -50,9 +50,9 @@ Telemetry is optional/off by default. Native official SDKs, existing Go/.NET ins
 
 After Tasks 1-8 report **implementation complete, awaiting review, not tested** with diff, new env/commands, API examples, migration impact and outstanding checks. Do not commit/push/publish before review/testing. Development snapshots only, never claim a tested release.
 
-## Task 9 — Tests (separate, LAST; local gates complete; remote CI next)
+## Task 9 — Tests (separate, LAST; all local and remote CI gates complete)
 
-User authorized execution on 2026-10-02 and then requested collected failures, grouped repairs, fixture cleanup and commit/push after verification. Native/database, Windows/Linux development-tarball consumers and all ten expanded Compose combinations pass. Current evidence and boundaries: [verification report](BACKEND-HARDENING-TEST-RESULTS.md). Commit/push is authorized; remote CI is checked after that push. Versioning/npm publication remains a separate release action.
+User authorized execution on 2026-10-02 and then requested collected failures, grouped repairs, fixture cleanup and commit/push after verification. Native/database, Windows/Linux development-tarball consumers and all ten expanded Compose combinations pass. Current evidence and boundaries: [verification report](BACKEND-HARDENING-TEST-RESULTS.md). All six repositories were committed and pushed; the final native and CLI CI runs pass. Versioning/npm publication remains a separate release action.
 
 - [x] Auth sliding/expired/revoked sessions, consumed-token logout, refresh/logout races and replay.
 
@@ -75,7 +75,7 @@ User authorized execution on 2026-10-02 and then requested collected failures, g
 - [x] Ten Compose image/migration/worker/seed/HTTP/live/ready/outage gates.
 
 - [x] Dependency/lock/package/checksum/secret audits.
-- [ ] Windows/Linux and macOS smoke CI after local success.
+- [x] Windows/Linux and macOS smoke CI after local success.
 
 Only start Task 9 after the user reviews all enhancements and explicitly requests tests. Commit, push, version bump and npm publication are subsequent user-directed release tasks.
 

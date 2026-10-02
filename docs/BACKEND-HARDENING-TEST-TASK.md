@@ -1,6 +1,6 @@
 # Task 9 — Regression and distribution verification
 
-**Local Task 9 gates completed on 2026-10-02; commit/push authorized; remote CI next.** Current native/database, consumer, concurrency and ten Compose results are recorded in the verification report. No prior release result is evidence for this implementation.
+**Local Task 9 gates completed on 2026-10-02; six repositories committed/pushed; all final CI gates passed on 2026-10-03.** Current native/database, consumer, concurrency and ten Compose results are recorded in the verification report. No prior release result is evidence for this implementation.
 
 ## Execution order
 
@@ -77,7 +77,7 @@ Start from the last committed schema, insert active/expired/rotated/logged-out r
 - [x] Compose: ten isolated image/migration/worker/seed/HTTP/live/ready/outage combinations.
 
 - [x] Windows/Linux local consumer install/build/native checks.
-- [ ] Remote Windows/Linux consumer CI and macOS smoke after commit/push.
+- [x] Remote Windows/Linux consumer CI and macOS smoke after commit/push.
 
 - [x] Lock/dependency/package/checksum/secret audit.
 
@@ -85,7 +85,7 @@ Passing build, health, or source inspection alone is not concurrency, email deli
 
 ## Implementation-generated artifacts to review before tests
 
-Prisma clients, sqlc ports/decorators, native Alembic/Goose migrations and EF migration/model snapshots are source preparation. EF scaffolding compiled Infrastructure as a tool prerequisite. Source formatting was applied; current native/database/consumer results and outstanding runtime/CI gates are recorded in BACKEND-HARDENING-TEST-RESULTS.md. Runtime checks used development snapshots; the final package check uses clean native commit provenance. npm version bump and publication remain separate release actions. Legacy assertion counts, auth fixtures and initializer input scripts may need updates against the actual new source contracts during this task; never adjust them solely to silence a failing test.
+Prisma clients, sqlc ports/decorators, native Alembic/Goose migrations and EF migration/model snapshots are source preparation. EF scaffolding compiled Infrastructure as a tool prerequisite. Source formatting was applied; current native/database/consumer results and completed runtime/CI gates are recorded in BACKEND-HARDENING-TEST-RESULTS.md. Runtime checks used development snapshots; the final package check uses clean native commit provenance. npm version bump and publication remain separate release actions. Legacy assertion counts, auth fixtures and initializer input scripts may need updates against the actual new source contracts during this task; never adjust them solely to silence a failing test.
 
 ## Collecting runner (2026-10-02 user direction)
 

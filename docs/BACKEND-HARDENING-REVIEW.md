@@ -1,10 +1,10 @@
 # Backend hardening — handoff review
 
-Status: **implementasi dan pengujian lokal selesai; commit/push diizinkan; verifikasi CI berikutnya**.
+Status: **implementasi, pengujian lokal, commit dan push selesai; seluruh CI final lulus pada 2026-10-03**.
 
-Current verified results and remaining gates: [test evidence](BACKEND-HARDENING-TEST-RESULTS.md). The implementation checklist below records source delivery; it is not a substitute for that evidence.
+Current verified results and verification boundaries: [test evidence](BACKEND-HARDENING-TEST-RESULTS.md). The implementation checklist below records source delivery; it is not a substitute for that evidence.
 
-Tasks 1–8 are implemented and local Task 9 gates pass for the CLI and five frameworks, each supporting PostgreSQL/MySQL. The source checklist and verified build/runtime results are recorded separately. Commit/push is authorized after these gates; versioning/npm publication remains separate.
+Tasks 1–8 are implemented and local Task 9 gates pass for the CLI and five frameworks, each supporting PostgreSQL/MySQL. The source checklist and verified build/runtime results are recorded separately. All six repositories were committed and pushed to main after local gates passed. Versioning/npm publication remains separate.
 
 ## Checklist implementasi
 
@@ -18,7 +18,7 @@ Tasks 1–8 are implemented and local Task 9 gates pass for the CLI and five fra
 | 6    | Explicit batch500 dry-run/apply cleanup; inactive-family30d, terminal-outbox30d; orphan24h/ref recheck; audit opt-in365d; notifications retained                        | Source complete                     |
 | 7    | Optional official OTel SDKs; safe HTTP/DB/storage/Redis/email spans; bounded metrics; request/trace log correlation; .NET transports; optional Collector                | Source complete                     |
 | 8    | Additive migrations/models/FKs/indexes, native contract/OpenAPI/generator integration, env/docs/Docker/Compose, CLI development snapshots                               | Source complete                     |
-| 9    | Native, database, concurrency, package, consumer, Compose, OS and CI verification                                                                                       | **Local gates pass; remote CI next** |
+| 9    | Native, database, concurrency, package, consumer, Compose, OS and CI verification                                                                                       | **Local and final CI gates pass** |
 
 The accepted [plan](BACKEND-HARDENING-ENHANCEMENT-PLAN.md) tracks implementation. The [testing task](BACKEND-HARDENING-TEST-TASK.md) is the separate final task.
 
