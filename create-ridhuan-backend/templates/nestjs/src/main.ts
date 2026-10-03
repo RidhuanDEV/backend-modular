@@ -52,16 +52,12 @@ export async function createApp() {
         (error: unknown) => {
           const status =
             error instanceof HttpException ? error.getStatus() : 500;
-          response
-            .status(status)
-            .json({
-              success: false,
-              message:
-                status === 429
-                  ? "Rate limit exceeded"
-                  : "Internal server error",
-              errors: [],
-            });
+          response.status(status).json({
+            success: false,
+            message:
+              status === 429 ? "Rate limit exceeded" : "Internal server error",
+            errors: [],
+          });
         },
       );
     },

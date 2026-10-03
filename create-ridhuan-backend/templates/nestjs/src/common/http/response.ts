@@ -23,7 +23,18 @@ export function success<T>(data: T, meta?: PaginationMeta): Success<T> {
   return { success: true, data, ...(meta ? { meta } : {}) };
 }
 
-export function pagination(page: number, limit: number, totalItems: number): PaginationMeta {
+export function pagination(
+  page: number,
+  limit: number,
+  totalItems: number,
+): PaginationMeta {
   const totalPages = Math.ceil(totalItems / limit);
-  return { page, limit, totalItems, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 };
+  return {
+    page,
+    limit,
+    totalItems,
+    totalPages,
+    hasNextPage: page < totalPages,
+    hasPrevPage: page > 1,
+  };
 }

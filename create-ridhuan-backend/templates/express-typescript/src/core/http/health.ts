@@ -10,26 +10,43 @@ export interface ReadinessDependencies {
   rateStore?: () => Promise<unknown>;
 }
 
-export async function checkReadiness(dependencies: ReadinessDependencies, timeoutMs = 1000): Promise<boolean> {
-  const checks = [dependencies.database(), ...(dependencies.rateStore ? [dependencies.rateStore()] : [])];
+export async function checkReadiness(
+  dependencies: ReadinessDependencies,
+  timeoutMs = 1000,
+): Promise<boolean> {
+  const checks = [
+    dependencies.database(),
+    ...(dependencies.rateStore ? [dependencies.rateStore()] : []),
+  ];
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      Promise.all(checks).then(() => true).catch((error: unknown) => {
-        logger.warn({ errorType: error instanceof Error ? error.name : "UnknownError" }, "Readiness dependency failed");
-        return false;
+      Promise.all(checks)
+        .then(() => true)
+        .catch((error: unknown) => {
+          logger.warn(
+            { errorType: error instanceof Error ? error.name : "UnknownError" },
+            "Readiness dependency failed",
+          );
+          return false;
+        }),
+      new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
       }),
-      new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), timeoutMs); }),
     ]);
   } finally {
     if (timer) clearTimeout(timer);
   }
 }
 
-export function createReadinessHandler(dependencies: ReadinessDependencies): RequestHandler {
+export function createReadinessHandler(
+  dependencies: ReadinessDependencies,
+): RequestHandler {
   return async (_req, res) => {
     if (!(await checkReadiness(dependencies))) {
-      res.status(503).json({ success: false, message: "Service unavailable", errors: [] });
+      res
+        .status(503)
+        .json({ success: false, message: "Service unavailable", errors: [] });
       return;
     }
     sendSuccess(res, { data: { status: "ok" } });
@@ -38,7 +55,12 @@ export function createReadinessHandler(dependencies: ReadinessDependencies): Req
 
 export const readinessHandler = createReadinessHandler({
   database: () => prisma.$queryRaw`SELECT 1`,
-  ...(env.RATE_LIMIT_STORE === "redis" ? {
-    rateStore: () => redis ? redis.ping() : Promise.reject(new Error("Redis rate store unavailable")),
-  } : {}),
+  ...(env.RATE_LIMIT_STORE === "redis"
+    ? {
+        rateStore: () =>
+          redis
+            ? redis.ping()
+            : Promise.reject(new Error("Redis rate store unavailable")),
+      }
+    : {}),
 });

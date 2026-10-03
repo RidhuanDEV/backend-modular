@@ -4,18 +4,30 @@ import {
   requireAuthenticatedUser,
   requireRouteParam,
 } from "../../core/http/request-context.js";
-import { sendSuccess, sendCreated, sendNoContent } from "../../utils/response.js";
+import {
+  sendSuccess,
+  sendCreated,
+  sendNoContent,
+} from "../../utils/response.js";
 import type {
   CreateRoleDto,
   UpdateRoleDto,
   AssignPermissionsDto,
 } from "./role.schema.js";
-import { createRoleSchema, updateRoleSchema, assignPermissionsSchema } from "./role.schema.js";
+import {
+  createRoleSchema,
+  updateRoleSchema,
+  assignPermissionsSchema,
+} from "./role.schema.js";
 
 const service = new RoleService();
 
 export class RoleController {
-  getAll = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  getAll = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const roles = await service.findAll();
       sendSuccess(res, { data: roles });
@@ -24,7 +36,11 @@ export class RoleController {
     }
   };
 
-  getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  getById = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const id = requireRouteParam(req, "id");
       const role = await service.findById(id);
@@ -69,7 +85,11 @@ export class RoleController {
     }
   };
 
-  delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  delete = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const id = requireRouteParam(req, "id");
       const user = requireAuthenticatedUser(req);
@@ -92,7 +112,9 @@ export class RoleController {
       const user = requireAuthenticatedUser(req);
       const reqIdStr = req.requestId;
 
-      const data: AssignPermissionsDto = assignPermissionsSchema.parse(req.body);
+      const data: AssignPermissionsDto = assignPermissionsSchema.parse(
+        req.body,
+      );
       const result = await service.assignPermissions(id, data, user, reqIdStr);
       sendSuccess(res, { data: result });
     } catch (error) {

@@ -9,7 +9,10 @@ export const newPasswordField = () =>
   z
     .string()
     .min(6, "Password must be at least 6 characters")
-    .refine((value) => Buffer.byteLength(value, "utf8") <= 72, "Password must be at most 72 bytes");
+    .refine(
+      (value) => Buffer.byteLength(value, "utf8") <= 72,
+      "Password must be at most 72 bytes",
+    );
 
 export const registerSchema = z.object({
   email: emailField(),

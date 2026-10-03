@@ -11,9 +11,16 @@ export class PageQueryDto {
   @IsOptional() @IsString() fields?: string;
 }
 
-export function fieldsAllowed(value: string | undefined, allow: readonly string[]): readonly string[] | undefined {
+export function fieldsAllowed(
+  value: string | undefined,
+  allow: readonly string[],
+): readonly string[] | undefined {
   if (!value) return undefined;
-  const fields = value.split(",").map((field) => field.trim()).filter(Boolean);
-  if (fields.some((field) => !allow.includes(field))) throw new BadRequestException("Unknown projection field");
+  const fields = value
+    .split(",")
+    .map((field) => field.trim())
+    .filter(Boolean);
+  if (fields.some((field) => !allow.includes(field)))
+    throw new BadRequestException("Unknown projection field");
   return fields;
 }

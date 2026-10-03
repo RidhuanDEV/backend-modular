@@ -24,206 +24,407 @@ before(async () => {
   app = await createApp();
   prisma = app.get(PrismaService);
 });
-after(async () => { if (app) await app.close(); });
+after(async () => {
+  if (app) await app.close();
+});
 
 test("search is case insensitive, escapes wildcards and counts beyond the page", async () => {
-  const login = await request(app.getHttpServer()).post("/api/auth/login")
-    .send({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD });
+  const login = await request(app.getHttpServer())
+    .post("/api/auth/login")
+    .send({
+      email: process.env.ADMIN_EMAIL,
+      password: process.env.ADMIN_PASSWORD,
+    });
   assert.equal(login.status, 200);
   const authorization = `Bearer ${textField(field(login.body, "data"), "token")}`;
   const prefix = `search_${randomUUID().replaceAll("-", "")}`;
   const ids: string[] = [];
   try {
     for (const suffix of ["%one", "%two", "Xthree"]) {
-      const created = await request(app.getHttpServer()).post("/api/roles")
-        .set("Authorization", authorization).send({ name: prefix + suffix });
+      const created = await request(app.getHttpServer())
+        .post("/api/roles")
+        .set("Authorization", authorization)
+        .send({ name: prefix + suffix });
       assert.equal(created.status, 201);
       ids.push(textField(field(created.body, "data"), "id"));
     }
-    const first = await request(app.getHttpServer()).get("/api/roles")
-      .query({ search: prefix.toUpperCase() + "%", limit: 1, sortBy: "name", orderBy: "asc" })
+    const first = await request(app.getHttpServer())
+      .get("/api/roles")
+      .query({
+        search: prefix.toUpperCase() + "%",
+        limit: 1,
+        sortBy: "name",
+        orderBy: "asc",
+      })
       .set("Authorization", authorization);
     assert.equal(first.status, 200);
     assert.equal(field(field(first.body, "meta"), "totalItems"), 2);
-    assert.deepEqual((field(first.body, "data") as Record<string, unknown>[]).map(row => row.id), [ids[0]]);
-    const second = await request(app.getHttpServer()).get("/api/roles")
-      .query({ search: prefix.toUpperCase() + "%", limit: 1, page: 2, sortBy: "name", orderBy: "asc" })
+    assert.deepEqual(
+      (field(first.body, "data") as Record<string, unknown>[]).map(
+        (row) => row.id,
+      ),
+      [ids[0]],
+    );
+    const second = await request(app.getHttpServer())
+      .get("/api/roles")
+      .query({
+        search: prefix.toUpperCase() + "%",
+        limit: 1,
+        page: 2,
+        sortBy: "name",
+        orderBy: "asc",
+      })
       .set("Authorization", authorization);
     assert.equal(second.status, 200);
-    assert.deepEqual((field(second.body, "data") as Record<string, unknown>[]).map(row => row.id), [ids[1]]);
+    assert.deepEqual(
+      (field(second.body, "data") as Record<string, unknown>[]).map(
+        (row) => row.id,
+      ),
+      [ids[1]],
+    );
   } finally {
-    for (const id of ids) await request(app.getHttpServer()).delete(`/api/roles/${id}`).set("Authorization", authorization);
+    for (const id of ids)
+      await request(app.getHttpServer())
+        .delete(`/api/roles/${id}`)
+        .set("Authorization", authorization);
   }
 });
 
 test("auth refresh rotation, replay revocation and public DTO", async () => {
   const email = `integration-${randomUUID()}@example.com`;
-  const registered = await request(app.getHttpServer()).post("/api/auth/register")
+  const registered = await request(app.getHttpServer())
+    .post("/api/auth/register")
     .send({ email, password: "strong-password-123" });
   assert.equal(registered.status, 201);
-  assert.deepEqual(Object.keys(field(registered.body, "data") as Record<string, unknown>).sort(),
-    ["createdAt", "email", "id", "roleId", "updatedAt"]);
-  const login = await request(app.getHttpServer()).post("/api/auth/login")
+  assert.deepEqual(
+    Object.keys(
+      field(registered.body, "data") as Record<string, unknown>,
+    ).sort(),
+    ["createdAt", "email", "id", "roleId", "updatedAt"],
+  );
+  const login = await request(app.getHttpServer())
+    .post("/api/auth/login")
     .send({ email, password: "strong-password-123" });
   assert.equal(login.status, 200);
   const data = field(login.body, "data");
-  assert.deepEqual(Object.keys(data as Record<string, unknown>).sort(), ["refreshToken", "token"]);
+  assert.deepEqual(Object.keys(data as Record<string, unknown>).sort(), [
+    "refreshToken",
+    "token",
+  ]);
   const token = textField(data, "token");
   const refreshToken = textField(data, "refreshToken");
-  const me = await request(app.getHttpServer()).get("/api/auth/me").set("Authorization", `Bearer ${token}`);
+  const me = await request(app.getHttpServer())
+    .get("/api/auth/me")
+    .set("Authorization", `Bearer ${token}`);
   assert.equal(me.status, 200);
   const user = field(me.body, "data");
-  assert.deepEqual(Object.keys(user as Record<string, unknown>).sort(),
-    ["createdAt", "email", "id", "roleId", "updatedAt"]);
-  const rotated = await request(app.getHttpServer()).post("/api/auth/refresh").send({ refreshToken });
+  assert.deepEqual(Object.keys(user as Record<string, unknown>).sort(), [
+    "createdAt",
+    "email",
+    "id",
+    "roleId",
+    "updatedAt",
+  ]);
+  const rotated = await request(app.getHttpServer())
+    .post("/api/auth/refresh")
+    .send({ refreshToken });
   assert.equal(rotated.status, 200);
   const replacement = textField(field(rotated.body, "data"), "refreshToken");
-  assert.equal((await request(app.getHttpServer()).post("/api/auth/refresh").send({ refreshToken })).status, 401);
-  assert.equal((await request(app.getHttpServer()).post("/api/auth/refresh").send({ refreshToken: replacement })).status, 401);
-  const logout = await request(app.getHttpServer()).post("/api/auth/logout")
+  assert.equal(
+    (
+      await request(app.getHttpServer())
+        .post("/api/auth/refresh")
+        .send({ refreshToken })
+    ).status,
+    401,
+  );
+  assert.equal(
+    (
+      await request(app.getHttpServer())
+        .post("/api/auth/refresh")
+        .send({ refreshToken: replacement })
+    ).status,
+    401,
+  );
+  const logout = await request(app.getHttpServer())
+    .post("/api/auth/logout")
     .send({ refreshToken: "unknown-refresh-token-with-enough-length" });
   assert.equal(logout.status, 204);
   assert.equal(logout.text, "");
 });
 
 test("admin CRUD writes public data and activity logs", async () => {
-  const login = await request(app.getHttpServer()).post("/api/auth/login")
-    .send({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD });
+  const login = await request(app.getHttpServer())
+    .post("/api/auth/login")
+    .send({
+      email: process.env.ADMIN_EMAIL,
+      password: process.env.ADMIN_PASSWORD,
+    });
   assert.equal(login.status, 200);
   const token = textField(field(login.body, "data"), "token");
-  const userRole = await prisma.role.findUniqueOrThrow({ where: { name: "user" } });
+  const userRole = await prisma.role.findUniqueOrThrow({
+    where: { name: "user" },
+  });
   const email = `created-${randomUUID()}@example.com`;
-  const created = await request(app.getHttpServer()).post("/api/users").set("Authorization", `Bearer ${token}`)
+  const created = await request(app.getHttpServer())
+    .post("/api/users")
+    .set("Authorization", `Bearer ${token}`)
     .send({ email, password: "new-password-123", roleId: userRole.id });
   assert.equal(created.status, 201);
   const id = textField(field(created.body, "data"), "id");
-  assert.equal((field(created.body, "data") as Record<string, unknown>).password, undefined);
-  const updated = await request(app.getHttpServer()).patch(`/api/users/${id}`).set("Authorization", `Bearer ${token}`)
+  assert.equal(
+    (field(created.body, "data") as Record<string, unknown>).password,
+    undefined,
+  );
+  const updated = await request(app.getHttpServer())
+    .patch(`/api/users/${id}`)
+    .set("Authorization", `Bearer ${token}`)
     .send({ email: `updated-${randomUUID()}@example.com` });
   assert.equal(updated.status, 200);
-  const removed = await request(app.getHttpServer()).delete(`/api/users/${id}`).set("Authorization", `Bearer ${token}`);
+  const removed = await request(app.getHttpServer())
+    .delete(`/api/users/${id}`)
+    .set("Authorization", `Bearer ${token}`);
   assert.equal(removed.status, 204);
-  assert.equal((await request(app.getHttpServer()).get(`/api/users/${id}`).set("Authorization", `Bearer ${token}`)).status, 404);
-  const logs = await prisma.activityLog.count({ where: { module: "user", entityId: id } });
+  assert.equal(
+    (
+      await request(app.getHttpServer())
+        .get(`/api/users/${id}`)
+        .set("Authorization", `Bearer ${token}`)
+    ).status,
+    404,
+  );
+  const logs = await prisma.activityLog.count({
+    where: { module: "user", entityId: id },
+  });
   assert.equal(logs, 3);
 });
 
 test("local upload accepts signature and returns only metadata", async () => {
-  const login = await request(app.getHttpServer()).post("/api/auth/login")
-    .send({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD });
+  const login = await request(app.getHttpServer())
+    .post("/api/auth/login")
+    .send({
+      email: process.env.ADMIN_EMAIL,
+      password: process.env.ADMIN_PASSWORD,
+    });
   const token = textField(field(login.body, "data"), "token");
-  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==", "base64");
-  const uploaded = await request(app.getHttpServer()).post("/api/upload").set("Authorization", `Bearer ${token}`)
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  const uploaded = await request(app.getHttpServer())
+    .post("/api/upload")
+    .set("Authorization", `Bearer ${token}`)
     .attach("file", png, { filename: "dot.png", contentType: "image/png" });
   assert.equal(uploaded.status, 201);
   const id = textField(field(uploaded.body, "data"), "id");
-  const metadata = await request(app.getHttpServer()).get(`/api/upload/${id}`).set("Authorization", `Bearer ${token}`);
+  const metadata = await request(app.getHttpServer())
+    .get(`/api/upload/${id}`)
+    .set("Authorization", `Bearer ${token}`);
   assert.equal(metadata.status, 200);
-  assert.equal((field(metadata.body, "data") as Record<string, unknown>).objectKey, undefined);
-  const invalid = await request(app.getHttpServer()).post("/api/upload").set("Authorization", `Bearer ${token}`)
-    .attach("file", Buffer.from("fake"), { filename: "bad.png", contentType: "image/png" });
+  assert.equal(
+    (field(metadata.body, "data") as Record<string, unknown>).objectKey,
+    undefined,
+  );
+  const invalid = await request(app.getHttpServer())
+    .post("/api/upload")
+    .set("Authorization", `Bearer ${token}`)
+    .attach("file", Buffer.from("fake"), {
+      filename: "bad.png",
+      contentType: "image/png",
+    });
   assert.equal(invalid.status, 400);
-  const oversized = await request(app.getHttpServer()).post("/api/upload").set("Authorization", `Bearer ${token}`)
-    .attach("file", Buffer.alloc(10_485_761), { filename: "large.png", contentType: "image/png" });
+  const oversized = await request(app.getHttpServer())
+    .post("/api/upload")
+    .set("Authorization", `Bearer ${token}`)
+    .attach("file", Buffer.alloc(10_485_761), {
+      filename: "large.png",
+      contentType: "image/png",
+    });
   assert.equal(oversized.status, 413);
 });
 
 test("role and permission changes preserve public DTO and audit records", async () => {
-  const login = await request(app.getHttpServer()).post("/api/auth/login")
-    .send({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD });
+  const login = await request(app.getHttpServer())
+    .post("/api/auth/login")
+    .send({
+      email: process.env.ADMIN_EMAIL,
+      password: process.env.ADMIN_PASSWORD,
+    });
   const token = textField(field(login.body, "data"), "token");
   const authorization = `Bearer ${token}`;
   const permissionName = `perm_${randomUUID().replaceAll("-", "")}`;
-  const permission = await request(app.getHttpServer()).post("/api/permissions")
-    .set("Authorization", authorization).send({ name: permissionName });
+  const permission = await request(app.getHttpServer())
+    .post("/api/permissions")
+    .set("Authorization", authorization)
+    .send({ name: permissionName });
   assert.equal(permission.status, 201);
   const permissionId = textField(field(permission.body, "data"), "id");
   const roleName = `role_${randomUUID().replaceAll("-", "")}`;
-  const role = await request(app.getHttpServer()).post("/api/roles")
-    .set("Authorization", authorization).send({ name: roleName });
+  const role = await request(app.getHttpServer())
+    .post("/api/roles")
+    .set("Authorization", authorization)
+    .send({ name: roleName });
   assert.equal(role.status, 201);
   const roleId = textField(field(role.body, "data"), "id");
-  const assigned = await request(app.getHttpServer()).post(`/api/roles/${roleId}/permissions`)
-    .set("Authorization", authorization).send({ permissionIds: [permissionId] });
+  const assigned = await request(app.getHttpServer())
+    .post(`/api/roles/${roleId}/permissions`)
+    .set("Authorization", authorization)
+    .send({ permissionIds: [permissionId] });
   assert.equal(assigned.status, 200);
-  assert.deepEqual(field(field(assigned.body, "data"), "permissions"), [{ id: permissionId, name: permissionName }]);
-  assert.equal(await prisma.activityLog.count({ where: { module: "roles", entityId: roleId } }), 2);
-  assert.equal((await request(app.getHttpServer()).delete(`/api/roles/${roleId}`)
-    .set("Authorization", authorization)).status, 204);
-  assert.equal((await request(app.getHttpServer()).delete(`/api/permissions/${permissionId}`)
-    .set("Authorization", authorization)).status, 204);
+  assert.deepEqual(field(field(assigned.body, "data"), "permissions"), [
+    { id: permissionId, name: permissionName },
+  ]);
+  assert.equal(
+    await prisma.activityLog.count({
+      where: { module: "roles", entityId: roleId },
+    }),
+    2,
+  );
+  assert.equal(
+    (
+      await request(app.getHttpServer())
+        .delete(`/api/roles/${roleId}`)
+        .set("Authorization", authorization)
+    ).status,
+    204,
+  );
+  assert.equal(
+    (
+      await request(app.getHttpServer())
+        .delete(`/api/permissions/${permissionId}`)
+        .set("Authorization", authorization)
+    ).status,
+    204,
+  );
 });
 
 test("a required audit failure rolls back the business mutation", async () => {
-  const login = await request(app.getHttpServer()).post("/api/auth/login")
-    .send({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD });
+  const login = await request(app.getHttpServer())
+    .post("/api/auth/login")
+    .send({
+      email: process.env.ADMIN_EMAIL,
+      password: process.env.ADMIN_PASSWORD,
+    });
   const token = textField(field(login.body, "data"), "token");
   const name = `rollback_${randomUUID().replaceAll("-", "")}`;
   const mysql = process.env.DB_PROVIDER === "mysql";
-  if (mysql) await prisma.$executeRawUnsafe("ALTER TABLE activity_logs ADD CONSTRAINT reject_permission_audit CHECK (endpointId <> 'permission.create' OR requestId <> 'audit-rollback-fixture')");
+  if (mysql)
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE activity_logs ADD CONSTRAINT reject_permission_audit CHECK (endpointId <> 'permission.create' OR requestId <> 'audit-rollback-fixture')",
+    );
   else {
-  await prisma.$executeRawUnsafe(`CREATE FUNCTION reject_permission_audit() RETURNS trigger AS $$
+    await prisma.$executeRawUnsafe(`CREATE FUNCTION reject_permission_audit() RETURNS trigger AS $$
     BEGIN IF NEW."endpointId" = 'permission.create' THEN RAISE EXCEPTION 'audit test failure'; END IF;
     RETURN NEW; END; $$ LANGUAGE plpgsql`);
-  await prisma.$executeRawUnsafe(`CREATE TRIGGER reject_permission_audit_insert BEFORE INSERT ON activity_logs
+    await prisma.$executeRawUnsafe(`CREATE TRIGGER reject_permission_audit_insert BEFORE INSERT ON activity_logs
     FOR EACH ROW EXECUTE FUNCTION reject_permission_audit()`);
   }
   try {
-    const response = await request(app.getHttpServer()).post("/api/permissions")
-      .set("Authorization", `Bearer ${token}`).set("X-Request-ID", "audit-rollback-fixture").send({ name });
+    const response = await request(app.getHttpServer())
+      .post("/api/permissions")
+      .set("Authorization", `Bearer ${token}`)
+      .set("X-Request-ID", "audit-rollback-fixture")
+      .send({ name });
     assert.equal(response.status, 500);
     assert.equal(await prisma.permission.count({ where: { name } }), 0);
     const optionalName = `optional_${randomUUID().replaceAll("-", "")}`;
     const audit = app.get(AuditService);
     await audit.transact(async (tx) => {
-      const created = await tx.permission.create({ data: { name: optionalName } });
-      return [created, { endpointId: "permission.create", policy: { ...endpointRegistry["permission.create"], audit: "optional" },
-        behavior: "created", module: "permissions", entityId: created.id, requestId: "audit-rollback-fixture" }] as const;
+      const created = await tx.permission.create({
+        data: { name: optionalName },
+      });
+      return [
+        created,
+        {
+          endpointId: "permission.create",
+          policy: {
+            ...endpointRegistry["permission.create"],
+            audit: "optional",
+          },
+          behavior: "created",
+          module: "permissions",
+          entityId: created.id,
+          requestId: "audit-rollback-fixture",
+        },
+      ] as const;
     });
-    assert.equal(await prisma.permission.count({ where: { name: optionalName } }), 1);
+    assert.equal(
+      await prisma.permission.count({ where: { name: optionalName } }),
+      1,
+    );
   } finally {
-    await prisma.$executeRawUnsafe(mysql ? "ALTER TABLE activity_logs DROP CHECK reject_permission_audit" : "DROP TRIGGER reject_permission_audit_insert ON activity_logs");
-    if (!mysql) await prisma.$executeRawUnsafe("DROP FUNCTION reject_permission_audit()");
+    await prisma.$executeRawUnsafe(
+      mysql
+        ? "ALTER TABLE activity_logs DROP CHECK reject_permission_audit"
+        : "DROP TRIGGER reject_permission_audit_insert ON activity_logs",
+    );
+    if (!mysql)
+      await prisma.$executeRawUnsafe("DROP FUNCTION reject_permission_audit()");
   }
 });
 
 test("notifications persist, stream to their recipient, mark read and report disabled SMTP", async () => {
   const email = `notify-${randomUUID()}@example.com`;
-  const registered = await request(app.getHttpServer()).post("/api/auth/register")
+  const registered = await request(app.getHttpServer())
+    .post("/api/auth/register")
     .send({ email, password: "strong-password-123" });
   assert.equal(registered.status, 201);
   const recipientId = textField(field(registered.body, "data"), "id");
-  const recipientLogin = await request(app.getHttpServer()).post("/api/auth/login")
+  const recipientLogin = await request(app.getHttpServer())
+    .post("/api/auth/login")
     .send({ email, password: "strong-password-123" });
   const recipientToken = textField(field(recipientLogin.body, "data"), "token");
-  const adminLogin = await request(app.getHttpServer()).post("/api/auth/login")
-    .send({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD });
+  const adminLogin = await request(app.getHttpServer())
+    .post("/api/auth/login")
+    .send({
+      email: process.env.ADMIN_EMAIL,
+      password: process.env.ADMIN_PASSWORD,
+    });
   const adminToken = textField(field(adminLogin.body, "data"), "token");
-  const denied = await request(app.getHttpServer()).post("/api/notifications")
-    .set("Authorization", `Bearer ${recipientToken}`).send({ recipientId, title: "Hello", body: "Your update" });
+  const denied = await request(app.getHttpServer())
+    .post("/api/notifications")
+    .set("Authorization", `Bearer ${recipientToken}`)
+    .send({ recipientId, title: "Hello", body: "Your update" });
   assert.equal(denied.status, 403);
-  const created = await request(app.getHttpServer()).post("/api/notifications")
+  const created = await request(app.getHttpServer())
+    .post("/api/notifications")
     .set("Authorization", `Bearer ${adminToken}`)
-    .send({ recipientId, title: "Hello", body: "Your update", sendEmail: true });
+    .send({
+      recipientId,
+      title: "Hello",
+      body: "Your update",
+      sendEmail: true,
+    });
   assert.equal(created.status, 201);
   const value = field(created.body, "data");
   const id = textField(value, "id");
   assert.equal(field(value, "emailStatus"), "FAILED");
-  const list = await request(app.getHttpServer()).get("/api/notifications")
+  const list = await request(app.getHttpServer())
+    .get("/api/notifications")
     .set("Authorization", `Bearer ${recipientToken}`);
   assert.equal(list.status, 200);
-  assert.ok((field(list.body, "data") as Array<{ id: string }>).some((item) => item.id === id));
+  assert.ok(
+    (field(list.body, "data") as Array<{ id: string }>).some(
+      (item) => item.id === id,
+    ),
+  );
   // Exercise the actual transport and cancel after receiving the persisted event.
   if (!app.getHttpServer().listening) await app.listen(0, "127.0.0.1");
   const streamAbort = new AbortController();
   const streamTimer = setTimeout(() => streamAbort.abort(), 10000);
   try {
-    const stream = await fetch(`${await app.getUrl()}/api/notifications/stream`, {
-      headers: { authorization: `Bearer ${recipientToken}` },
-      signal: streamAbort.signal,
-    });
+    const stream = await fetch(
+      `${await app.getUrl()}/api/notifications/stream`,
+      {
+        headers: { authorization: `Bearer ${recipientToken}` },
+        signal: streamAbort.signal,
+      },
+    );
     assert.equal(stream.status, 200);
-    assert.match(stream.headers.get("content-type") ?? "", /text\/event-stream/);
+    assert.match(
+      stream.headers.get("content-type") ?? "",
+      /text\/event-stream/,
+    );
     assert.ok(stream.body);
     const reader = stream.body.getReader();
     let events = "";
@@ -237,38 +438,107 @@ test("notifications persist, stream to their recipient, mark read and report dis
     clearTimeout(streamTimer);
     streamAbort.abort();
   }
-  const wrongRecipient = await request(app.getHttpServer()).patch(`/api/notifications/${id}/read`)
+  const wrongRecipient = await request(app.getHttpServer())
+    .patch(`/api/notifications/${id}/read`)
     .set("Authorization", `Bearer ${adminToken}`);
   assert.equal(wrongRecipient.status, 404);
-  const read = await request(app.getHttpServer()).patch(`/api/notifications/${id}/read`)
+  const read = await request(app.getHttpServer())
+    .patch(`/api/notifications/${id}/read`)
     .set("Authorization", `Bearer ${recipientToken}`);
   assert.equal(read.status, 200);
   assert.equal(typeof field(field(read.body, "data"), "readAt"), "string");
-  assert.equal(await prisma.activityLog.count({ where: { module: "notifications", entityId: id } }), 2);
+  assert.equal(
+    await prisma.activityLog.count({
+      where: { module: "notifications", entityId: id },
+    }),
+    2,
+  );
 });
 
 test("user and role managers cannot grant privileges they do not hold", async () => {
   const bcrypt = (await import("bcrypt")).default;
   const suffix = randomUUID();
-  const permissions = await prisma.permission.findMany({ where: { name: { in: ["manage_users", "manage_roles", "manage_permissions"] } } });
+  const permissions = await prisma.permission.findMany({
+    where: {
+      name: { in: ["manage_users", "manage_roles", "manage_permissions"] },
+    },
+  });
   const byName = new Map(permissions.map((item) => [item.name, item.id]));
-  const managerRole = await prisma.role.create({ data: { name: `priv_manager_${suffix}` } });
-  const plainRole = await prisma.role.create({ data: { name: `priv_plain_${suffix}` } });
-  await prisma.rolePermission.createMany({ data: ["manage_users", "manage_roles"].map((name) => ({ roleId: managerRole.id, permissionId: byName.get(name)! })) });
-  const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: "admin" } });
+  const managerRole = await prisma.role.create({
+    data: { name: `priv_manager_${suffix}` },
+  });
+  const plainRole = await prisma.role.create({
+    data: { name: `priv_plain_${suffix}` },
+  });
+  await prisma.rolePermission.createMany({
+    data: ["manage_users", "manage_roles"].map((name) => ({
+      roleId: managerRole.id,
+      permissionId: byName.get(name)!,
+    })),
+  });
+  const adminRole = await prisma.role.findUniqueOrThrow({
+    where: { name: "admin" },
+  });
   const password = "manager-password-123";
-  const manager = await prisma.user.create({ data: { email: `manager-${suffix}@example.com`, password: await bcrypt.hash(password, 4), roleId: managerRole.id } });
-  const plain = await prisma.user.create({ data: { email: `plain-${suffix}@example.com`, password: "unused", roleId: plainRole.id } });
-  const admin = await prisma.user.findFirstOrThrow({ where: { roleId: adminRole.id, deletedAt: null } });
-  const login = await request(app.getHttpServer()).post("/api/auth/login").send({ email: manager.email, password });
+  const manager = await prisma.user.create({
+    data: {
+      email: `manager-${suffix}@example.com`,
+      password: await bcrypt.hash(password, 4),
+      roleId: managerRole.id,
+    },
+  });
+  const plain = await prisma.user.create({
+    data: {
+      email: `plain-${suffix}@example.com`,
+      password: "unused",
+      roleId: plainRole.id,
+    },
+  });
+  const admin = await prisma.user.findFirstOrThrow({
+    where: { roleId: adminRole.id, deletedAt: null },
+  });
+  const login = await request(app.getHttpServer())
+    .post("/api/auth/login")
+    .send({ email: manager.email, password });
   assert.equal(login.status, 200);
   const token = textField(field(login.body, "data"), "token");
-  const call = (method: "patch" | "post" | "delete", path: string, body?: object) =>
-    request(app.getHttpServer())[method](path).set("Authorization", `Bearer ${token}`).send(body);
-  assert.equal((await call("patch", `/api/users/${plain.id}`, { roleId: adminRole.id })).status, 403);
-  assert.equal((await call("post", "/api/users", { email: `new-${suffix}@example.com`, password: "secret-123", roleId: adminRole.id })).status, 403);
+  const call = (
+    method: "patch" | "post" | "delete",
+    path: string,
+    body?: object,
+  ) =>
+    request(app.getHttpServer())
+      [method](path)
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+  assert.equal(
+    (await call("patch", `/api/users/${plain.id}`, { roleId: adminRole.id }))
+      .status,
+    403,
+  );
+  assert.equal(
+    (
+      await call("post", "/api/users", {
+        email: `new-${suffix}@example.com`,
+        password: "secret-123",
+        roleId: adminRole.id,
+      })
+    ).status,
+    403,
+  );
   assert.equal((await call("delete", `/api/users/${admin.id}`)).status, 403);
-  assert.equal((await call("post", `/api/roles/${managerRole.id}/permissions`, { permissionIds: [...byName.values()] })).status, 403);
-  assert.equal((await call("patch", `/api/users/${plain.id}`, { roleId: managerRole.id })).status, 200);
+  assert.equal(
+    (
+      await call("post", `/api/roles/${managerRole.id}/permissions`, {
+        permissionIds: [...byName.values()],
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (await call("patch", `/api/users/${plain.id}`, { roleId: managerRole.id }))
+      .status,
+    200,
+  );
   assert.equal((await call("delete", `/api/users/${plain.id}`)).status, 204);
 });

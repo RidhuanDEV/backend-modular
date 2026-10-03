@@ -1,10 +1,12 @@
 export interface RoleWithPermissionsDto {
   id: string;
   name: string;
-  permissions?: Array<{
-    id: string;
-    name: string;
-  }> | undefined;
+  permissions?:
+    | Array<{
+        id: string;
+        name: string;
+      }>
+    | undefined;
 }
 
 export interface UserResponseDto {

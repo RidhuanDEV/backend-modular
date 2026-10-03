@@ -190,3 +190,14 @@ Configure database TLS with hostname/CA validation, trusted ingress/proxies, exa
 ## License
 
 [MIT](LICENSE). Source: [RidhuanDEV/modular-laravel](https://github.com/RidhuanDEV/modular-laravel).
+
+## Code formatting
+
+Install development dependencies, then use the native project formatter:
+
+```sh
+composer format
+composer format:check
+```
+
+The workspace formatting workflow preserves released migration history.

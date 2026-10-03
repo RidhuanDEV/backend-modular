@@ -25,7 +25,9 @@
     "predev": "prisma generate",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "worker": "node dist/scripts/email-worker.js",
-    "cleanup": "node dist/scripts/cleanup-orphan-uploads.js"
+    "cleanup": "node dist/scripts/cleanup-orphan-uploads.js",
+    "format": "prettier --write src tests prisma.config.ts eslint.config.js",
+    "format:check": "prettier --check src tests prisma.config.ts eslint.config.js"
   },
   "keywords": [
     "express",

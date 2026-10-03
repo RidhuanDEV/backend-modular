@@ -7,7 +7,10 @@ import { z } from "zod";
 import { auditService } from "../../core/audit/audit.service.js";
 import { AuditAction } from "../../constants/audit.constants.js";
 import { ROLE_MODULE } from "../../constants/modules.constants.js";
-import { assertPermissionsWithinActor, assertRoleWithinActor } from "../../core/auth/privilege.js";
+import {
+  assertPermissionsWithinActor,
+  assertRoleWithinActor,
+} from "../../core/auth/privilege.js";
 import type {
   CreateRoleDto,
   UpdateRoleDto,

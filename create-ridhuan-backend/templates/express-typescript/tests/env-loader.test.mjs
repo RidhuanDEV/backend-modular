@@ -12,23 +12,43 @@ test("quoted credentials round trip and injected environment wins", async () => 
   try {
     delete process.env[key];
     const path = join(directory, ".env");
-    await writeFile(path, `${key}='hash#$cash "quoted" apostrophe\\' back\\slash Unicode-æ—¥æœ¬'\n`);
+    await writeFile(
+      path,
+      `${key}='hash#$cash "quoted" apostrophe\\' back\\slash Unicode-æ—¥æœ¬'\n`,
+    );
     loadEnvironment(path);
-    assert.equal(process.env[key], `hash#$cash "quoted" apostrophe' back\\slash Unicode-æ—¥æœ¬`);
+    assert.equal(
+      process.env[key],
+      `hash#$cash "quoted" apostrophe' back\\slash Unicode-æ—¥æœ¬`,
+    );
     process.env[key] = "injected";
     loadEnvironment(path);
     assert.equal(process.env[key], "injected");
   } finally {
-    if (original === undefined) delete process.env[key]; else process.env[key] = original;
+    if (original === undefined) delete process.env[key];
+    else process.env[key] = original;
     await rm(directory, { recursive: true, force: true });
   }
 });
 
 test("backslash and escaped dollar edges survive the dotenv loader", async () => {
- const dir = await mkdtemp(join(tmpdir(), "env-edge-")); const key = "CLI_ENV_EDGE_TEST", prior = process.env[key];
- try { for (const value of ['trailing\\', "slash\\'quote", 'x\\$HOME $$x 日本']) {
-  delete process.env[key]; const path = join(dir,'.env');
-  await writeFile(path, key+'='+JSON.stringify(value).replaceAll('$','\\$')+'\n'); loadEnvironment(path);
-  assert.equal(process.env[key], value, "Escaped credential changed");
- }} finally { if(prior===undefined)delete process.env[key];else process.env[key]=prior;await rm(dir,{recursive:true,force:true}); }
+  const dir = await mkdtemp(join(tmpdir(), "env-edge-"));
+  const key = "CLI_ENV_EDGE_TEST",
+    prior = process.env[key];
+  try {
+    for (const value of ["trailing\\", "slash\\'quote", "x\\$HOME $$x 日本"]) {
+      delete process.env[key];
+      const path = join(dir, ".env");
+      await writeFile(
+        path,
+        key + "=" + JSON.stringify(value).replaceAll("$", "\\$") + "\n",
+      );
+      loadEnvironment(path);
+      assert.equal(process.env[key], value, "Escaped credential changed");
+    }
+  } finally {
+    if (prior === undefined) delete process.env[key];
+    else process.env[key] = prior;
+    await rm(dir, { recursive: true, force: true });
+  }
 });

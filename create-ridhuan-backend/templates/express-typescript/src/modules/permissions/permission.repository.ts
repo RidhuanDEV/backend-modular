@@ -12,7 +12,10 @@ export class PermissionRepository {
     return prisma.permission.findMany();
   }
 
-  async findById(id: string, trx?: TransactionClient): Promise<Permission | null> {
+  async findById(
+    id: string,
+    trx?: TransactionClient,
+  ): Promise<Permission | null> {
     const client = trx ?? prisma;
     return client.permission.findUnique({ where: { id } });
   }

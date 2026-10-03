@@ -387,3 +387,14 @@ Version bumps and npm publication need separate release authorization. Do not pu
 </details>
 
 MIT © RidhuanDEV
+
+## Maintainer formatting
+
+From the repository root, install each backend development toolchain and build the CLI first. These commands format or check all seven source repositories. Diagnostics and an aggregate report are written to the OS temporary directory; failures do not skip independent backends.
+
+```sh
+npm --prefix create-ridhuan-backend run format:backends
+npm --prefix create-ridhuan-backend run format:backends:check
+```
+
+Use `-- --only nestjs` (or `express`, `golang`, `dotnet`, `fastapi`, `springboot`, `laravel`) to select a backend. Refresh local bundled templates with `npm --prefix create-ridhuan-backend run prepare:templates -- --allow-dirty`. Prepare release snapshots from committed source without `--allow-dirty`.

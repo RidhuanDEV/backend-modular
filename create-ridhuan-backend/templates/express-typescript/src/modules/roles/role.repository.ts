@@ -24,7 +24,10 @@ export class RoleRepository {
     });
   }
 
-  async findById(id: string, trx?: TransactionClient): Promise<RoleWithPermissions | null> {
+  async findById(
+    id: string,
+    trx?: TransactionClient,
+  ): Promise<RoleWithPermissions | null> {
     const client = trx ?? prisma;
     return client.role.findUnique({
       where: { id },

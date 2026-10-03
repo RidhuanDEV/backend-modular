@@ -12,7 +12,10 @@ process.on("uncaughtException", (err: Error) => {
 });
 
 process.on("unhandledRejection", (reason: unknown) => {
-  logger.fatal({ reason }, "Unhandled Rejection detected — shutting down process");
+  logger.fatal(
+    { reason },
+    "Unhandled Rejection detected — shutting down process",
+  );
   process.exit(1);
 });
 

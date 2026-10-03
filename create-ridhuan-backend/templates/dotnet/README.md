@@ -195,3 +195,14 @@ Configure database TLS with hostname/CA validation, trusted ingress/proxies, exa
 ## License
 
 [MIT](LICENSE). Source: [RidhuanDEV/NET-backend](https://github.com/RidhuanDEV/NET-backend).
+
+## Code formatting
+
+Install development dependencies, then use the native project formatter:
+
+```sh
+dotnet format whitespace ModularBackend.slnx --exclude src/ModularBackend.Infrastructure/Persistence/Migrations src/ModularBackend.Infrastructure/Persistence/MySqlMigrations
+dotnet format whitespace ModularBackend.slnx --verify-no-changes --exclude src/ModularBackend.Infrastructure/Persistence/Migrations src/ModularBackend.Infrastructure/Persistence/MySqlMigrations
+```
+
+The workspace formatting workflow preserves released migration history.

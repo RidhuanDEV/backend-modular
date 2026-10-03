@@ -19,8 +19,7 @@ export const PERMISSION_GROUPS = {
 type PermissionGroups = typeof PERMISSION_GROUPS;
 
 export type PermissionName = {
-  [K in keyof PermissionGroups]:
-    PermissionGroups[K][keyof PermissionGroups[K]];
+  [K in keyof PermissionGroups]: PermissionGroups[K][keyof PermissionGroups[K]];
 }[keyof PermissionGroups];
 
 export const USER_PERMISSIONS = PERMISSION_GROUPS.USER;

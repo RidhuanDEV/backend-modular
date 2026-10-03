@@ -121,9 +121,12 @@ export function buildFindOptions<Q extends BaseSearchQuery>(
   // Full-text search across configured fields
   if (search != null && search.length > 0 && config.searchFields?.length) {
     for (const col of config.searchFields) {
-      orConditions.push({ [col]: databaseProvider() === "postgresql"
-        ? { contains: search, mode: "insensitive" }
-        : { contains: search.toLowerCase() } });
+      orConditions.push({
+        [col]:
+          databaseProvider() === "postgresql"
+            ? { contains: search, mode: "insensitive" }
+            : { contains: search.toLowerCase() },
+      });
     }
   }
 
@@ -192,7 +195,10 @@ export function buildFindOptions<Q extends BaseSearchQuery>(
     result.select = select;
   }
 
-  if (config.defaultIncludes && Object.keys(config.defaultIncludes).length > 0) {
+  if (
+    config.defaultIncludes &&
+    Object.keys(config.defaultIncludes).length > 0
+  ) {
     result.include = config.defaultIncludes;
   }
 

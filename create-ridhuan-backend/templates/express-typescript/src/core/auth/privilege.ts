@@ -22,12 +22,20 @@ export async function assertPermissionsWithinActor(
   if (permissionIds.length === 0) return;
   const actor = await client.user.findFirst({
     where: { id: actorId, deletedAt: null },
-    select: { role: { select: { name: true, permissions: { select: { permissionId: true } } } } },
+    select: {
+      role: {
+        select: { name: true, permissions: { select: { permissionId: true } } },
+      },
+    },
   });
   if (actor?.role.name === ROOT_ROLE) return;
-  const held = new Set(actor?.role.permissions.map((row) => row.permissionId) ?? []);
+  const held = new Set(
+    actor?.role.permissions.map((row) => row.permissionId) ?? [],
+  );
   if (permissionIds.some((id) => !held.has(id))) {
-    throw HttpError.forbidden("You cannot grant or manage permissions you do not hold");
+    throw HttpError.forbidden(
+      "You cannot grant or manage permissions you do not hold",
+    );
   }
 }
 
@@ -40,5 +48,9 @@ export async function assertRoleWithinActor(
     where: { roleId },
     select: { permissionId: true },
   });
-  await assertPermissionsWithinActor(client, actorId, rows.map((row) => row.permissionId));
+  await assertPermissionsWithinActor(
+    client,
+    actorId,
+    rows.map((row) => row.permissionId),
+  );
 }

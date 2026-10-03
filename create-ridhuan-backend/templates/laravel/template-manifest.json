@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-laravel.git",
-    "commit": "060f595a2c59ba6ffed47273501b66b3b32563e0",
+    "commit": "7873bd136ab7384d8aeb0ca950e706629ed7d428",
     "dirty": false
   },
   "requirements": {
@@ -135,7 +135,7 @@
     "compose.mysql.yaml": "fb3b4e76e0af2d497610ad911022da9a0264b83ab650ea438344aa4a85b9d77e",
     "compose.override.yaml.example": "0c9711ff61d000e59493672e8721d48c45baa38f77ab080a20474c39c709e91a",
     "compose.yaml": "00953bceffa34ab7103192e77ea8cbf137c3c15b293540cd892a93bcd180275c",
-    "composer.json": "b4ef5f2fdc659d10d81a18a88a732813f047455c282b12341dda4319a4fe05cd",
+    "composer.json": "149f800965f8a0becaccd8b045d2fa52e48013279e3f3063aeaeb90eac732bd4",
     "composer.lock": "796a05f3040514e85452286b8633287e631973dfc05349e4789278af13fb8dc2",
     "config/app.php": "37141f0faf0acb48816dbb2b0ed4d227db1aaefdd5f610d462ff3ce3d96b7500",
     "config/auth.php": "fc78d72d12d07960112af7fdfbd96dae2a65760c777366bc63fbcd6b8127dccd",
@@ -171,10 +171,10 @@
     "LICENSE": "53ba2c47c406c564e6263f36c300ff2e2affb2fbc102c7becc34a412904eb6c3",
     "phpstan.neon": "978f1326fc241bd2e18623d5d5c5b9860b54347c7500f4218b8dc5de9511bac4",
     "phpunit.xml": "8defdd840209039c78a66fcd6cc6e260769bb8f0c2933be087b271e23cf587aa",
-    "pint.json": "d0d8b06a948fb7fbdb531c89e24d9f6dd5531eb551b3b75247b1b255c8a29db8",
+    "pint.json": "3b64d4734b2183d2f67f7699a9c1507c52fd511d13ed450199a22eb13371617d",
     "public/.htaccess": "b7e379c77639fd56144947dbae84c84eb466d9c686ea81f2f013ae85421da923",
     "public/index.php": "bcda9ec38b78c7f23eed674f019467e330193cafa9b7c64d48036a8b8b04496d",
-    "README.md": "faced6915d007fd4403ae0f14ed4570d38c6ea248900efd4c2835f9c7ddcf982",
+    "README.md": "e0d2abfcb16100dc67d1a4b5ff09f9878d5842f5537203abb98f64c93ea17ea6",
     "resources/views/welcome.blade.php": "5ab68aae2df265be18189b8a4f48cadaa303666730829cfbf4be418890cdb544",
     "routes/console.php": "0f47689a54b62f2fa99240ff0e081920bad20dc3779b24d76f16e7709eecbed3",
     "routes/web.php": "453bad516ef45af1cbc563530d4b71bc407bd909538efaeda61b3ae80913a602",

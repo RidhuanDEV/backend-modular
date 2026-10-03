@@ -939,16 +939,28 @@ function main(): void {
   writeFile(path.join(moduleDir, `${name}.service.ts`), genService(name));
   writeFile(path.join(moduleDir, `${name}.controller.ts`), genController(name));
   writeFile(path.join(moduleDir, `${name}.routes.ts`), genRoutes(name));
-  registerCrudModule(name, pluralize(name), pascalCase(name), camelCase(name), permissionConstantName(name));
+  registerCrudModule(
+    name,
+    pluralize(name),
+    pascalCase(name),
+    camelCase(name),
+    permissionConstantName(name),
+  );
 
   // Postman
   updatePostman(name);
 
   console.log(`\nModule "${name}" generated successfully!`);
   console.log(`\nImportant next steps:`);
-  console.log(`1. Add model "${pascalCase(name)}" to your schema.prisma file manually.`);
-  console.log(`2. Run "npx prisma migrate dev --name create-${name}" to update the database schema.`);
-  console.log(`3. Registry and app registration were updated; review policies and response schemas.\n`);
+  console.log(
+    `1. Add model "${pascalCase(name)}" to your schema.prisma file manually.`,
+  );
+  console.log(
+    `2. Run "npx prisma migrate dev --name create-${name}" to update the database schema.`,
+  );
+  console.log(
+    `3. Registry and app registration were updated; review policies and response schemas.\n`,
+  );
 }
 
 try {

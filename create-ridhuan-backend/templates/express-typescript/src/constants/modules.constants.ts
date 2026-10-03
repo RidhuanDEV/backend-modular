@@ -7,7 +7,7 @@ export const MODULES = {
   NOTIFICATIONS: "notifications",
 } as const;
 
-export type ModuleName = typeof MODULES[keyof typeof MODULES];
+export type ModuleName = (typeof MODULES)[keyof typeof MODULES];
 
 export const AUTH_MODULE = MODULES.AUTH;
 export const USER_MODULE = MODULES.USER;

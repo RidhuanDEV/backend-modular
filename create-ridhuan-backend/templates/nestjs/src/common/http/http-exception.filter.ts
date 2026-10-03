@@ -45,13 +45,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
       prismaClientErrors[exception.code]
     ) {
       const mapped = prismaClientErrors[exception.code]!;
-      response
-        .status(mapped.status)
-        .json({
-          success: false,
-          message: mapped.message,
-          errors: [],
-        } satisfies Failure);
+      response.status(mapped.status).json({
+        success: false,
+        message: mapped.message,
+        errors: [],
+      } satisfies Failure);
       return;
     }
     if (isBodyParserError(exception)) {

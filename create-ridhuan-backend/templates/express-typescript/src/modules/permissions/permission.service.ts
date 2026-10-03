@@ -19,7 +19,10 @@ const CACHE_PREFIX = PERMISSION_MODULE;
 export class PermissionService {
   async findAll() {
     const cacheKey = `${CACHE_PREFIX}:list`;
-    const cached = await cacheService.get(cacheKey, z.array(permissionCacheSchema));
+    const cached = await cacheService.get(
+      cacheKey,
+      z.array(permissionCacheSchema),
+    );
     if (cached) return cached;
 
     const permissions = await repository.findAll();

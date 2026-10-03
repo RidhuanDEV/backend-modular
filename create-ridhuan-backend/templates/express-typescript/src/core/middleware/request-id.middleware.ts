@@ -7,9 +7,10 @@ export function requestIdMiddleware(
   next: NextFunction,
 ): void {
   const existing = req.headers["x-request-id"];
-  req.requestId = typeof existing === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(existing)
-    ? existing
-    : randomUUID();
+  req.requestId =
+    typeof existing === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(existing)
+      ? existing
+      : randomUUID();
   res.setHeader("X-Request-Id", req.requestId);
   next();
 }

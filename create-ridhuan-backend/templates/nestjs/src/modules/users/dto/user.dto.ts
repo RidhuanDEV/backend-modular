@@ -1,4 +1,11 @@
-import { IsEmail, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
+import {
+  IsEmail,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from "class-validator";
 import { MaxUtf8Bytes } from "../../../common/dto/password";
 
 export class CreateUserDto {
@@ -11,7 +18,14 @@ export class UpdateUserDto {
   @IsOptional() @IsUUID() roleId?: string;
 }
 export class UserResponseDto {
-  id!: string; email!: string; roleId!: string;
-  role!: { id: string; name: string; permissions: { id: string; name: string }[] };
-  createdAt!: string; updatedAt!: string;
+  id!: string;
+  email!: string;
+  roleId!: string;
+  role!: {
+    id: string;
+    name: string;
+    permissions: { id: string; name: string }[];
+  };
+  createdAt!: string;
+  updatedAt!: string;
 }

@@ -2,63 +2,179 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
-test("notifications persist, authorize recipient, stream and mark read", { skip: !process.env.DATABASE_URL }, async () => {
-  process.env.JWT_SECRET ??= "test_secret_at_least_32_characters_long";
-  process.env.CACHE_ENABLED = "false";
-  process.env.RATE_LIMIT_STORE = "memory";
-  process.env.SMTP_ENABLED = "false";
-  const { app } = await import("../dist/app.js");
-  const { prisma } = await import("../dist/config/prisma.js");
-  const { signToken } = await import("../dist/core/auth/jwt.service.js");
-  const suffix = randomUUID();
-  const adminRole = await prisma.role.create({ data: { name: `notify_admin_${suffix}` } });
-  const userRole = await prisma.role.create({ data: { name: `notify_user_${suffix}` } });
-  const userManagerRole = await prisma.role.create({ data: { name: `notify_user_manager_${suffix}` } });
-  await prisma.permission.createMany({ data: [{ name: "manage_notifications" }, { name: "manage_users" }], skipDuplicates: true });
-  const permission = await prisma.permission.findUniqueOrThrow({ where: { name: "manage_notifications" } });
-  await prisma.rolePermission.create({ data: { roleId: adminRole.id, permissionId: permission.id } });
-  const userPermission = await prisma.permission.findUniqueOrThrow({ where: { name: "manage_users" } });
-  await prisma.rolePermission.create({ data: { roleId: userManagerRole.id, permissionId: userPermission.id } });
-  const admin = await prisma.user.create({ data: { email: `admin_${suffix}@example.test`, password: "unused", roleId: adminRole.id } });
-  const recipient = await prisma.user.create({ data: { email: `recipient_${suffix}@example.test`, password: "unused", roleId: userRole.id } });
-  const userManager = await prisma.user.create({ data: { email: `manager_${suffix}@example.test`, password: "unused", roleId: userManagerRole.id } });
-  const server = app.listen(0);
-  const base = `http://127.0.0.1:${server.address().port}`;
-  const adminToken = signToken({ id: admin.id, email: admin.email, roleId: admin.roleId });
-  const recipientToken = signToken({ id: recipient.id, email: recipient.email, roleId: recipient.roleId });
-  const userManagerToken = signToken({ id: userManager.id, email: userManager.email, roleId: userManager.roleId });
-  const request = (path, token, options = {}) => fetch(base + path, { ...options, headers: { Authorization: `Bearer ${token}`, ...(options.headers ?? {}) } });
-  try {
-    const forbidden = await request("/api/notifications", recipientToken, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipientId: recipient.id, title: "Hello", body: "Your update" }) });
-    assert.equal(forbidden.status, 403);
-    const wrongPermission = await request("/api/notifications", userManagerToken, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipientId: recipient.id, title: "Hello", body: "Your update" }) });
-    assert.equal(wrongPermission.status, 403);
-    const created = await request("/api/notifications", adminToken, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ recipientId: recipient.id, title: "Hello", body: "Your update", sendEmail: true }) });
-    const createdText = await created.text();
-    assert.equal(created.status, 201, createdText);
-    const value = JSON.parse(createdText).data;
-    assert.equal(value.emailStatus, "FAILED");
-    const listed = await request("/api/notifications", recipientToken);
-    assert.equal(listed.status, 200);
-    assert.ok((await listed.json()).data.some((item) => item.id === value.id));
-    const streamAbort = new AbortController();
-    const stream = await request("/api/notifications/stream", recipientToken, { signal: streamAbort.signal });
-    assert.equal(stream.status, 200);
-    assert.equal(stream.headers.get("content-type")?.startsWith("text/event-stream"), true);
-    const chunk = await stream.body.getReader().read();
-    assert.match(new TextDecoder().decode(chunk.value), /event: notification/);
-    streamAbort.abort();
-    const wrong = await request(`/api/notifications/${value.id}/read`, adminToken, { method: "PATCH" });
-    assert.equal(wrong.status, 404);
-    const read = await request(`/api/notifications/${value.id}/read`, recipientToken, { method: "PATCH" });
-    assert.equal(read.status, 200);
-    assert.equal(typeof (await read.json()).data.readAt, "string");
-    assert.equal(await prisma.activityLog.count({ where: { module: "notifications", entityId: value.id } }), 2);
-  } finally {
-    server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
-    await prisma.user.deleteMany({ where: { id: { in: [admin.id, recipient.id, userManager.id] } } });
-    await prisma.role.deleteMany({ where: { id: { in: [adminRole.id, userRole.id, userManagerRole.id] } } });
-    await prisma.$disconnect();
-  }
-});
+test(
+  "notifications persist, authorize recipient, stream and mark read",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    process.env.JWT_SECRET ??= "test_secret_at_least_32_characters_long";
+    process.env.CACHE_ENABLED = "false";
+    process.env.RATE_LIMIT_STORE = "memory";
+    process.env.SMTP_ENABLED = "false";
+    const { app } = await import("../dist/app.js");
+    const { prisma } = await import("../dist/config/prisma.js");
+    const { signToken } = await import("../dist/core/auth/jwt.service.js");
+    const suffix = randomUUID();
+    const adminRole = await prisma.role.create({
+      data: { name: `notify_admin_${suffix}` },
+    });
+    const userRole = await prisma.role.create({
+      data: { name: `notify_user_${suffix}` },
+    });
+    const userManagerRole = await prisma.role.create({
+      data: { name: `notify_user_manager_${suffix}` },
+    });
+    await prisma.permission.createMany({
+      data: [{ name: "manage_notifications" }, { name: "manage_users" }],
+      skipDuplicates: true,
+    });
+    const permission = await prisma.permission.findUniqueOrThrow({
+      where: { name: "manage_notifications" },
+    });
+    await prisma.rolePermission.create({
+      data: { roleId: adminRole.id, permissionId: permission.id },
+    });
+    const userPermission = await prisma.permission.findUniqueOrThrow({
+      where: { name: "manage_users" },
+    });
+    await prisma.rolePermission.create({
+      data: { roleId: userManagerRole.id, permissionId: userPermission.id },
+    });
+    const admin = await prisma.user.create({
+      data: {
+        email: `admin_${suffix}@example.test`,
+        password: "unused",
+        roleId: adminRole.id,
+      },
+    });
+    const recipient = await prisma.user.create({
+      data: {
+        email: `recipient_${suffix}@example.test`,
+        password: "unused",
+        roleId: userRole.id,
+      },
+    });
+    const userManager = await prisma.user.create({
+      data: {
+        email: `manager_${suffix}@example.test`,
+        password: "unused",
+        roleId: userManagerRole.id,
+      },
+    });
+    const server = app.listen(0);
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const adminToken = signToken({
+      id: admin.id,
+      email: admin.email,
+      roleId: admin.roleId,
+    });
+    const recipientToken = signToken({
+      id: recipient.id,
+      email: recipient.email,
+      roleId: recipient.roleId,
+    });
+    const userManagerToken = signToken({
+      id: userManager.id,
+      email: userManager.email,
+      roleId: userManager.roleId,
+    });
+    const request = (path, token, options = {}) =>
+      fetch(base + path, {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(options.headers ?? {}),
+        },
+      });
+    try {
+      const forbidden = await request("/api/notifications", recipientToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientId: recipient.id,
+          title: "Hello",
+          body: "Your update",
+        }),
+      });
+      assert.equal(forbidden.status, 403);
+      const wrongPermission = await request(
+        "/api/notifications",
+        userManagerToken,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipientId: recipient.id,
+            title: "Hello",
+            body: "Your update",
+          }),
+        },
+      );
+      assert.equal(wrongPermission.status, 403);
+      const created = await request("/api/notifications", adminToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientId: recipient.id,
+          title: "Hello",
+          body: "Your update",
+          sendEmail: true,
+        }),
+      });
+      const createdText = await created.text();
+      assert.equal(created.status, 201, createdText);
+      const value = JSON.parse(createdText).data;
+      assert.equal(value.emailStatus, "FAILED");
+      const listed = await request("/api/notifications", recipientToken);
+      assert.equal(listed.status, 200);
+      assert.ok(
+        (await listed.json()).data.some((item) => item.id === value.id),
+      );
+      const streamAbort = new AbortController();
+      const stream = await request(
+        "/api/notifications/stream",
+        recipientToken,
+        { signal: streamAbort.signal },
+      );
+      assert.equal(stream.status, 200);
+      assert.equal(
+        stream.headers.get("content-type")?.startsWith("text/event-stream"),
+        true,
+      );
+      const chunk = await stream.body.getReader().read();
+      assert.match(
+        new TextDecoder().decode(chunk.value),
+        /event: notification/,
+      );
+      streamAbort.abort();
+      const wrong = await request(
+        `/api/notifications/${value.id}/read`,
+        adminToken,
+        { method: "PATCH" },
+      );
+      assert.equal(wrong.status, 404);
+      const read = await request(
+        `/api/notifications/${value.id}/read`,
+        recipientToken,
+        { method: "PATCH" },
+      );
+      assert.equal(read.status, 200);
+      assert.equal(typeof (await read.json()).data.readAt, "string");
+      assert.equal(
+        await prisma.activityLog.count({
+          where: { module: "notifications", entityId: value.id },
+        }),
+        2,
+      );
+    } finally {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+      await prisma.user.deleteMany({
+        where: { id: { in: [admin.id, recipient.id, userManager.id] } },
+      });
+      await prisma.role.deleteMany({
+        where: { id: { in: [adminRole.id, userRole.id, userManagerRole.id] } },
+      });
+      await prisma.$disconnect();
+    }
+  },
+);

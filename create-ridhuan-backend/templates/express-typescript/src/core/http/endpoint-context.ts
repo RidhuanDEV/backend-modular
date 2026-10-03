@@ -13,7 +13,12 @@ export function currentEndpoint(): EndpointContext | undefined {
 }
 export function runWithEndpoint<T>(id: EndpointId, fn: () => T): T {
   return storage.run(
-    { endpointId: id, auditWritten: false, auditNoMutation: false, pendingAudits: [] },
+    {
+      endpointId: id,
+      auditWritten: false,
+      auditNoMutation: false,
+      pendingAudits: [],
+    },
     fn,
   );
 }

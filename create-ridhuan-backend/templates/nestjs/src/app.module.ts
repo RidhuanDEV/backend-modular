@@ -21,12 +21,31 @@ import { MailModule } from "./platform/mail/mail.module";
 import { SseModule } from "./platform/sse/sse.module";
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true, validate: validateEnvironment }), CommonModule,
-    DatabaseModule, RedisModule, MailModule, SseModule, SystemModule, DocsModule, AuthModule, UsersModule,
-    RolesModule, PermissionsModule, UploadsModule, NotificationsModule],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      ignoreEnvFile: true,
+      validate: validateEnvironment,
+    }),
+    CommonModule,
+    DatabaseModule,
+    RedisModule,
+    MailModule,
+    SseModule,
+    SystemModule,
+    DocsModule,
+    AuthModule,
+    UsersModule,
+    RolesModule,
+    PermissionsModule,
+    UploadsModule,
+    NotificationsModule,
+  ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
-    { provide: APP_GUARD, useClass: PreAuthRateGuard }, { provide: APP_GUARD, useClass: AccessGuard },
-    { provide: APP_INTERCEPTOR, useClass: ReadAuditInterceptor }],
+    { provide: APP_GUARD, useClass: PreAuthRateGuard },
+    { provide: APP_GUARD, useClass: AccessGuard },
+    { provide: APP_INTERCEPTOR, useClass: ReadAuditInterceptor },
+  ],
 })
 export class AppModule {}

@@ -14,19 +14,9 @@ import type { QueryBuilderConfig } from "../../../core/database/query-builder.js
  * defaultIncludes: Eager-loaded relations to prevent N+1 queries.
  */
 export const userQueryConfig: QueryBuilderConfig = {
-  searchFields: [
-    "email",
-  ],
-  sortableFields: [
-    "createdAt",
-    "updatedAt",
-    "email",
-  ],
-  selectableFields: [
-    "id",
-    "email",
-    "roleId",
-  ],
+  searchFields: ["email"],
+  sortableFields: ["createdAt", "updatedAt", "email"],
+  selectableFields: ["id", "email", "roleId"],
   filters: {},
   defaultIncludes: {
     role: {

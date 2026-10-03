@@ -48,7 +48,9 @@ import { logger } from "../logger/logger.js";
 
 const redisUrl = env.REDIS_URL ? new URL(env.REDIS_URL) : null;
 const redisDatabase =
-  redisUrl && redisUrl.pathname.length > 1 ? Number(redisUrl.pathname.slice(1)) : undefined;
+  redisUrl && redisUrl.pathname.length > 1
+    ? Number(redisUrl.pathname.slice(1))
+    : undefined;
 
 const connection: ConnectionOptions = {
   host: redisUrl?.hostname ?? "127.0.0.1",

@@ -194,3 +194,14 @@ Configure database TLS with hostname/CA validation, trusted ingress/proxies, exa
 ## License
 
 [MIT](LICENSE). Source: [RidhuanDEV/modular-nestjs](https://github.com/RidhuanDEV/modular-nestjs).
+
+## Code formatting
+
+Install development dependencies, then use the native project formatter:
+
+```sh
+npm run format
+npm run format:check
+```
+
+The workspace formatting workflow preserves released migration history.

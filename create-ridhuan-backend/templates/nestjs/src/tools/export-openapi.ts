@@ -8,6 +8,13 @@ async function main(): Promise<void> {
   try {
     const document = app.get(DocsService).getDocument();
     await writeFile("openapi.json", JSON.stringify(document, null, 2));
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 }
-main().catch((error: unknown) => { process.stderr.write(`${error instanceof Error ? error.message : "OpenAPI export failed"}\n`); process.exitCode = 1; });
+main().catch((error: unknown) => {
+  process.stderr.write(
+    `${error instanceof Error ? error.message : "OpenAPI export failed"}\n`,
+  );
+  process.exitCode = 1;
+});

@@ -19,7 +19,11 @@ export class UserPolicy {
   }
 
   /** The assigned role may not carry permissions the actor lacks. */
-  async canCreate(user: JwtUserPayload, roleId: string, trx: Prisma.TransactionClient): Promise<void> {
+  async canCreate(
+    user: JwtUserPayload,
+    roleId: string,
+    trx: Prisma.TransactionClient,
+  ): Promise<void> {
     await assertRoleWithinActor(trx, user.id, roleId);
   }
 
@@ -36,7 +40,11 @@ export class UserPolicy {
     }
   }
 
-  async canDelete(user: JwtUserPayload, resource: User, trx: Prisma.TransactionClient): Promise<void> {
+  async canDelete(
+    user: JwtUserPayload,
+    resource: User,
+    trx: Prisma.TransactionClient,
+  ): Promise<void> {
     if (user.id === resource.id) {
       throw HttpError.forbidden("You cannot delete your own account.");
     }

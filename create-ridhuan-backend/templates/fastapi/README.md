@@ -205,3 +205,14 @@ MySQL credentials, including non-ASCII passwords, are covered by the provider ac
 ## License
 
 [MIT](LICENSE). Source: [RidhuanDEV/modular-fastapi](https://github.com/RidhuanDEV/modular-fastapi).
+
+## Code formatting
+
+Install development dependencies, then use the native project formatter:
+
+```sh
+uv run --locked ruff format src tests scripts
+uv run --locked ruff format --check src tests scripts
+```
+
+The workspace formatting workflow preserves released migration history.

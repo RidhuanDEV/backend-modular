@@ -70,13 +70,11 @@ export async function serveNotifications<T extends NotificationEvent>(
     )
       response.write(": heartbeat\n\n");
   }, 15_000);
-  response
-    .status(200)
-    .set({
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      "X-Accel-Buffering": "no",
-    });
+  response.status(200).set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    "X-Accel-Buffering": "no",
+  });
   response.flushHeaders();
   sseConnection(1);
   try {

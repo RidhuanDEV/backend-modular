@@ -4,7 +4,11 @@ import {
   requireAuthenticatedUser,
   requireRouteParam,
 } from "../../core/http/request-context.js";
-import { sendSuccess, sendCreated, sendNoContent } from "../../utils/response.js";
+import {
+  sendSuccess,
+  sendCreated,
+  sendNoContent,
+} from "../../utils/response.js";
 import type { SearchUserDto } from "./dto/search-user.dto.js";
 import type { CreateUserDto } from "./dto/create-user.dto.js";
 import type { UpdateUserDto } from "./dto/update-user.dto.js";
@@ -13,7 +17,11 @@ import { createUserSchema, updateUserSchema } from "./user.schema.js";
 const service = new UserService();
 
 export class UserController {
-  getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  getAll = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const pageVal = req.query["page"];
       const limitVal = req.query["limit"];
@@ -41,7 +49,11 @@ export class UserController {
     }
   };
 
-  getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  getById = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const id = requireRouteParam(req, "id");
       const result = await service.findById(id);
@@ -86,7 +98,11 @@ export class UserController {
     }
   };
 
-  delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  delete = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const id = requireRouteParam(req, "id");
       const user = requireAuthenticatedUser(req);

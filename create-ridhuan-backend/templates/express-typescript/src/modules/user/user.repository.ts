@@ -21,7 +21,9 @@ export type UserWithRole = Prisma.UserGetPayload<{
 }>;
 
 export class UserRepository {
-  async findAll(options: PrismaFindOptions): Promise<{ rows: UserWithRole[]; count: number }> {
+  async findAll(
+    options: PrismaFindOptions,
+  ): Promise<{ rows: UserWithRole[]; count: number }> {
     const [rows, count] = await Promise.all([
       prisma.user.findMany({
         where: { ...options.where, deletedAt: null },
@@ -43,7 +45,10 @@ export class UserRepository {
     return { rows, count };
   }
 
-  async findById(id: string, trx?: TransactionClient): Promise<UserWithRole | null> {
+  async findById(
+    id: string,
+    trx?: TransactionClient,
+  ): Promise<UserWithRole | null> {
     const client = trx ?? prisma;
     return client.user.findFirst({
       where: { id, deletedAt: null },
@@ -77,12 +82,15 @@ export class UserRepository {
   ): Promise<User | null> {
     const client = trx ?? prisma;
 
-    const existing = await client.user.findFirst({ where: { id, deletedAt: null } });
+    const existing = await client.user.findFirst({
+      where: { id, deletedAt: null },
+    });
     if (!existing) return null;
 
     const updateData: Prisma.UserUpdateInput = {};
     if (data.email !== undefined) updateData.email = data.email;
-    if (data.roleId !== undefined) updateData.role = { connect: { id: data.roleId } };
+    if (data.roleId !== undefined)
+      updateData.role = { connect: { id: data.roleId } };
 
     return client.user.update({
       where: { id },

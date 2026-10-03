@@ -1,7 +1,10 @@
 import { UserRepository } from "./user.repository.js";
 import { prisma } from "../../config/prisma.js";
 import { cacheService } from "../../core/cache/cache.service.js";
-import { userCacheSchema, userListCacheSchema } from "../../core/cache/cache-schemas.js";
+import {
+  userCacheSchema,
+  userListCacheSchema,
+} from "../../core/cache/cache-schemas.js";
 import { auditService } from "../../core/audit/audit.service.js";
 import { HttpError } from "../../core/errors/http-error.js";
 import { buildFindOptions } from "../../core/database/query-builder.js";
@@ -15,10 +18,7 @@ import bcrypt from "bcrypt";
 import type { CreateUserDto } from "./dto/create-user.dto.js";
 import type { UpdateUserDto } from "./dto/update-user.dto.js";
 import type { SearchUserDto } from "./dto/search-user.dto.js";
-import type {
-  JwtUserPayload,
-  PaginationMeta,
-} from "../../types/index.js";
+import type { JwtUserPayload, PaginationMeta } from "../../types/index.js";
 import type {
   UserResponseDto,
   UserResponseProjection,
@@ -122,7 +122,11 @@ export class UserService {
     return toUserResponse(full);
   }
 
-  async delete(id: string, user: JwtUserPayload, requestId?: string): Promise<void> {
+  async delete(
+    id: string,
+    user: JwtUserPayload,
+    requestId?: string,
+  ): Promise<void> {
     await prisma.$transaction(async (tx) => {
       const existing = await repository.findById(id, tx);
       if (!existing) throw HttpError.notFound("User not found");

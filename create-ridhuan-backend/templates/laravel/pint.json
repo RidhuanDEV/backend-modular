@@ -1,1 +1,6 @@
-{"preset":"laravel"}
+{
+    "preset": "laravel",
+    "exclude": [
+        "database/migrations"
+    ]
+}

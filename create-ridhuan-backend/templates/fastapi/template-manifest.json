@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-fastapi.git",
-    "commit": "90b7fcb196afe2119191e189c0e6c17f88c677e7",
+    "commit": "843e7383cead143bfa36db7188a4f1f396567a5e",
     "dirty": false
   },
   "requirements": {
@@ -44,7 +44,7 @@
     "migrations/postgresql/versions/0003_session_families_and_email_outbox.py": "4c67e2923a135bab09173e793a0740ad974425ce31c7cad7a7b033e96a9ed89c",
     "migrations/script.py.mako": "34d6b7b9f64100da1c2854833cdb20f53cf0ea6c7500f0953ad3cf02b5857976",
     "pyproject.toml": "e0bda326e3e6d7590293dae2fcc39482d93804643c8ec92c7f7f35670c6a023b",
-    "README.md": "4e185cbf1d840d276644f8e40445952afe6ba836e1f54e32bb19075c14064996",
+    "README.md": "59e076bd9569822e6d028e29d0b1f4b630c2b6a7a7c5c2d522d88edbf1720aa8",
     "scripts/init-bucket.sh": "4dd62855a4d9d354f31bffea2d89e4a57b554705e189e440b1c72fea97c87d96",
     "scripts/minio.Dockerfile": "1f41a7baa0a917fb32ee82b8b4523cb144077a7a61469cb580cc4000a876013f",
     "scripts/mysql-entrypoint.sh": "7ddb1c2a7f0a8654a71b00d39dc7deb940886b880572577fce57460448d4f7ab",

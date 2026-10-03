@@ -35,7 +35,9 @@ export function toUserResponse(model: UserWithRole): UserResponseDto {
   };
 }
 
-export function toUserResponseList(models: UserWithRole[]): UserResponseProjection[] {
+export function toUserResponseList(
+  models: UserWithRole[],
+): UserResponseProjection[] {
   return models.map((model) => {
     const roleData = model.role
       ? {

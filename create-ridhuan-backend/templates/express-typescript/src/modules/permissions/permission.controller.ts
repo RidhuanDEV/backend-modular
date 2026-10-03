@@ -4,17 +4,28 @@ import {
   requireAuthenticatedUser,
   requireRouteParam,
 } from "../../core/http/request-context.js";
-import { sendSuccess, sendCreated, sendNoContent } from "../../utils/response.js";
+import {
+  sendSuccess,
+  sendCreated,
+  sendNoContent,
+} from "../../utils/response.js";
 import type {
   CreatePermissionDto,
   UpdatePermissionDto,
 } from "./permission.schema.js";
-import { createPermissionSchema, updatePermissionSchema } from "./permission.schema.js";
+import {
+  createPermissionSchema,
+  updatePermissionSchema,
+} from "./permission.schema.js";
 
 const service = new PermissionService();
 
 export class PermissionController {
-  getAll = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  getAll = async (
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const permissions = await service.findAll();
       sendSuccess(res, { data: permissions });
@@ -23,7 +34,11 @@ export class PermissionController {
     }
   };
 
-  getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  getById = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const id = requireRouteParam(req, "id");
       const permission = await service.findById(id);
@@ -68,7 +83,11 @@ export class PermissionController {
     }
   };
 
-  delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  delete = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const id = requireRouteParam(req, "id");
       const user = requireAuthenticatedUser(req);

@@ -192,3 +192,14 @@ Configure database TLS with hostname/CA validation, trusted ingress/proxies, exa
 ## License
 
 [MIT](LICENSE). Source: [RidhuanDEV/golang-backend](https://github.com/RidhuanDEV/golang-backend).
+
+## Code formatting
+
+Install development dependencies, then use the native project formatter:
+
+```sh
+make format
+make format-check
+```
+
+The workspace formatting workflow preserves released migration history.

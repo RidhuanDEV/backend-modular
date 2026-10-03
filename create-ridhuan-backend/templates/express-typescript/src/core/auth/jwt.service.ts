@@ -11,7 +11,11 @@ const signOptions = {
 } as const satisfies jwt.SignOptions;
 
 export function signToken(payload: JwtUserPayload): string {
-  return jwt.sign({ ...payload, tokenUse: "access" }, env.JWT_SECRET, signOptions);
+  return jwt.sign(
+    { ...payload, tokenUse: "access" },
+    env.JWT_SECRET,
+    signOptions,
+  );
 }
 
 export function verifyToken(token: string): JwtUserPayload {
@@ -20,7 +24,7 @@ export function verifyToken(token: string): JwtUserPayload {
     issuer: env.JWT_ISSUER,
     audience: env.JWT_AUDIENCE,
   });
-  
+
   if (
     decoded &&
     typeof decoded === "object" &&
@@ -42,6 +46,6 @@ export function verifyToken(token: string): JwtUserPayload {
       };
     }
   }
-  
+
   throw new Error("Invalid token payload structure");
 }

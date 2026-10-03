@@ -26,3 +26,10 @@ verify:
 	test -z "$$(gofmt -l $$(find cmd internal -name '*.go'))"
 	go vet ./...
 	go test ./...
+
+.PHONY: format format-check
+format:
+	gofmt -w cmd internal
+
+format-check:
+	test -z "$$(gofmt -l cmd internal)"

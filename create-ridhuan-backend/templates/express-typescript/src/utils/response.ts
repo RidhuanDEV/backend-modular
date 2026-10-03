@@ -5,8 +5,15 @@ import { endpointPolicy } from "../core/http/endpoint-registry.js";
 
 function ensureRequiredAudit(): void {
   const context = currentEndpoint();
-  if (context && endpointPolicy(context.endpointId).audit === "required" && !context.auditWritten && !context.auditNoMutation) {
-    throw new Error(`Required audit was not persisted for ${context.endpointId}`);
+  if (
+    context &&
+    endpointPolicy(context.endpointId).audit === "required" &&
+    !context.auditWritten &&
+    !context.auditNoMutation
+  ) {
+    throw new Error(
+      `Required audit was not persisted for ${context.endpointId}`,
+    );
   }
 }
 
@@ -24,7 +31,9 @@ export function sendSuccess(res: Response, options: SuccessOptions = {}): void {
     body["meta"] = meta;
   }
   const context = currentEndpoint();
-  const responseSchema = context ? endpointPolicy(context.endpointId).response : undefined;
+  const responseSchema = context
+    ? endpointPolicy(context.endpointId).response
+    : undefined;
   if (responseSchema) {
     const wireBody: unknown = JSON.parse(JSON.stringify(body));
     if (!responseSchema.safeParse(wireBody).success) {

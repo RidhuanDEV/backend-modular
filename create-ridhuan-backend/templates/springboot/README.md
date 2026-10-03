@@ -182,3 +182,14 @@ Configure database TLS with hostname/CA validation, trusted ingress/proxies, exa
 ## License
 
 [MIT](LICENSE). Source: [RidhuanDEV/modular-springboot](https://github.com/RidhuanDEV/modular-springboot).
+
+## Code formatting
+
+Install development dependencies, then use the native project formatter:
+
+```sh
+./mvnw -DskipTests spotless:apply
+./mvnw -DskipTests spotless:check
+```
+
+The workspace formatting workflow preserves released migration history. On Windows, use `mvnw.cmd` instead of `./mvnw`.
