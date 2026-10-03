@@ -5,6 +5,10 @@ import { verifyManual } from "./verify-manual.mjs";
 import { command } from "../dist/process.js";
 
 const id = process.argv[2];
+if (id === "springboot" || id === "laravel") {
+  const native = command(process.execPath, ["scripts/verify-" + id + "-consumer.mjs", ...process.argv.slice(3)], resolve(import.meta.dirname, ".."), true);
+  process.exit(native.status ?? 1);
+}
 if (!["express-typescript", "nestjs", "golang", "dotnet", "fastapi"].includes(id)) throw new Error("Supply a template ID");
 const database = process.argv[3] ?? "postgresql";
 if (!["postgresql", "mysql"].includes(database)) throw new Error("Supply postgresql or mysql");

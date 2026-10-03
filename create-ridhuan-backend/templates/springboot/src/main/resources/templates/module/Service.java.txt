@@ -1,0 +1,23 @@
+package __PACKAGE__.__FEATURE__;
+import __PACKAGE__.platform.audit.AuditService;
+import __PACKAGE__.platform.audit.AuditService.Snapshot;
+import __PACKAGE__.platform.endpoint.EndpointId;
+import __PACKAGE__.platform.security.Access;
+import __PACKAGE__.platform.http.ApiException;
+import java.time.Clock;
+import java.util.*;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+@Service
+public class __NAME__Service {
+ private final __NAME__Repository repository;private final Clock clock;private final Access access;private final AuditService audit;
+ public __NAME__Service(__NAME__Repository repository,Clock clock,Access access,AuditService audit){this.repository=repository;this.clock=clock;this.access=access;this.audit=audit;}
+ public List<__NAME__Dto.Response> list(){return repository.findAll().stream().map(this::dto).toList();}
+ public __NAME__Dto.Response get(UUID id){return dto(entity(id));}
+ @Transactional public __NAME__Dto.Response create(__NAME__Dto.Input input){var e=new __NAME__Entity();e.id=UUID.randomUUID();e.name=input.name();e.createdAt=clock.instant();e.updatedAt=e.createdAt;repository.saveAndFlush(e);audit.write(EndpointId.__ENUM___CREATE,access.actor(),"CREATE",e.id,null,snapshot(e));return dto(e);}
+ @Transactional public __NAME__Dto.Response update(UUID id,__NAME__Dto.Input input){var e=entity(id);var before=snapshot(e);e.name=input.name();e.updatedAt=clock.instant();repository.flush();audit.write(EndpointId.__ENUM___UPDATE,access.actor(),"UPDATE",e.id,before,snapshot(e));return dto(e);}
+ @Transactional public void delete(UUID id){var e=entity(id);repository.delete(e);repository.flush();audit.write(EndpointId.__ENUM___DELETE,access.actor(),"DELETE",id,snapshot(e),null);}
+ private __NAME__Entity entity(UUID id){return repository.findById(id).orElseThrow(ApiException::missing);}
+ private Snapshot snapshot(__NAME__Entity e){return new Snapshot(e.id,null,e.name,null,null);}
+ private __NAME__Dto.Response dto(__NAME__Entity e){return new __NAME__Dto.Response(e.id,e.name,e.createdAt,e.updatedAt);}
+}

@@ -1,0 +1,51 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\{{ module }}\Services;
+
+use App\Modules\{{ module }}\Data\{{ module }}Data;
+use App\Modules\{{ module }}\Models\{{ module }};
+use App\Modules\Users\Models\User;
+use App\Support\Audit\Audit;
+use App\Support\Http\ApiException;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
+
+final class {{ module }}Service
+{
+    public function __construct(private readonly Audit $audit) {}
+
+    /** @return Collection<int, {{ module }}> */
+    public function list(): Collection
+    {
+        return {{ module }}::query()->orderBy('id')->limit(100)->get();
+    }
+
+    public function get(string $id): {{ module }}
+    {
+        return {{ module }}::query()->find($id) ?? throw new ApiException(404, 'Not found');
+    }
+
+    public function save(?string $id, {{ module }}Data $data, User $actor): {{ module }}
+    {
+        return DB::transaction(function () use ($id, $data, $actor): {{ module }} {
+            $item = $id === null ? new {{ module }} : {{ module }}::query()->whereKey($id)->lockForUpdate()->first() ?? throw new ApiException(404, 'Not found');
+            $before = $id === null ? null : ['name' => $item->name];
+            $item->name = $data->name;
+            $item->save();
+            $this->audit->write($id === null ? 'CREATE' : 'UPDATE', '{{ slug }}', $item->id, $actor->id, $before, ['name' => $item->name]);
+
+            return $item;
+        });
+    }
+
+    public function delete(string $id, User $actor): void
+    {
+        DB::transaction(function () use ($id, $actor): void {
+            $item = {{ module }}::query()->whereKey($id)->lockForUpdate()->first() ?? throw new ApiException(404, 'Not found');
+            $item->delete();
+            $this->audit->write('DELETE', '{{ slug }}', $id, $actor->id, ['name' => $item->name]);
+        });
+    }
+}

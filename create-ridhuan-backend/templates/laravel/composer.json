@@ -1,0 +1,74 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "ridhuandev/modular-laravel",
+    "type": "project",
+    "description": "Strict modular Laravel API with PostgreSQL and MySQL",
+    "keywords": [
+        "laravel",
+        "framework"
+    ],
+    "license": "MIT",
+    "require": {
+        "php": "~8.5.0",
+        "ext-pdo": "*",
+        "ext-mbstring": "*",
+        "ext-fileinfo": "*",
+        "ext-openssl": "*",
+        "ext-curl": "*",
+        "laravel/framework": "^13.0",
+        "firebase/php-jwt": "^7.0",
+        "predis/predis": "^3.0",
+        "league/flysystem-aws-s3-v3": "^3.0",
+        "dedoc/scramble": "^0.13.46",
+        "open-telemetry/sdk": "^1.0",
+        "open-telemetry/exporter-otlp": "^1.0",
+        "php-http/guzzle7-adapter": "^1.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.27",
+        "phpunit/phpunit": "^12.5.12",
+        "mockery/mockery": "^1.6",
+        "nunomaduro/collision": "^8.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "build": [
+            "@composer dump-autoload --optimize",
+            "@php artisan backend:verify-contract",
+            "@php artisan backend:openapi-export"
+        ],
+        "analyse": "@php vendor/bin/phpstan analyse --memory-limit=1G",
+        "test": "@php vendor/bin/phpunit"
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": []
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

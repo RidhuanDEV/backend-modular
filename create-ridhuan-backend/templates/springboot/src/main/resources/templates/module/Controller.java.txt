@@ -1,0 +1,15 @@
+package __PACKAGE__.__FEATURE__;
+import __PACKAGE__.platform.http.Api;
+import __PACKAGE__.platform.endpoint.*;
+import jakarta.validation.Valid;
+import java.util.*;
+import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/api/__ROUTE__")
+public class __NAME__Controller {
+ private final __NAME__Service service;public __NAME__Controller(__NAME__Service service){this.service=service;}
+ @GetMapping @EndpointPolicy(EndpointId.__ENUM___LIST) public Api.Success<List<__NAME__Dto.Response>> list(){return Api.Success.of(service.list());}
+ @GetMapping("/{id}") @EndpointPolicy(EndpointId.__ENUM___GET) public Api.Success<__NAME__Dto.Response> get(@PathVariable UUID id){return Api.Success.of(service.get(id));}
+ @PostMapping @ResponseStatus(org.springframework.http.HttpStatus.CREATED) @EndpointPolicy(EndpointId.__ENUM___CREATE) public Api.Success<__NAME__Dto.Response> create(@Valid @RequestBody __NAME__Dto.Input input){return Api.Success.of(service.create(input));}
+ @PatchMapping("/{id}") @EndpointPolicy(EndpointId.__ENUM___UPDATE) public Api.Success<__NAME__Dto.Response> update(@PathVariable UUID id,@Valid @RequestBody __NAME__Dto.Input input){return Api.Success.of(service.update(id,input));}
+ @DeleteMapping("/{id}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT) @EndpointPolicy(EndpointId.__ENUM___DELETE) public void delete(@PathVariable UUID id){service.delete(id);}
+}

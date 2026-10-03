@@ -17,3 +17,9 @@
 [submodule "modular-fastapi"]
 	path = modular-fastapi
 	url = https://github.com/RidhuanDEV/modular-fastapi.git
+[submodule "modular-laravel"]
+	path = modular-laravel
+	url = https://github.com/RidhuanDEV/modular-laravel.git
+[submodule "modular-springboot"]
+	path = modular-springboot
+	url = https://github.com/RidhuanDEV/modular-springboot.git

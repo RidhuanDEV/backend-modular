@@ -1,7 +1,7 @@
 {
   "name": "create-ridhuan-backend",
   "version": "1.4.0",
-  "description": "CLI for Express TypeScript, NestJS, Go, ASP.NET Core and FastAPI with PostgreSQL or MySQL",
+  "description": "CLI for Express, NestJS, Go, ASP.NET Core, FastAPI, Spring Boot and Laravel with PostgreSQL or MySQL",
   "type": "module",
   "bin": {
     "create-ridhuan-backend": "./dist/bin/index.js"
@@ -33,7 +33,11 @@
     "python",
     "mysql",
     "sqlalchemy",
-    "alembic"
+    "alembic",
+    "java",
+    "springboot",
+    "laravel",
+    "php"
   ],
   "author": "RidhuanDEV",
   "license": "MIT",

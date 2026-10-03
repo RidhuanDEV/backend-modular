@@ -1,0 +1,8 @@
+services:
+  web:
+    ports:
+      - "${APP_PORT:-8000}:8080"
+  app:
+    environment:
+      APP_ENV: production
+      CORS_ORIGINS: https://your-frontend.example.com

@@ -4,7 +4,7 @@ import type { CliArguments, TemplateId, DatabaseProvider } from "./types.js";
 const aliases: Readonly<Record<string, TemplateId>> = {
   "express-typescript": "express-typescript", express: "express-typescript", ts: "express-typescript",
   nestjs: "nestjs", nest: "nestjs", golang: "golang", go: "golang", dotnet: "dotnet", net: "dotnet", csharp: "dotnet",
-  fastapi: "fastapi", python: "fastapi", py: "fastapi",
+  springboot: "springboot", spring: "springboot", java: "springboot", laravel: "laravel", php: "laravel", fastapi: "fastapi", python: "fastapi", py: "fastapi",
 };
 export function parsePort(value: string, name: string): number {
   if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 65535) throw new Error(`${name} must be an integer from 1 to 65535`);
@@ -16,12 +16,12 @@ export function parseCliArgs(args: readonly string[]): CliArguments {
     "no-install": { type: "boolean" }, help: { type: "boolean", short: "h" }, version: { type: "boolean", short: "v" },
     port: { type: "string" }, mode: { type: "string" }, "db-host": { type: "string" }, "db-port": { type: "string" },
     "db-name": { type: "string" }, "db-user": { type: "string" }, redis: { type: "boolean" }, "no-redis": { type: "boolean" },
-    storage: { type: "string" }, "go-module": { type: "string" }, "s3-endpoint": { type: "string" },
+    storage: { type: "string" }, "go-module": { type: "string" }, "java-package": { type: "string" }, "s3-endpoint": { type: "string" },
     "s3-docker-endpoint": { type: "string" }, "s3-region": { type: "string" }, "s3-bucket": { type: "string" }, "s3-access-key": { type: "string" },
   } });
   if (positionals.length > 1) throw new Error("Provide exactly one project folder name");
   const template = values.template === undefined ? undefined : aliases[values.template];
-  if (values.template !== undefined && template === undefined) throw new Error("Unknown template; choose express-typescript, nestjs, golang, dotnet, or fastapi");
+  if (values.template !== undefined && template === undefined) throw new Error("Unknown template; choose express-typescript, nestjs, golang, dotnet, fastapi, springboot, or laravel");
   const databases: Readonly<Record<string, DatabaseProvider>> = { postgresql: "postgresql", postgres: "postgresql", pg: "postgresql", mysql: "mysql" };
   const database = values.database === undefined ? undefined : databases[values.database];
   if (values.database !== undefined && database === undefined) throw new Error("Database must be postgresql or mysql");
@@ -40,6 +40,7 @@ export function parseCliArgs(args: readonly string[]): CliArguments {
     ...(values["db-host"] === undefined ? {} : { dbHost: values["db-host"] }),
     ...(values["db-name"] === undefined ? {} : { dbName: values["db-name"] }),
     ...(values["db-user"] === undefined ? {} : { dbUser: values["db-user"] }),
+    ...(values["java-package"] === undefined ? {} : { javaPackage: values["java-package"] }),
     ...(values["go-module"] === undefined ? {} : { goModule: values["go-module"] }),
     ...(values["s3-endpoint"] === undefined ? {} : { s3Endpoint: values["s3-endpoint"] }),
     ...(values["s3-docker-endpoint"] === undefined ? {} : { s3DockerEndpoint: values["s3-docker-endpoint"] }),
@@ -58,7 +59,8 @@ export function validateGoModule(module: string): void {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._~-]*(?:\/[a-zA-Z0-9][a-zA-Z0-9._~-]*)+$/.test(module) || module.includes("..")) throw new Error("Invalid Go module path");
 }
 export const helpText = `Usage: create-ridhuan-backend [project-name] [options]
-  --template, -t <express-typescript|nestjs|golang|dotnet|fastapi>
+  --template, -t <express-typescript|nestjs|golang|dotnet|fastapi|springboot|laravel>
+  --java-package <package>  Java namespace (Spring Boot only)
   --database <postgresql|mysql>  Default: postgresql
   --yes, -y                 Use defaults without prompting
   --no-install              Generate files and defer tool/dependency checks

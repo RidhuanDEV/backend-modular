@@ -115,3 +115,15 @@ test(
     }
   },
 );
+
+test("timeout and cancellation produce failures while the runner continues",async()=>{const directory=await mkdtemp(join(tmpdir(),"hardening-runner-timeout-"));try{const result=await collectProcessCase({executable:process.execPath,args:["-e","setInterval(()=>{},1000)"],cwd:directory},join(directory,"timeout.log"),process.env,100);assert.equal(result.exitCode,124);const controller=new AbortController();setTimeout(()=>controller.abort(),100);const aborted=await collectProcessCase({executable:process.execPath,args:["-e","setInterval(()=>{},1000)"],cwd:directory,signal:controller.signal},join(directory,"abort.log"),process.env,10000);assert.equal(aborted.exitCode,130);}finally{assert(resolve(directory).startsWith(resolve(tmpdir())+sep));await rm(directory,{recursive:true,force:true});}});
+
+test("invalid log path is a collected failure and does not launch its child",async()=>{
+ const directory=await mkdtemp(join(tmpdir(),"hardening-log-error-"));
+ try{
+  const marker=join(directory,"must-not-exist");
+  const result=await collectProcessCase({executable:process.execPath,args:["-e","require('fs').writeFileSync(process.argv[1],'launched')",marker],cwd:directory},join(directory,"missing","log"),process.env);
+  assert.equal(result.exitCode,1);assert.match(result.error,/Cannot open task log/);
+  await assert.rejects(readFile(marker),{code:"ENOENT"});
+ }finally{assert(resolve(directory).startsWith(resolve(tmpdir())+sep));await rm(directory,{recursive:true,force:true});}
+});

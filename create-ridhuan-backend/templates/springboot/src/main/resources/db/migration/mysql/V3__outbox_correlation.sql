@@ -1,0 +1,1 @@
+ALTER TABLE email_jobs ADD COLUMN request_id VARCHAR(64) NULL, ADD COLUMN trace_parent VARCHAR(55) NULL;

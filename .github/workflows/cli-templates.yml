@@ -13,6 +13,8 @@ on:
       - modular-golang
       - modular-NET
       - modular-fastapi
+      - modular-springboot
+      - modular-laravel
   pull_request:
     paths:
       - .github/workflows/cli-templates.yml
@@ -25,6 +27,8 @@ on:
       - modular-golang
       - modular-NET
       - modular-fastapi
+      - modular-springboot
+      - modular-laravel
   workflow_dispatch:
     inputs:
       publish:
@@ -55,6 +59,7 @@ jobs:
       - run: npm run prepare:templates
       - run: npm run build
       - run: npm run test:hardening:runner
+      - run: node --test scripts/test-spring-scenario-selection.mjs
       - run: npm test
       - run: npm pack
       - uses: actions/upload-artifact@v4
@@ -69,11 +74,14 @@ jobs:
       max-parallel: 2
       matrix:
         os: [ubuntu-latest, windows-latest]
-        template: [express-typescript, nestjs, golang, dotnet, fastapi]
+        template: [express-typescript, nestjs, golang, dotnet, fastapi, springboot, laravel]
         database: [postgresql, mysql]
     runs-on: ${{ matrix.os }}
     env:
       CLI_RUNTIME_TEST: ${{ matrix.os == 'ubuntu-latest' && 'true' || 'false' }}
+      TMP: ${{ runner.temp }}
+      TEMP: ${{ runner.temp }}
+      TMPDIR: ${{ runner.temp }}
       GOWORK: "off"
       GOMAXPROCS: "2"
       GOMEMLIMIT: 512MiB
@@ -93,6 +101,17 @@ jobs:
         if: matrix.template == 'dotnet'
         with:
           global-json-file: modular-NET/global.json
+      - uses: actions/setup-java@v4
+        if: matrix.template == 'springboot'
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: shivammathur/setup-php@v2
+        if: matrix.template == 'laravel'
+        with:
+          php-version: '8.5'
+          extensions: ctype,curl,dom,fileinfo,mbstring,openssl,pdo,pdo_mysql,pdo_pgsql,tokenizer,xml
+          tools: composer:2.9.8
       - uses: actions/setup-python@v5
         if: matrix.template == 'fastapi'
         with:
@@ -112,6 +131,16 @@ jobs:
         run: |
           $env:CLI_TARBALL = (Get-ChildItem artifact/*.tgz).FullName
           node scripts/verify-consumer.mjs '${{ matrix.template }}' '${{ matrix.database }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: consumer-diagnostics-${{ matrix.os }}-${{ matrix.template }}-${{ matrix.database }}
+          path: |
+            ${{ runner.temp }}/spring-consumer-logs-*/**
+            ${{ runner.temp }}/spring-runtime-*/diagnostics/**
+            ${{ runner.temp }}/laravel-consumer-logs-*/**
+            ${{ runner.temp }}/laravel-manual-logs-*/**
+            ${{ runner.temp }}/laravel-integration-logs-*/**
   macos-smoke:
     needs: package
     runs-on: macos-latest
@@ -135,6 +164,25 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)" npm test
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Spring Boot macOS smoke
+        run: |
+          export CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)"
+          node scripts/verify-consumer.mjs springboot postgresql
+          node scripts/verify-consumer.mjs springboot mysql
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: ctype,curl,dom,fileinfo,mbstring,openssl,pdo,pdo_mysql,pdo_pgsql,tokenizer,xml
+          tools: composer:2.9.8
+      - name: Laravel macOS smoke
+        run: |
+          export CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)"
+          node scripts/verify-consumer.mjs laravel postgresql
+          node scripts/verify-consumer.mjs laravel mysql
       - name: FastAPI native install and generator smoke
         run: |
           export CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)"
@@ -144,12 +192,16 @@ jobs:
     needs: package
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      TMP: ${{ runner.temp }}
+      TEMP: ${{ runner.temp }}
+      TMPDIR: ${{ runner.temp }}
     strategy:
       fail-fast: false
       # Each matrix job has its own runner; cap concurrency without sharing RAM.
       max-parallel: 3
       matrix:
-        template: [express-typescript, nestjs, golang, dotnet, fastapi]
+        template: [express-typescript, nestjs, golang, dotnet, fastapi, springboot, laravel]
         database: [postgresql, mysql]
     steps:
       - uses: actions/checkout@v4
@@ -168,6 +220,13 @@ jobs:
       - name: Confirm task-owned Docker cleanup isolation
         if: always()
         run: node scripts/test-hardening-runner.mjs --docker
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compose-diagnostics-${{ matrix.template }}-${{ matrix.database }}
+          path: |
+            ${{ runner.temp }}/spring-runtime-*/diagnostics/**
+            ${{ runner.temp }}/laravel-compose-logs-*/**
   publish:
     if: github.event_name == 'workflow_dispatch' && inputs.publish
     needs: [package, consumer, macos-smoke, compose]

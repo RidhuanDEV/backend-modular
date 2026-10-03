@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre.git",
-    "commit": "55198bbe68c079a0432eb7ba1cd30a4241c16ed7",
+    "commit": "aa148779cf4c5e19de46d2e812c4af151c6b9cc1",
     "dirty": false
   },
   "requirements": {
@@ -19,7 +19,7 @@
     ".env.example": "4939d7179ce0b0198574cea967b7747d76be60eb9dce8f6fedea496d5963c8cc",
     ".env.mysql.example": "1b0067667421d46431730a234db34a83305c68ab76a0b6f956c50dbe6bc80a7c",
     ".gitattributes": "a0a7d068fd4921bf72c55eefa51e5b5866ed0437f409a338431ae6f2adcadfa1",
-    "DEVELOPER-GUIDE.md": "ab42ecfcd64b2ec34a9775b1434277f3d6c097444cb6bf01b34d8b7770fce965",
+    "DEVELOPER-GUIDE.md": "779ff0c38333f7d6411a91b368d2d9f78ed0486e868101f7df09e4305b492bea",
     "docker-compose.mysql.yml": "8c6649ba7860ef534f77d5bb6590fa78a2dbb0355bca3af6fb4c93eef993a126",
     "docker-compose.override.yml": "d34ed0f65d67dfc48885114e278c36e850274061bb0b0b7b1cca116fa387d7dd",
     "docker-compose.yml": "5fd7d77ca1f6f06ed451f49b509dd80a3a0d0ae9d72f2cce26b91138cb544472",
@@ -28,8 +28,8 @@
     "eslint.config.js": "81b4308be86fd1b4df5bd906addf69f9334a9288bd1ac0a8b5b78c58b6074d80",
     "gitignore.template": "27cf55c154e1df717966921431a8bd88825dbf373842e62b81abbd5f510ac903",
     "LICENSE": "2d21540dd2845c397a2fa78c35db091877bdfdf174c4a7df59b3f6e7b79f88af",
-    "package-lock.json": "608918c06d7bb5efceb7e66b135b8b34b77d3e5c662c0950cc1f1e88de4b8fbe",
-    "package.json": "1aa1bd796d5f8085ec311b3dc1dda7be8be0ac37caf6e179f67233283d01a755",
+    "package-lock.json": "9127ed449426462d4e200160b4af9ef8bdc2cf950e1839f59c063cdc9cb36f53",
+    "package.json": "c7c7dd63b314c8fd98c0636c4b3063758ce71d8d31c161e9aaf86eaf1a747842",
     "prisma/migrations/20260524120000_init/migration.sql": "204e06f0b93dd67cf92828d25392a2dbdfe0082ae418f78854789472a34637f7",
     "prisma/migrations/20260922120000_endpoint_foundation/migration.sql": "c746d1da34567524e8050f35bb4e5fa511ce54ed40b702e03166d14f825af0a4",
     "prisma/migrations/20260926120000_refresh_tokens/migration.sql": "5640236fb83be2def17f73a8a787135a05e699cdc87375e52a1ad8bf6f5ad765",
@@ -143,6 +143,6 @@
     "tests/rate-limit.test.mjs": "5a11b43248eff94cb47fb00d5c8a4dbd998e091a100878240978657f5d6921bd",
     "tests/storage.test.mjs": "88693048d1696b2106844ca9e1f64029f85e276768100065e60c6aa88de02c6d",
     "tests/time-docs-audit.test.mjs": "0341f73f2af712e87b0e021c4b44ae6c475dd7741d37111cbd48591f0c5a6d30",
-    "tsconfig.json": "242ea5c1ba5ae5f558fc46658c5a98414ed068d19e0e4f054d310ccd9f8cbb9e"
+    "tsconfig.json": "d70d9297789e885d99086d5cb88a8486f57d9e5ec4dbd4aa4053eb1747059270"
   }
 }

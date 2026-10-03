@@ -1,0 +1,122 @@
+x-runtime: &runtime
+  build:
+    context: .
+    target: app
+  env_file: [.env]
+  dns_opt: ["timeout:1", "attempts:2"]
+  environment:
+      APP_ENV: ${APP_ENV:-local}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      S3_ENDPOINT: ${S3_ENDPOINT_DOCKER:-http://minio:9000}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      FPM_MAX_CHILDREN: ${FPM_MAX_CHILDREN:-8}
+  volumes: ["storage_data:/var/www/html/storage"]
+
+services:
+  postgres:
+    image: postgres:18.3-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
+    volumes: ["database_data:/var/lib/postgresql"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  migrate:
+    <<: *runtime
+    command: ["php", "artisan", "backend:migrate", "--force"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+  app:
+    <<: *runtime
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy, required: false}
+      minio-init: {condition: service_completed_successfully, required: false}
+    healthcheck:
+      test: ["CMD", "php", "artisan", "backend:ready"]
+      interval: 10s
+      timeout: 8s
+      retries: 12
+    restart: unless-stopped
+  web:
+    build:
+      context: .
+      target: web
+    ports: ["127.0.0.1:${APP_PORT:-8000}:8080"]
+    depends_on:
+      app: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/ready"]
+      interval: 10s
+      timeout: 8s
+      retries: 12
+    restart: unless-stopped
+  worker:
+    <<: *runtime
+    command: ["php", "artisan", "notifications:work"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    stop_grace_period: 15s
+    restart: on-failure
+  seeder:
+    <<: *runtime
+    command: ["php", "artisan", "backend:seed"]
+    profiles: [seed]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    restart: "no"
+  redis:
+    image: redis:8.6.1-alpine
+    profiles: [redis]
+    ports: ["127.0.0.1:${REDIS_PORT:-6379}:6379"]
+    volumes: ["redis_data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+  minio:
+    build: {context: ., dockerfile: scripts/minio.Dockerfile, target: server}
+    profiles: [s3]
+    command: [server, /data]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY}
+    ports: ["127.0.0.1:${MINIO_PORT:-9000}:9000"]
+    volumes: ["minio_data:/data"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9000/minio/health/live"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+  minio-init:
+    build: {context: ., dockerfile: scripts/minio.Dockerfile, target: client}
+    profiles: [s3]
+    entrypoint: [/bin/sh, /init-bucket.sh]
+    environment:
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-uploads}
+      MC_CONFIG_DIR: /tmp/mc
+    volumes: ["./scripts/init-bucket.sh:/init-bucket.sh:ro"]
+    depends_on:
+      minio: {condition: service_healthy}
+  otel-collector:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector:0.162.0
+    profiles: [telemetry]
+    command: [--config=/etc/otelcol/config.yaml]
+    volumes: ["./scripts/otel-collector.yaml:/etc/otelcol/config.yaml:ro"]
+volumes:
+  database_data:
+  storage_data:
+  redis_data:
+  minio_data:

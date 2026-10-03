@@ -1,0 +1,4 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:127.0.0.1}:${DB_PORT:5432}/${DB_NAME:backend}
+    driver-class-name: org.postgresql.Driver

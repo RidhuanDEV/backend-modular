@@ -1,0 +1,7 @@
+# Provider migration and upgrade
+
+Never modify released migration IDs/content. PostgreSQL and MySQL have independent histories selected for native migrate/status/rollback by provider config. Core 2026_10_03_000001 fixture represents Laravel pre-hardening schema (refresh token family_id/hash/expiry/consumed_at and legacy notifications without sequence). Hardening 000002 backfills families preserving maximum legacy expiry and ended-family consumption, rejecting mixed-user families. Notifications sort by created_at then UUID deterministically per recipient, counters become max allocated sequence, old PENDING without job becomes FAILED. Then FK/unique/non-null constraints are added. This is a native Laravel fixture, not Express/Go/.NET data import.
+
+DDL atomicity differs: MySQL schema changes may implicitly commit. Back up and use reviewed migration release jobs; rollback command is a tool, not proof of atomic recovery. APP_KEY/JWT rotation and provider changes require separate operational design. Existing .env/data/storage histories survive installs and redeployment.
+
+Cleanup preserves consumed refresh traces until authoritative family ended beyond retention30d; old terminal jobs may delete, pending/leased jobs and persisted notifications remain. Audit off by default; opt-in365d recommended. Orphan files older24h require owned UUID object name and final metadata recheck; this is not a distributed SQL/filesystem transaction.

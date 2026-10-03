@@ -1,0 +1,106 @@
+package com.example.backend;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PreDestroy;
+import jakarta.servlet.AsyncEvent;
+import jakarta.servlet.AsyncListener;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.Set;
+import java.io.IOException;
+import org.apache.coyote.http11.Http11NioProtocol;
+import org.apache.tomcat.util.net.NioChannel;
+import org.apache.tomcat.util.net.SocketWrapperBase;
+import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
+import org.springframework.boot.web.server.WebServerFactoryCustomizer;
+import org.springframework.context.annotation.Bean;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.AsyncHandlerInterceptor;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+/** Diagnostic fixture only: observes native lifecycle without closing requests. */
+@Configuration
+public class SseDiagnostic implements WebMvcConfigurer {
+  private final Logger logger = LoggerFactory.getLogger(SseDiagnostic.class);
+  private final MeterRegistry metrics;
+  private final AtomicInteger sequence = new AtomicInteger();
+  private final ConcurrentMap<Integer, HttpServletRequest> watched = new ConcurrentHashMap<>();
+  private final ConcurrentMap<Integer, SocketWrapperBase<NioChannel>> sockets = new ConcurrentHashMap<>();
+  private final AtomicReference<ProbeProtocol> protocol = new AtomicReference<>();
+  private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
+  public SseDiagnostic(MeterRegistry metrics) {
+    this.metrics = metrics;
+    scheduler.scheduleAtFixedRate(this::observe, 1, 1, TimeUnit.SECONDS);
+  }
+
+  public static class ProbeProtocol extends Http11NioProtocol {
+    public Set<SocketWrapperBase<NioChannel>> sockets() { return getEndpoint().getConnections(); }
+  }
+
+  @Bean
+  @org.springframework.core.annotation.Order(org.springframework.core.Ordered.LOWEST_PRECEDENCE)
+  public WebServerFactoryCustomizer<TomcatServletWebServerFactory> nativeObserver() {
+    return factory -> {
+      factory.setProtocol(ProbeProtocol.class.getName());
+      factory.addConnectorCustomizers(connector -> {
+        if (connector.getProtocolHandler() instanceof ProbeProtocol nativeProtocol) protocol.set(nativeProtocol);
+      });
+    };
+  }
+
+  @Override
+  public void addInterceptors(InterceptorRegistry registry) {
+    registry.addInterceptor(new AsyncHandlerInterceptor() {
+      @Override
+      public void afterConcurrentHandlingStarted(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        if (!request.getRequestURI().equals("/api/notifications/stream")) return;
+        int id = sequence.incrementAndGet();
+        watched.put(id, request);
+        var connection = request.getServletConnection();
+        var nativeProtocol = protocol.get();
+        if (nativeProtocol != null) for(var socket : nativeProtocol.sockets()) {
+          if(socket.getServletConnection(connection.getProtocol(), connection.getProtocolConnectionId()).getConnectionId().equals(connection.getConnectionId())) sockets.put(id,socket);
+        }
+        logger.info("SSE_PROBE event=started id={} async={}", id, request.isAsyncStarted());
+        try {
+          request.getAsyncContext().addListener(new AsyncListener() {
+            @Override public void onComplete(AsyncEvent event) { logger.info("SSE_PROBE event=complete id={}", id); }
+            @Override public void onError(AsyncEvent event) { logger.info("SSE_PROBE event=error id={}", id); }
+            @Override public void onTimeout(AsyncEvent event) { logger.info("SSE_PROBE event=timeout id={}", id); }
+            @Override public void onStartAsync(AsyncEvent event) { event.getAsyncContext().addListener(this); }
+          });
+        } catch (IllegalStateException ended) {
+          logger.info("SSE_PROBE event=early-complete id={}", id);
+        }
+      }
+    });
+  }
+
+  private void observe() {
+    var gauge = metrics.find("backend.sse.connections").gauge();
+    int activeRequests = 0, endedRequests = 0;
+    for (var request : watched.values()) {
+      try { if (request.isAsyncStarted()) activeRequests++; else endedRequests++; }
+      catch (IllegalStateException recycled) { endedRequests++; }
+    }
+    long workers = Thread.getAllStackTraces().values().stream().filter(stack ->
+      java.util.Arrays.stream(stack).anyMatch(frame -> frame.getClassName().endsWith(".notifications.NotificationStreams"))).count();
+    long closedSockets=sockets.values().stream().filter(SocketWrapperBase::isClosed).count();
+    long endedInputs=0;
+    for(var socket:sockets.values()) {
+      socket.getLock().lock();
+      try { socket.isReadyForRead(); } catch(IOException closedInput) { endedInputs++; }
+      finally { socket.getLock().unlock(); }
+    }
+    logger.info("SSE_PROBE gauge={} async={} ended={} polling={} sockets={} closed={} input-ended={}", gauge == null ? -1 : gauge.value(), activeRequests, endedRequests, workers,sockets.size(),closedSockets,endedInputs);
+  }
+
+  @PreDestroy public void close() { scheduler.shutdownNow(); }
+}

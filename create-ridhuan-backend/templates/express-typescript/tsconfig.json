@@ -27,16 +27,7 @@
 
     "resolveJsonModule": true,
 
-    "skipLibCheck": true,
-
-    "baseUrl": "./src",
-    "paths": {
-      "@modules/*": ["modules/*"],
-      "@core/*": ["core/*"],
-      "@config/*": ["config/*"],
-      "@database/*": ["database/*"],
-      "@shared/*": ["shared/*"]
-    }
+    "skipLibCheck": true
   },
 
   "include": ["src"],

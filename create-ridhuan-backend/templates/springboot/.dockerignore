@@ -1,0 +1,9 @@
+.git
+.env
+.env.*
+!.env.example
+!.env.mysql.example
+target
+uploads
+.m2
+*.log

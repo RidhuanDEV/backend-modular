@@ -1,6 +1,8 @@
 # create-ridhuan-backend
 
-Scaffold five modular backend templates with PostgreSQL or MySQL from one npm package. Template files are bundled; generation does not download source from GitHub.
+Scaffold seven modular backend templates with PostgreSQL or MySQL including Spring Boot Java and Laravel PHP, from one npm package. Template files are bundled; generation does not download source from GitHub.
+
+Seven-framework support describes this source checkout and its locally packed artifact. This change does not bump or publish npm; the currently published `@latest` package remains its previous release until a separately authorized publication. For Spring Boot/Laravel now, install the tarball produced by `npm pack` in this checkout.
 
 ## Start a project
 
@@ -22,6 +24,8 @@ Omit `--yes` for the wizard. It masks password input; accepting an empty passwor
 | Go | 8080 | 8080 | 5432 | 6379 | MinIO 9000 |
 | ASP.NET Core | 5080 | 8080 | 55432 | 56379 | S3Mock 19000 |
 | FastAPI | 8000 | 8000 | 5432 | 6379 | MinIO 9000 |
+| Spring Boot Java | 8080 | 8080 | 5432 | 6379 | MinIO 9000 |
+| Laravel PHP | 8000 | 8080 | 5432 | 6379 | MinIO 9000 |
 
 MySQL host port defaults to 3306 for every framework. PostgreSQL remains the default engine. FastAPI manual setup requires Python 3.13.3 and uv 0.12.21 or newer; installation uses the locked dependency graph and only the selected driver.
 
@@ -29,13 +33,15 @@ The CLI supports Node 22.13+ or Node 24+. Express and NestJS require Node 24.15+
 
 Redis and S3 are optional. Defaults use a single-instance memory limiter and local storage. Enable Redis for shared rate limits across API replicas. Selected development services are enabled by `COMPOSE_PROFILES`; remote S3 does not start a local fixture. Database/Redis/S3 development ports bind to loopback. `--port` changes manual and Compose host HTTP; container ports remain fixed.
 
+Spring Boot requires JDK25 and uses its checked Maven Wrapper3.9.16 (no global Maven). Java package defaults to com.example.<normalized project>; --java-package overrides it independently of .NET. Laravel requires 64-bit PHP8.5 with provider PDO extension and Composer2.9.8+. Composer/Java dependency restore is preparation; migration/seed stays explicit. Docker mode needs neither host JDK nor PHP. Seven frameworks provide fourteen database combinations.
+
 ## Options
 
 Run `create-ridhuan-backend --help` for the complete contract.
 
 | Option | Purpose |
 | --- | --- |
-| `--template`, `-t` | `express-typescript`, `nestjs`, `golang`, `dotnet`, `fastapi` (aliases `express`, `ts`, `nest`, `go`, `net`, `csharp`, `python`, `py`) |
+| `--template`, `-t` | `express-typescript`, `nestjs`, `golang`, `dotnet`, `fastapi`, `springboot`, `laravel` (aliases `express`, `ts`, `nest`, `go`, `net`, `csharp`, `python`, `py`) |
 | `--database` | `postgresql` (default) or `mysql`; chosen once when generating |
 | `--yes`, `-y` | Accept defaults without prompting; Express is default |
 | `--mode manual\|docker` | Install host dependencies or prepare Compose setup |

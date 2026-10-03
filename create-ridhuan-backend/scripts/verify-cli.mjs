@@ -58,6 +58,8 @@ try {
       "golang",
       "dotnet",
       "fastapi",
+    "springboot",
+    "laravel",
     ])
       for (const file of [
         "gitignore.template",
@@ -91,6 +93,8 @@ try {
     "modular-golang",
     "modular-NET",
     "modular-fastapi",
+    "modular-springboot",
+    "modular-laravel",
   ]) {
     let localEnv;
     try {
@@ -138,6 +142,8 @@ try {
     "golang",
     "dotnet",
     "fastapi",
+    "springboot",
+    "laravel",
   ]) {
     const template = join(installed, "templates", id);
     const manifest = JSON.parse(
@@ -284,6 +290,8 @@ try {
     ["golang", "custom-go", 8080],
     ["dotnet", "Custom.Net", 5080],
     ["fastapi", "custom-fastapi", 8000],
+    ["springboot", "custom-java", 8080],
+    ["laravel", "custom-php", 8000],
   ];
   const fixtures = baseFixtures.flatMap(([id, name, port]) =>
     ["postgresql", "mysql"].map((database) => [
@@ -331,7 +339,7 @@ try {
     );
     if (database === "mysql") {
       assert.match(env, /^MYSQL_PORT=3306$/m);
-      assert(!/^POSTGRES_PORT=/m.test(env));
+      if (id !== "springboot" && id !== "laravel") assert(!/^POSTGRES_PORT=/m.test(env));
     }
     if (id === "fastapi") {
       assert.match(

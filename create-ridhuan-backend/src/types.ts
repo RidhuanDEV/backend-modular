@@ -1,4 +1,4 @@
-export type TemplateId = "express-typescript" | "nestjs" | "golang" | "dotnet" | "fastapi";
+export type TemplateId = "express-typescript" | "nestjs" | "golang" | "dotnet" | "fastapi" | "springboot" | "laravel";
 export type DatabaseProvider = "postgresql" | "mysql";
 export type UploadStorageType = "local" | "s3";
 export type SetupMode = "manual" | "docker";
@@ -23,6 +23,7 @@ export interface CliArguments {
   readonly redis?: boolean;
   readonly storage?: UploadStorageType;
   readonly goModule?: string;
+  readonly javaPackage?: string;
   readonly s3Endpoint?: string;
   readonly s3DockerEndpoint?: string;
   readonly s3Region?: string;
@@ -39,6 +40,7 @@ export interface ProjectAnswers {
   readonly projectName: string;
   readonly packageName: string;
   readonly namespace: string;
+  readonly javaPackage: string;
   readonly deploymentName: string;
   readonly templateId: TemplateId;
   readonly mode: SetupMode;
@@ -59,6 +61,11 @@ export interface ProjectAnswers {
   readonly goModulePath?: string;
 }
 export interface RuntimeRequirements {
+  readonly java?: string;
+  readonly maven?: string;
+  readonly php?: string;
+  readonly composer?: string;
+  readonly phpExtensions?: readonly string[];
   readonly python?: string;
   readonly uv?: string;
   readonly node?: string;
@@ -86,7 +93,10 @@ export interface TemplateDescriptor {
   readonly storageHost: string;
   readonly storageProfile: string;
   readonly composeFile: string;
-  readonly install: { readonly command: "npm" | "go" | "dotnet" | "uv"; readonly args: readonly string[] };
+  readonly httpService?: string;
+  readonly applicationService?: string;
+  readonly workerService?: string;
+  readonly install: { readonly command: "npm" | "go" | "dotnet" | "uv" | "mvnw" | "composer"; readonly args: readonly string[] };
 }
 export interface ScaffoldResult {
   readonly projectDirectory: string;

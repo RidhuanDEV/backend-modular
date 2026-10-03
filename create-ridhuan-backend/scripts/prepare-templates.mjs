@@ -10,6 +10,8 @@ const only = process.argv.includes("--only")
   ? process.argv[process.argv.indexOf("--only") + 1]
   : undefined;
 const descriptors = {
+  springboot: { source: "modular-springboot", identity: "com.example.backend", paths: [".gitattributes", ".dockerignore", ".env.example", ".gitignore", "AGENTS.md", "LICENSE", "README.md", "DEPENDENCIES.md", "pom.xml", "mvnw", "mvnw.cmd", ".mvn/wrapper", "Dockerfile", "compose.yaml", "compose.override.yaml.example", "src", "contracts", "docs", "scripts"] },
+  laravel: { source: "modular-laravel", identity: "modular-laravel", paths: [".gitattributes", ".dockerignore", ".env.example", ".gitignore", "AGENTS.md", "LICENSE", "README.md", "DEPENDENCIES.md", "composer.json", "composer.lock", "artisan", "app", "bootstrap/app.php", "bootstrap/providers.php", "bootstrap/cache/.gitignore", "config", "database", "routes", "public/index.php", "public/.htaccess", "resources/views", "stubs", "storage/.gitignore", "Dockerfile", "compose.yaml", "compose.override.yaml.example", "contracts", "docs", "scripts", "tests", "phpunit.xml", "phpstan.neon", "pint.json"] },
   "express-typescript": {
     source: "modular-express-typescript-starter-postgre",
     identity: "backend",
@@ -170,7 +172,7 @@ const git = (source, ...args) =>
     stdio: ["ignore", "pipe", "pipe"],
   }).trim();
 const unsafe =
-  /(^|\/)(?:node_modules|\.git|bin|obj|dist|coverage|\.legacy|__pycache__|\.venv|\.pytest_cache|\.ruff_cache)(\/|$)|(?:^|\/)\.env(?!\.(?:mysql\.)?example$)(?:\.|$)|^uploads(\/|$)|\.tgz$|\.log$|\.py[co]$|(?:^|\/)\.tmp-/;
+  /(^|\/)(?:node_modules|vendor|target|\.m2|\.git|bin|obj|dist|coverage|\.legacy|__pycache__|\.venv|\.pytest_cache|\.ruff_cache)(\/|$)|(?:^|\/)\.env(?!\.(?:mysql\.)?example$)(?:\.|$)|^uploads(\/|$)|\.(?:tgz|jks|p12|pfx|pem|key|dump|bak|sql\.gz)$|\.log$|\.py[co]$|(?:^|\/)\.tmp-/;
 
 for (const [id, descriptor] of Object.entries(descriptors)) {
   if (only && only !== id) continue;
@@ -220,7 +222,7 @@ for (const [id, descriptor] of Object.entries(descriptors)) {
     for (const file of matching) if (!unsafe.test(file)) selected.add(file);
   }
   for (const file of [...selected].sort()) {
-    const output = file === ".gitignore" ? "gitignore.template" : file;
+    const output = file === ".gitignore" ? "gitignore.template" : file.endsWith("/.gitignore") ? file.slice(0,-10)+"gitignore.template" : file;
     await mkdir(join(target, output, ".."), { recursive: true });
     const bytes = await readFile(join(source, file));
     let normalized = bytes;
@@ -254,6 +256,13 @@ for (const [id, descriptor] of Object.entries(descriptors)) {
     );
     for (const [, project] of solution.matchAll(/<Project Path="([^"]+)"/g))
       await readFile(join(target, project));
+  } else if (id === "springboot") {
+    const pom = await readFile(join(target, "pom.xml"), "utf8");
+    const wrapper = await readFile(join(target, ".mvn/wrapper/maven-wrapper.properties"), "utf8");
+    requirements = { java: /<java.version>([^<]+)/.exec(pom)?.[1], maven: /apache-maven\/(\d+\.\d+\.\d+)\//.exec(wrapper)?.[1] };
+    if (!requirements.java || !requirements.maven || !/^distributionSha256Sum=[a-f0-9]{64}$/m.test(wrapper)) throw new Error("Invalid Spring runtime/wrapper metadata");
+  } else if (id === "laravel") {
+    requirements = { php: "~8.5.0", composer: ">=2.9.8", phpExtensions: ["ctype", "curl", "dom", "fileinfo", "mbstring", "openssl", "pdo", "tokenizer", "xml"] };
   } else if (id === "fastapi") {
     requirements = {
       python: (await readFile(join(target, ".python-version"), "utf8")).trim(),

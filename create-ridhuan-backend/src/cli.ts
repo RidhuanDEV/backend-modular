@@ -19,6 +19,8 @@ import { scaffoldExpress } from "./scaffold/express.js";
 import { scaffoldNestjs } from "./scaffold/nestjs.js";
 import { scaffoldGolang } from "./scaffold/golang.js";
 import { scaffoldDotnet } from "./scaffold/dotnet.js";
+import { scaffoldSpringboot, defaultJavaPackage, validateJavaPackage } from "./scaffold/springboot.js";
+import { scaffoldLaravel } from "./scaffold/laravel.js";
 import { scaffoldFastapi } from "./scaffold/fastapi.js";
 import { objectRecord, readManifest, templateRegistry } from "./templates.js";
 import { command, preflight, installDependencies } from "./process.js";
@@ -281,6 +283,7 @@ export async function runCli(): Promise<void> {
     targetDirectory,
     projectName,
     packageName: slug,
+    javaPackage: args.javaPackage ?? defaultJavaPackage(projectName),
     namespace: /^\d/.test(namespace) ? `App${namespace}` : namespace,
     deploymentName: `${slug.slice(0, 48)}-${randomBytes(4).toString("hex")}`,
     templateId: template,
@@ -334,6 +337,8 @@ export async function runCli(): Promise<void> {
       : {}),
   };
   validateAnswers(answers);
+  if (template === "springboot") validateJavaPackage(answers.javaPackage);
+  else if (args.javaPackage !== undefined) throw new Error("--java-package is only valid for Spring Boot");
   if (template !== "golang" && args.goModule !== undefined)
     throw new Error("--go-module is only valid for Go");
   if (!args.noInstall) preflight(answers, manifest);
@@ -367,6 +372,8 @@ export async function runCli(): Promise<void> {
     golang: scaffoldGolang,
     dotnet: scaffoldDotnet,
     fastapi: scaffoldFastapi,
+    springboot: scaffoldSpringboot,
+    laravel: scaffoldLaravel,
   }[template];
   emptyTarget(targetDirectory);
   await scaffold(source, answers);

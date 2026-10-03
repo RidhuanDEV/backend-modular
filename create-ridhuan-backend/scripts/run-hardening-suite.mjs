@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, readFile, statfs } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -18,6 +19,8 @@ const frameworks = [
   "golang",
   "dotnet",
   "fastapi",
+  "springboot",
+  "laravel",
 ];
 const providers = ["postgresql", "mysql"];
 if (
@@ -52,6 +55,7 @@ add("runner-unit-contracts", "distribution", [
   "--test",
   "scripts/test-hardening-runner.mjs",
 ]);
+add("spring-runtime-selection-contracts", "distribution", ["--test", "scripts/test-spring-scenario-selection.mjs"]);
 add("dependency-and-lock-audits", "audit", [
   "scripts/verify-hardening-dependencies.mjs",
 ]);
@@ -66,7 +70,7 @@ for (const framework of frameworks)
     add(
       `database-${suffix}`,
       "native",
-      [
+      framework === "springboot" || framework === "laravel" ? ["scripts/verify-" + framework + "-compose.mjs", provider] : [
         "scripts/verify-native-databases.mjs",
         "--framework",
         framework === "express-typescript" ? "express" : framework,
@@ -84,10 +88,11 @@ for (const framework of frameworks)
   }
 // Native consumers include native build/lint/unit/contracts and module generators.
 // The Linux image has a small .NET-only target for the final remaining cases.
+const fixtureID = randomUUID().replaceAll("-", "").slice(0, 12);
 const image =
   stage === "remaining"
-    ? "ridhuan-hardening-dotnet-consumer:local"
-    : "ridhuan-hardening-linux-consumer:local";
+    ? "ridhuan-hardening-dotnet-consumer-" + fixtureID + ":local"
+    : "ridhuan-hardening-linux-consumer-" + fixtureID + ":local";
 add(
   "linux-consumer-image",
   "distribution",
@@ -110,8 +115,10 @@ for (const framework of frameworks)
       [
         "run",
         "--rm",
+        "--label",
+        "ridhuan.test.suite=" + fixtureID,
         "--name",
-        `hardening-linux-${framework}-${provider}`,
+        `hardening-linux-${fixtureID}-${framework}-${provider}`,
         "-e",
         "CLI_TARBALL=/artifact.tgz",
         "-v",
@@ -217,10 +224,20 @@ try {
   }
 } finally {
   await cleanup();
+  // Kill only this suite's consumer containers if a Docker client was cancelled.
+  if(selected.some(item=>item.id.startsWith("linux-consumer-"))){
+    const inventory=command("docker",["ps","-a","--filter","label=ridhuan.test.suite="+fixtureID,"--format","{{.ID}}"],root);
+    if(inventory.status!==0)cleanupResults.push({error:"Consumer inventory failed"});
+    for(const id of inventory.stdout.trim().split(/\r?\n/).filter(Boolean)){const removed=command("docker",["rm","-f","-v",id],root);cleanupResults.push({consumer:id,exitCode:removed.status});}
+    const remaining=command("docker",["ps","-a","--filter","label=ridhuan.test.suite="+fixtureID,"--format","{{.ID}}"],root);
+    if(remaining.status!==0||remaining.stdout.trim())cleanupResults.push({error:"Owned consumer containers remain or inventory failed"});
+  }
   // Delete only this suite's disposable Linux consumer image tag.
   if (selected.some((item) => item.id === "linux-consumer-image")) {
     const result = command("docker", ["image", "rm", image], root);
     cleanupResults.push({ consumerImage: image, exitCode: result.status });
+    const remaining = command("docker", ["image", "inspect", image], root);
+    if (remaining.status === 0 || remaining.error || !/No such image|not found/i.test(remaining.stderr ?? "")) cleanupResults.push({error:"Owned consumer image removal could not be verified"});
   }
   await writeFile(
     join(directory, "results.json"),

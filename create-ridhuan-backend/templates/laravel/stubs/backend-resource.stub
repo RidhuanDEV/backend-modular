@@ -1,0 +1,26 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\{{ module }}\Http\Resources;
+
+use App\Modules\{{ module }}\Models\{{ module }};
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+/** @property {{ module }} $resource */
+final class {{ module }}Resource extends JsonResource
+{
+    public function __construct(private readonly {{ module }} $record)
+    {
+        parent::__construct($record);
+    }
+
+    /** @return array{id:string,name:string,createdAt:string,updatedAt:string} */
+    public function toArray(Request $request): array
+    {
+        $m = $this->record;
+
+        return ['id' => $m->id, 'name' => $m->name, 'createdAt' => $m->created_at->toIso8601ZuluString(), 'updatedAt' => $m->updated_at->toIso8601ZuluString()];
+    }
+}

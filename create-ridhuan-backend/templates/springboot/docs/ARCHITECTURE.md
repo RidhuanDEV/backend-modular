@@ -1,0 +1,7 @@
+# Architecture
+Feature packages own controllers, records, services and repositories. Users/roles/permissions use Spring Data JPA with explicit mapping; session/outbox/notification locking uses JDBC on the same JPA-managed DataSource transaction. No open session in view.
+JPA entity UUID follows PostgreSQL UUID or configured MySQL CHAR mapping. PostgreSQL TIMESTAMPTZ/JSONB and MySQL ASCII CHAR(36)/DATETIME(6)/JSON are independent histories. User deletion is soft; FK relations remain intact. Each generated project owns a separate database.
+EndpointId/EndpointPolicy/EndpointRegistry cover all business routes. Startup verifies method/path parity. Override keys audit/cache/rateLimit are strictly allowlisted; mutations and streams cannot be cached, read-only endpoints cannot require mutation audit.
+Required audit fails the transaction. Optional JDBC audit uses a savepoint on the same connection to recover PostgreSQL transaction state. Snapshots omit passwords, email, bodies and tokens.
+Notifications lock recipient User before incrementing persisted counter, avoiding MAX(sequence). Email snapshot and sequence commit together. Refresh/replay/logout lock family before reading token state and active user. Replay returns failure outside the committed revocation transaction.
+Clock is UTC; Zones utility changes presentation only. External SMTP/S3 work is outside transaction retries. Pools, stream slots, quotas, timeouts and payload cache bounds are explicit.

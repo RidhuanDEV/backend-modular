@@ -9,7 +9,9 @@ export function nextSteps(
   if (answers.mode === "docker") {
     steps.push("docker compose up --build -d --wait");
     steps.push(
-      answers.templateId === "dotnet"
+      (answers.templateId === "springboot" || answers.templateId === "laravel")
+        ? "docker compose --profile seed run --rm seeder"
+        : answers.templateId === "dotnet"
         ? "docker compose --profile seed run --rm seeder"
         : answers.templateId === "golang"
           ? "docker compose run --rm --entrypoint seed app"
@@ -22,12 +24,16 @@ export function nextSteps(
   } else {
     if (noInstall)
       steps.push(
-        `${descriptor.install.command} ${descriptor.install.args.join(" ")}${answers.templateId === "fastapi" ? ` --extra ${answers.databaseProvider}` : ""}`,
+        `${descriptor.install.command === "mvnw" ? process.platform === "win32" ? ".\\mvnw.cmd" : "./mvnw" : descriptor.install.command} ${descriptor.install.args.join(" ")}${answers.templateId === "fastapi" ? ` --extra ${answers.databaseProvider}` : ""}`,
       );
     steps.push(
       `# Provide ${answers.databaseProvider} ${answers.dbHost}:${answers.dbPort} and create database ${answers.dbName} first.`,
     );
-    if (answers.templateId === "dotnet") {
+    if (answers.templateId === "springboot") {
+      steps.push(`${process.platform === "win32" ? ".\\mvnw.cmd" : "./mvnw"} -B -Dmaven.test.skip=true package`, "java -jar target/app.jar --app.mode=migrate", "java -jar target/app.jar --app.mode=seed", "java -jar target/app.jar --app.mode=http");
+    } else if (answers.templateId === "laravel") {
+      steps.push("php artisan backend:migrate --force", "php artisan backend:seed", "php artisan serve --host=127.0.0.1 --port=" + answers.appPort);
+    } else if (answers.templateId === "dotnet") {
       const loader =
         process.platform === "win32"
           ? "pwsh -File scripts/run.ps1"
@@ -69,7 +75,9 @@ export function nextSteps(
     steps.push(
       "# In a separate terminal, run the SMTP outbox worker (SMTP disabled => no-op):",
     );
-    if (answers.templateId === "dotnet")
+    if (answers.templateId === "springboot") steps.push("java -jar target/app.jar --app.mode=email-worker");
+    else if (answers.templateId === "laravel") steps.push("php artisan notifications:work");
+    else if (answers.templateId === "dotnet")
       steps.push(
         `${process.platform === "win32" ? "pwsh -File scripts/run.ps1" : "python3 scripts/run.py"} run --project tools/${answers.namespace}.Worker`,
       );
@@ -105,7 +113,7 @@ export function gettingStarted(
     `Setup choices are in the ignored .env. Restart/redeploy after changing them. Bootstrap passwords were generated; inspect .env locally.\n\n` +
     `## Manual\n\nProvide ${answers.databaseProvider} and the enabled Redis/S3 services first. Use an empty database owned by this application.\n\n\`\`\`sh\n${manual}\n\`\`\`\n\n` +
     `On Windows use pwsh -File scripts/run.ps1 for .NET; on Linux/macOS use python3 scripts/run.py. Go projects inside an unrelated workspace can run with GOWORK=off set in the current terminal.\n\n` +
-    `## Docker Compose\n\nDocker Engine and Compose v2 are required; host Node/Go/.NET/Python build tools are optional. Redis/S3 development profiles follow COMPOSE_PROFILES.\n\n\`\`\`sh\n${docker}\n\`\`\`\n\n` +
+    `## Docker Compose\n\nDocker Engine and Compose v2 are required; host Node/Go/.NET/Python/Java/PHP build tools are optional. Redis/S3 development profiles follow COMPOSE_PROFILES.\n\n\`\`\`sh\n${docker}\n\`\`\`\n\n` +
     `For a host API with container dependencies, run docker compose up -d ${answers.databaseProvider === "mysql" ? "mysql" : "postgres"}${answers.enableRedis ? " redis" : ""}${localS3 ? (descriptor.storageHost.startsWith("minio") ? " minio-init" : " s3mock") : ""}. Host connection settings are separate from container URLs.\n\n` +
     `Migrations run once before new replicas; seed stays explicit. Compose includes a separate worker; SMTP disabled makes it a no-op. SMTP delivery is at least once: a crash after acceptance may deliver the same email again.\n\n` +
     `Cleanup is a separate scheduled command, dry-run by default. Read docs/HARDENING-UPGRADE.md for cleanup commands, retention, sliding refresh sessions, SSE cursors, worker lease/retry configuration and optional telemetry. No cleanup runs during HTTP startup.\n\n` +

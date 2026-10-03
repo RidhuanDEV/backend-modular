@@ -12,6 +12,8 @@ const repositories = {
   golang: "modular-golang",
   dotnet: "modular-NET",
   fastapi: "modular-fastapi",
+  springboot: "modular-springboot",
+  laravel: "modular-laravel",
 };
 const counts = {};
 for (const [id, directory] of Object.entries(repositories)) {
@@ -21,8 +23,8 @@ for (const [id, directory] of Object.entries(repositories)) {
   let count = 0;
   for (const name of tracked.stdout.split("\0").filter(Boolean)) {
     const migration =
-      /migrations\//i.test(name) &&
-      (name.endsWith(".sql") ||
+      /migration(?:s)?\//i.test(name) &&
+      (name.endsWith(".sql") || name.endsWith(".php") ||
         (name.endsWith(".cs") && !name.includes("ModelSnapshot")) ||
         (name.endsWith(".py") && name.includes("/versions/")));
     if (!migration) continue;

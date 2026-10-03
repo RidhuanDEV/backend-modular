@@ -1,7 +1,7 @@
 # ==========================================
 # Non-modular / Irrelevant Folders
 # ==========================================
-backend/
+/backend/
 frontend/
 react/
 modular-go-refine-smoke/

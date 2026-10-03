@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc && tsc-alias && npm run api-docs",
+    "build": "tsc && npm run api-docs",
     "start": "node dist/server.js",
     "seed": "tsx src/scripts/seed.ts",
     "seed:prod": "node dist/scripts/seed.js",
@@ -88,7 +88,6 @@
     "eslint": "^10.0.3",
     "pino-pretty": "^13.1.3",
     "prettier": "^3.8.1",
-    "tsc-alias": "^1.8.16",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.71.0"

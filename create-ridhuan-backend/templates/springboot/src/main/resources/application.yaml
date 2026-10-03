@@ -1,0 +1,100 @@
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: none
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: 64
+    connection-timeout: 5s
+spring:
+  application:
+    name: ${APP_NAME:modular-springboot}
+  profiles:
+    active: ${DB_PROVIDER:postgresql}
+  datasource:
+    username: ${DB_USER:backend}
+    password: ${DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 16
+      connection-timeout: 2000
+      initialization-fail-timeout: 1
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: false
+  servlet:
+    multipart:
+      max-file-size: ${UPLOAD_MAX_BYTES:10485760}B
+      max-request-size: ${UPLOAD_MAX_BYTES:10485760}B
+  data:
+    redis:
+      url: ${REDIS_URL:redis://127.0.0.1:6379}
+      timeout: 1s
+      connect-timeout: 1s
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp:
+        auth: ${SMTP_AUTH:true}
+        starttls.enable: ${SMTP_STARTTLS:true}
+        starttls.required: ${SMTP_STARTTLS:true}
+        ssl.enable: ${SMTP_SSL:false}
+        ssl.checkserveridentity: true
+        connectiontimeout: 5000
+        timeout: 25000
+        writetimeout: 25000
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  mvc:
+    async:
+      request-timeout: 840000
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ""
+  otlp:
+    metrics:
+      export:
+        enabled: ${OTEL_ENABLED:false}
+        url: ${OTEL_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}
+        step: 5s
+  tracing:
+    export:
+      enabled: ${OTEL_ENABLED:false}
+      otlp:
+        enabled: ${OTEL_ENABLED:false}
+    sampling:
+      probability: ${OTEL_SAMPLE_RATE:1.0}
+  opentelemetry:
+    enabled: ${OTEL_ENABLED:false}
+    map-environment-variables: false
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+springdoc:
+  api-docs:
+    path: /docs/openapi.json
+  swagger-ui:
+    path: /docs
+    disable-swagger-default-url: true
+app:
+  mode: ${APP_MODE:http}
+
+logging:
+  structured:
+    format:
+      console: ecs
+  level:
+    org.hibernate.orm.jdbc.error: OFF
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: OFF

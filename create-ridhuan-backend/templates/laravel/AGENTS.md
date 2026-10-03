@@ -1,0 +1,3 @@
+# Engineering rules
+
+Read README.md and source contracts before editing. Use strict_types and explicit parameter/property/return types. Narrow framework mixed values at boundaries. Keep DTOs readonly and output allowlisted. PHPStan level max has no baseline or global suppressions. Preserve released migrations, local .env and storage. DB mandatory; PostgreSQL and MySQL have separate native histories. No SQLite fallback. Required audit belongs to the same transaction as mutation. SMTP delivery is at least once. Author complete acceptance scripts before execution; collect independent failures and clean only owned fixtures in finally. Build/package precedes tests. Never publish npm or bump a version without explicit authorization.

@@ -1,0 +1,9 @@
+package __PACKAGE__.__FEATURE__;
+import jakarta.validation.constraints.*;
+import java.time.Instant;
+import java.util.UUID;
+public final class __NAME__Dto {
+ private __NAME__Dto(){}
+ public record Input(@NotBlank @Size(max=160) String name){}
+ public record Response(UUID id,String name,Instant createdAt,Instant updatedAt){}
+}

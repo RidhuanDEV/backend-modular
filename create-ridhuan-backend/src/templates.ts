@@ -3,6 +3,8 @@ import { join } from "node:path";
 import type { DatabaseProvider, TemplateDescriptor, TemplateId, TemplateManifest, ProjectAnswers } from "./types.js";
 
 export const templateRegistry = {
+  springboot: { id: "springboot", label: "Spring Boot Java", hint: "Spring MVC, JPA, Flyway, JWT, RBAC", defaultPort: 8080, containerPort: 8080, dbPort: 5432, redisPort: 6379, storagePort: 9000, storageHost: "minio:9000", storageProfile: "s3", composeFile: "compose.yaml", install: { command: "mvnw", args: ["-B", "-DskipTests", "dependency:go-offline"] } },
+  laravel: { id: "laravel", label: "Laravel PHP", hint: "Eloquent, native migrations, JWT, RBAC", defaultPort: 8000, containerPort: 8080, dbPort: 5432, redisPort: 6379, storagePort: 9000, storageHost: "minio:9000", storageProfile: "s3", composeFile: "compose.yaml", httpService: "web", applicationService: "app", workerService: "worker", install: { command: "composer", args: ["install", "--no-interaction", "--prefer-dist"] } },
   "express-typescript": { id: "express-typescript", label: "Express TypeScript", hint: "Prisma, Zod, JWT, RBAC",
     defaultPort: 3000, containerPort: 3000, dbPort: 5432, redisPort: 6379, storagePort: 9000,
     storageHost: "minio:9000", storageProfile: "minio", composeFile: "docker-compose.yml", install: { command: "npm", args: ["ci"] } },
@@ -48,8 +50,10 @@ export async function readManifest(source: string, id: TemplateId): Promise<Temp
       typeof provenance.repository !== "string" || typeof provenance.dirty !== "boolean" ||
       !(typeof provenance.commit === "string" && /^[a-f0-9]{40}$/.test(provenance.commit) || manifest.schemaVersion === 2 && provenance.commit === null && provenance.dirty === true)) throw new Error("Invalid template provenance");
   for (const [key, requirement] of Object.entries(requirements)) {
-    if (!["node", "go", "dotnet", "python", "uv"].includes(key) || typeof requirement !== "string") throw new Error("Invalid runtime requirement");
+    if (!["node", "go", "dotnet", "python", "uv", "java", "maven", "php", "composer", "phpExtensions"].includes(key) || (key === "phpExtensions" ? !Array.isArray(requirement) || requirement.some((item: unknown) => typeof item !== "string" || !/^[a-z][a-z0-9_]*$/.test(item)) : typeof requirement !== "string")) throw new Error("Invalid runtime requirement");
   }
+  if (id === "springboot" && (requirements.java !== "25" || typeof requirements.maven !== "string" || !/^3\.9\.\d+$/.test(requirements.maven))) throw new Error("Invalid Java/Maven requirements");
+  if (id === "laravel" && (typeof requirements.php !== "string" || typeof requirements.composer !== "string" || !Array.isArray(requirements.phpExtensions))) throw new Error("Invalid PHP/Composer requirements");
   const hashes: Record<string, string> = {};
   for (const [path, hash] of Object.entries(files)) {
     if (typeof hash !== "string" || !/^[a-f0-9]{64}$/.test(hash)) throw new Error("Invalid template file hash");
@@ -58,6 +62,11 @@ export async function readManifest(source: string, id: TemplateId): Promise<Temp
   return { schemaVersion: manifest.schemaVersion, databaseProviders, id, identity: manifest.identity,
     source: { repository: provenance.repository, commit: typeof provenance.commit === "string" ? provenance.commit : null, dirty: provenance.dirty },
     requirements: {
+      ...(typeof requirements.java === "string" ? { java: requirements.java } : {}),
+      ...(typeof requirements.maven === "string" ? { maven: requirements.maven } : {}),
+      ...(typeof requirements.php === "string" ? { php: requirements.php } : {}),
+      ...(typeof requirements.composer === "string" ? { composer: requirements.composer } : {}),
+      ...(Array.isArray(requirements.phpExtensions) ? { phpExtensions: requirements.phpExtensions.map((item: unknown) => { if (typeof item !== "string") throw new Error("Invalid PHP extension"); return item; }) } : {}),
       ...(typeof requirements.node === "string" ? { node: requirements.node } : {}),
       ...(typeof requirements.go === "string" ? { go: requirements.go } : {}),
       ...(typeof requirements.dotnet === "string" ? { dotnet: requirements.dotnet } : {}),

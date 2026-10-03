@@ -1,0 +1,15 @@
+/.env
+/.env.*
+!/.env.example
+!/.env.mysql.example
+/vendor/
+/node_modules/
+/storage/*
+!/storage/.gitignore
+/bootstrap/cache/*
+!/bootstrap/cache/.gitignore
+/.phpunit.cache/
+/.phpunit.result.cache
+/public/build/
+*.log
+*.tgz

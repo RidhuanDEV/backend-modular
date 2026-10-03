@@ -1,0 +1,116 @@
+x-runtime: &runtime
+  image: ${COMPOSE_PROJECT_NAME:-modular-springboot}-app:local
+  build: .
+  env_file: .env
+  environment: &runtime-env
+    PORT: "8080"
+    DB_PROVIDER: mysql
+    DB_HOST: mysql
+    DB_PORT: "3306"
+    REDIS_URL: redis://redis:6379
+    S3_ENDPOINT: ${S3_ENDPOINT_DOCKER:-http://minio:9000}
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+    OTEL_METRICS_ENDPOINT: http://otel-collector:4318/v1/metrics
+  volumes:
+    - uploads:/app/uploads
+  mem_limit: 768m
+  stop_grace_period: 35s
+services:
+  mysql:
+    image: mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
+    entrypoint: ["/bin/bash", "/opt/mysql-entrypoint.sh"]
+    command: ["mysqld"]
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-backend}
+      MYSQL_USER: ${MYSQL_USER:-backend}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
+      TZ: UTC
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+      - ./scripts/mysql-entrypoint.sh:/opt/mysql-entrypoint.sh:ro
+      - ./scripts/mysql-init-user.sh:/docker-entrypoint-initdb.d/01-app-password.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping --protocol=TCP -h 127.0.0.1 -P 3306 --silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  migrate:
+    <<: *runtime
+    command: ["--app.mode=migrate"]
+    depends_on:
+      mysql: {condition: service_healthy}
+  seeder:
+    <<: *runtime
+    profiles: [seed]
+    command: ["--app.mode=seed"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  app:
+    <<: *runtime
+    command: ["--app.mode=http"]
+    ports: ["${APP_PORT:-8080}:8080"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy, required: false}
+      minio-init: {condition: service_completed_successfully, required: false}
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "3", "http://localhost:8080/ready"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+      start_period: 30s
+  worker:
+    <<: *runtime
+    command: ["--app.mode=email-worker"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    restart: unless-stopped
+  redis:
+    image: redis:8-alpine
+    profiles: [redis]
+    ports: ["127.0.0.1:${REDIS_PORT:-6379}:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+  minio:
+    image: ${COMPOSE_PROJECT_NAME:-modular-springboot}-minio:local
+    build:
+      context: .
+      dockerfile: scripts/minio.Dockerfile
+      target: server
+    profiles: [s3]
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-development}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY}
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
+    volumes: [s3-data:/data]
+  minio-init:
+    image: ${COMPOSE_PROJECT_NAME:-modular-springboot}-mc:local
+    build:
+      context: .
+      dockerfile: scripts/minio.Dockerfile
+      target: client
+    profiles: [s3]
+    environment:
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-development}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-uploads}
+    entrypoint: ["/bin/sh","-c"]
+    command: ['until mc alias set local http://minio:9000 "$$S3_ACCESS_KEY_ID" "$$S3_SECRET_ACCESS_KEY"; do sleep 2; done; mc mb --ignore-existing "local/$$S3_BUCKET"']
+    depends_on: [minio]
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.152.0@sha256:f41d7995565df3733b7568702073a9c490792f9c6ac60684fe6a4da21a313f8d
+    profiles: [telemetry]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes: ["./scripts/otel-collector.yaml:/etc/otelcol/config.yaml:ro"]
+    mem_limit: 256m
+volumes:
+  db-data:
+  uploads:
+  s3-data:

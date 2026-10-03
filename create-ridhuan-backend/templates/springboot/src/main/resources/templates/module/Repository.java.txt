@@ -1,0 +1,4 @@
+package __PACKAGE__.__FEATURE__;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+public interface __NAME__Repository extends JpaRepository<__NAME__Entity,UUID>{}

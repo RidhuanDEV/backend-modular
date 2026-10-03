@@ -13,6 +13,10 @@ import { verifyWorkerRetention } from "./verify-worker-retention.mjs";
 import { randomUUID, X509Certificate } from "node:crypto";
 import { verifyDatabaseConnection } from "../dist/prompts/db-check.js";
 const id = process.argv[2];
+if (id === "springboot" || id === "laravel") {
+  const native = command(process.execPath, ["scripts/verify-" + id + "-compose.mjs", ...process.argv.slice(3)], resolve(import.meta.dirname, ".."), true);
+  process.exit(native.status ?? 1);
+}
 if (
   !["express-typescript", "nestjs", "golang", "dotnet", "fastapi"].includes(id)
 )
@@ -638,13 +642,15 @@ try {
     // after the multiplexer has recovered, without automatically rerunning a
     // failed assertion or hiding its status.
     for (let iteration = 0; iteration < 3; iteration++) {
-      compose("exec", "-T", "redis", "redis-cli", "CLIENT", "PAUSE", "4000");
+      // Both Public and Auth checks use independent Redis commands. Keep the
+      // owned store paused across both native one-second timeout boundaries.
+      compose("exec", "-T", "redis", "redis-cli", "CLIENT", "PAUSE", "12000");
       await request("/api/auth/login", {
         method: "POST",
         body: credentials,
         status: 503,
       });
-      await new Promise((resolve) => setTimeout(resolve, 4500));
+      await new Promise((resolve) => setTimeout(resolve, 12500));
       compose("exec", "-T", "redis", "redis-cli", "CLIENT", "PAUSE", "7000");
       await request(`/api/users/${me.id}`, { token });
       await new Promise((resolve) => setTimeout(resolve, 7500));
@@ -1362,6 +1368,9 @@ CMD ["node", "smtp.mjs"]
   );
 } catch (error) {
   if (started) {
+    const configured = command("docker", ["compose", "-f", base, "-f", ".tmp-consumer-ports.yaml", "--profile", "*", "config", "--services"], project);
+    const available = new Set((configured.stdout ?? "").trim().split(/\r?\n/));
+    const diagnostics = ["app", "migrate", "worker", "mailfixture", "otel-collector", "minio", "minio-init", "s3mock"].filter(service=>available.has(service));
     const state = command(
       "docker",
       [
@@ -1372,12 +1381,8 @@ CMD ["node", "smtp.mjs"]
         ".tmp-consumer-ports.yaml",
         "logs",
         "--tail",
-        "35",
-        "app",
-        "migrate",
-        "worker",
-        "mailfixture",
-        "otel-collector",
+        "100",
+        ...diagnostics,
       ],
       project,
     );

@@ -1,0 +1,46 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\{{ module }}\Http;
+
+use App\Modules\Auth\Services\Actor;
+use App\Modules\{{ module }}\Http\Requests\{{ module }}Request;
+use App\Modules\{{ module }}\Http\Resources\{{ module }}Resource;
+use App\Modules\{{ module }}\Models\{{ module }};
+use App\Modules\{{ module }}\Services\{{ module }}Service;
+use App\Support\Http\Api;
+use Illuminate\Http\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
+
+final class {{ module }}Controller
+{
+    public function __construct(private readonly {{ module }}Service $service, private readonly Actor $actor) {}
+
+    public function list(): JsonResponse
+    {
+        return Api::data($this->service->list()->map(fn ({{ module }} $m): array => (new {{ module }}Resource($m))->toArray(request()))->all());
+    }
+
+    public function get(string $id): JsonResponse
+    {
+        return Api::resource(new {{ module }}Resource($this->service->get($id)));
+    }
+
+    public function create({{ module }}Request $request): JsonResponse
+    {
+        return Api::resource(new {{ module }}Resource($this->service->save(null, $request->dto(), $this->actor->user())), 201);
+    }
+
+    public function update({{ module }}Request $request, string $id): JsonResponse
+    {
+        return Api::resource(new {{ module }}Resource($this->service->save($id, $request->dto(), $this->actor->user())));
+    }
+
+    public function delete(string $id): Response
+    {
+        $this->service->delete($id, $this->actor->user());
+
+        return response()->noContent();
+    }
+}

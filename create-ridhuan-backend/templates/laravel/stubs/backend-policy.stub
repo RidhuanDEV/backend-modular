@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\{{ module }}\Policies;
+
+use App\Modules\Users\Models\User;
+use App\Modules\Users\Policies\AccessPolicy;
+
+final class {{ module }}Policy
+{
+    public function manage(User $actor): bool
+    {
+        return app(AccessPolicy::class)->permits($actor, 'manage_{{ slug }}');
+    }
+}
