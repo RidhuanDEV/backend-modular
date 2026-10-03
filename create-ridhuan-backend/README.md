@@ -1,111 +1,389 @@
 # create-ridhuan-backend
 
-Scaffold seven modular backend templates with PostgreSQL or MySQL including Spring Boot Java and Laravel PHP, from one npm package. Template files are bundled; generation does not download source from GitHub.
+Create a backend project with your preferred framework and database. The CLI copies a working starter, writes your configuration, and gives you instructions for running it.
 
-Seven-framework support describes this source checkout and its locally packed artifact. This change does not bump or publish npm; the currently published `@latest` package remains its previous release until a separately authorized publication. For Spring Boot/Laravel now, install the tarball produced by `npm pack` in this checkout.
+Choose **Express, NestJS, Go, ASP.NET Core, FastAPI, Spring Boot, or Laravel**, with **PostgreSQL or MySQL**. Each generated project includes authentication, permissions, audit logging, notifications, uploads, and API documentation.
 
-## Start a project
+**Start here:** [Get the CLI](#get-the-cli) → [Create a project](#create-a-project) → [Run your application](#run-your-application).
+
+| Looking for… | Go to |
+| --- | --- |
+| Frameworks and required tools | [Choose a framework](#choose-a-framework) |
+| Windows, macOS, Linux, and Docker | [Choose how to run it](#choose-how-to-run-it) |
+| What the generated folders contain | [Understand your project](#understand-your-project) |
+| Ports, Redis, storage, and other options | [Customize your setup](#customize-your-setup) |
+| Detailed framework documentation | [Where to read next](#where-to-read-next) |
+| Package tests and publication | [For maintainers](#for-maintainers) |
+
+## Features
+
+- Seven framework choices, each with PostgreSQL or MySQL.
+- Typed starters with authentication, live permissions, audit, uploads, notifications, and an email worker.
+- Manual or Docker setup, optional Redis and S3, and fresh local secrets.
+- A generated setup guide and source/hash provenance for your selected template.
+
+## Requirements
+
+Run the CLI with Node `^22.13.0` or `>=24.0.0 <27`. Docker mode needs Docker Engine and Compose 2.24.4+; manual mode also needs the selected framework tools shown below. You need a database, but Redis, S3, and SMTP are optional.
+
+## Get the CLI
+
+Start the published CLI's guided setup:
 
 ```sh
-npx create-ridhuan-backend@latest my-api --template nestjs --yes
-npm create ridhuan-backend@latest my-api -- --template nestjs --yes
-npm install -g create-ridhuan-backend@latest
-create-ridhuan-backend my-api --template nestjs --yes
+npx create-ridhuan-backend@latest my-api
 ```
 
-Omit `--yes` for the wizard. It masks password input; accepting an empty password generates a secret. Noninteractive setup generates secrets and never prints them. Read the ignored `.env` and `GETTING-STARTED.md` in the new project.
+Or use npm create:
 
-## Defaults and requirements
+```sh
+npm create ridhuan-backend@latest my-api
+```
 
-| Template | Host HTTP | Container HTTP | PostgreSQL host | Redis host | Development S3 host |
-| --- | --- | --- | --- | --- | --- |
-| Express TypeScript | 3000 | 3000 | 5432 | 6379 | MinIO 9000 |
-| NestJS | 3000 | 3000 | 5432 | 6379 | MinIO 9000 |
-| Go | 8080 | 8080 | 5432 | 6379 | MinIO 9000 |
-| ASP.NET Core | 5080 | 8080 | 55432 | 56379 | S3Mock 19000 |
-| FastAPI | 8000 | 8000 | 5432 | 6379 | MinIO 9000 |
-| Spring Boot Java | 8080 | 8080 | 5432 | 6379 | MinIO 9000 |
-| Laravel PHP | 8000 | 8080 | 5432 | 6379 | MinIO 9000 |
+For a global installation:
 
-MySQL host port defaults to 3306 for every framework. PostgreSQL remains the default engine. FastAPI manual setup requires Python 3.13.3 and uv 0.12.21 or newer; installation uses the locked dependency graph and only the selected driver.
+```sh
+npm install --global create-ridhuan-backend@latest
+create-ridhuan-backend --help
+```
 
-The CLI supports Node 22.13+ or Node 24+. Express and NestJS require Node 24.15+ (below 27) for manual setup. Go/.NET requirements come from the bundled `go.mod`/`global.json`; use the exact supported SDK/toolchain shown in the generated guide. Go automatic toolchain selection is confined to child processes. `.NET` requires PowerShell 7 on Windows or Python 3 for its supplied env loader. Docker mode needs Docker Engine and Compose 2.24.4+, and skips host application dependency installation.
+The examples below use `create-ridhuan-backend` after global installation. You can also put `npx` before it to use a published version without installing globally.
 
-Redis and S3 are optional. Defaults use a single-instance memory limiter and local storage. Enable Redis for shared rate limits across API replicas. Selected development services are enabled by `COMPOSE_PROFILES`; remote S3 does not start a local fixture. Database/Redis/S3 development ports bind to loopback. `--port` changes manual and Compose host HTTP; container ports remain fixed.
+<details>
+<summary>Use a packed source artifact instead of a published release</summary>
 
-Spring Boot requires JDK25 and uses its checked Maven Wrapper3.9.16 (no global Maven). Java package defaults to com.example.<normalized project>; --java-package overrides it independently of .NET. Laravel requires 64-bit PHP8.5 with provider PDO extension and Composer2.9.8+. Composer/Java dependency restore is preparation; migration/seed stays explicit. Docker mode needs neither host JDK nor PHP. Seven frameworks provide fourteen database combinations.
+Repository changes reach npm only after publication. To try an exact source revision, get the `cli-package` artifact from a completed [GitHub Actions run](https://github.com/RidhuanDEV/backend-modular/actions/workflows/cli-templates.yml), or [build it locally](#for-maintainers).
 
-## Options
+```sh
+npm install --global ./create-ridhuan-backend-1.6.0.tgz
+create-ridhuan-backend --help
+```
 
-Run `create-ridhuan-backend --help` for the complete contract.
+Use the actual archive filename if its version differs. For npm-create options, add `--` before them:
 
-| Option | Purpose |
+```sh
+npm create ridhuan-backend@latest my-api -- --template express-typescript --yes
+```
+
+`@latest` uses the published release, not unpublished repository changes.
+
+</details>
+
+## Create a project
+
+**Guided setup:**
+
+```sh
+create-ridhuan-backend my-api
+```
+
+The wizard asks for your framework, database, run mode, ports, and optional Redis or S3 storage. Password input is hidden. Leaving a password empty generates one for you.
+
+**Express + PostgreSQL + Docker, without prompts:**
+
+```sh
+create-ridhuan-backend my-api --template express-typescript --database postgresql --mode docker --yes
+```
+
+**Laravel + MySQL + Docker:**
+
+```sh
+create-ridhuan-backend my-api --template laravel --database mysql --mode docker --yes
+```
+
+`--yes` accepts defaults for remaining settings. Without it, the CLI prompts for anything you have not supplied. Defaults are Express, PostgreSQL, and manual mode.
+
+The CLI creates your project; it does not start the application. Open **`GETTING-STARTED.md`** for the next commands. Generated passwords are saved in the ignored **`.env`** file and are not printed.
+
+## Choose a framework
+
+Every framework supports PostgreSQL and MySQL. These host tools are for **manual mode**; Docker builds the application inside containers.
+
+| Framework | `--template` value | Main tools for manual mode | Default API port |
+| --- | --- | --- | --- |
+| Express TypeScript | `express-typescript` | Node 24.15+ and npm, below Node 27 | 3000 |
+| NestJS | `nestjs` | Node 24.15+ and npm, below Node 27 | 3000 |
+| Go | `golang` | Go 1.27.1 | 8080 |
+| ASP.NET Core | `dotnet` | .NET SDK 10.0.401 | 5080 |
+| FastAPI | `fastapi` | Python 3.13.3 and uv 0.12.21+ | 8000 |
+| Spring Boot | `springboot` | JDK 25; included Maven Wrapper 3.9.16 | 8080 |
+| Laravel | `laravel` | 64-bit PHP 8.5, required extensions, Composer 2.9.8+ | 8000 |
+
+The CLI itself needs Node `^22.13.0` or `>=24.0.0 <27`. Your generated guide lists exact application requirements. Laravel also needs the selected PDO database driver. The .NET env loader uses PowerShell 7 on Windows or Python 3 on Linux/macOS.
+
+## Choose how to run it
+
+| Mode | Where the application runs | What the CLI does |
+| --- | --- | --- |
+| `--mode docker` | Inside Linux containers | Prepares Compose; skips host application dependency installation |
+| `--mode manual` | Directly on your computer or server | Checks framework tools and installs dependencies |
+| Either mode with `--no-install` | You decide later | Generates files and defers tool checks and installation |
+
+Docker mode needs Docker Engine and Compose 2.24.4+. Node is still needed to run the CLI, but host PHP, Java, Go, or .NET is not needed to build their containers.
+
+The same Compose setup runs on a Linux server or through Docker Desktop with Linux containers on Windows/macOS. **The CLI does not ask for a server OS.** It adapts local commands where needed, such as Windows Maven wrappers.
+
+You receive **one selected framework project**. “Fourteen combinations” means seven frameworks × two databases in our test matrix. It does not mean fourteen projects or OS-specific Docker setups in your generated folder. Database alternatives and optional override files may remain beside the active Compose file.
+
+## Run your application
+
+Follow your generated `GETTING-STARTED.md`: its commands match your framework, database, and ports.
+
+### Express + Docker example
+
+After generating the Express Docker example above:
+
+```sh
+cd my-api
+docker compose up --build -d --wait
+docker compose exec app npm run seed:prod
+```
+
+Compose runs migrations before starting the application. The explicit seed command creates initial application data. The API process itself does not run migrations or seed.
+
+| Default address | Purpose |
 | --- | --- |
-| `--template`, `-t` | `express-typescript`, `nestjs`, `golang`, `dotnet`, `fastapi`, `springboot`, `laravel` (aliases `express`, `ts`, `nest`, `go`, `net`, `csharp`, `python`, `py`) |
-| `--database` | `postgresql` (default) or `mysql`; chosen once when generating |
-| `--yes`, `-y` | Accept defaults without prompting; Express is default |
-| `--mode manual\|docker` | Install host dependencies or prepare Compose setup |
-| `--no-install` | Generate files only; tool checks/install are deferred |
-| `--port` | HTTP host/manual port, 1–65535 |
-| `--db-host`, `--db-port`, `--db-name`, `--db-user` | Selected database settings for manual/hybrid startup |
-| `--redis`, `--no-redis` | Enable/disable cache and shared limiter |
-| `--storage local\|s3` | Upload adapter |
-| `--s3-endpoint`, `--s3-docker-endpoint` | Host/container endpoint; custom provider settings are preserved |
-| `--s3-region`, `--s3-bucket`, `--s3-access-key` | S3 settings |
-| `--go-module` | Explicit module path for a Go project |
-| `--help`, `--version` | Help and package version |
+| `http://localhost:3000/docs` | Browse API documentation |
+| `http://localhost:3000/live` | Check that HTTP is responding |
+| `http://localhost:3000/ready` | Check required dependencies |
 
-Use `RIDHUAN_DB_PASSWORD` and `RIDHUAN_S3_SECRET_KEY` environment variables for automated credential input. Do not put passwords in command arguments. Quotes, `$`, `#`, backslashes, spaces and Unicode are supported; newline and NUL are rejected.
+Other frameworks have different seed commands. Spring Boot also builds the app image separately before starting Compose; use its generated guide.
 
-A nonempty target or a symlink target is rejected. Installation failure preserves files/secrets and prints a recovery command. Configuration changes take effect after restart/redeployment.
+### Express + manual example
 
-## Run the generated application
+Generate with `--mode manual`. Provide the selected database first, create the database named in `.env`, and make sure its credentials match. Then:
 
-Each project gets framework-specific manual and Compose steps in `GETTING-STARTED.md`: install, explicit migration, build, explicit seed, start, readiness and docs URLs. API startup never performs migrations or seed. Express uses Zod; NestJS uses class-validator/class-transformer/Swagger; Go uses Chi/Huma/sqlc/Goose; .NET uses ASP.NET Core/EF Core; FastAPI uses Pydantic/SQLAlchemy/Alembic. Auth, RBAC, audit, persisted notifications plus SSE, SMTP, uploads, optional Redis and OpenAPI follow each framework's source contracts.
+```sh
+cd my-api
+npm run prisma:migrate:deploy
+npm run build
+npm run seed
+npm start
+```
 
-## Maintainer verification
+Manual mode normally installs dependencies. If you used `--no-install`, run `npm ci` first. To process notification emails, run `npm run worker` in a separate terminal after building. SMTP is disabled by default.
+
+## Understand your project
+
+Folder names follow each framework's conventions. The generated framework README explains its own structure; linked technical reference and upgrade guides hold the deeper contracts.
+
+<details>
+<summary>Explore a generated Express project and its helper files</summary>
+
+Here is a shortened **generated Express project**, including files the CLI adds:
+
+```text
+my-api/
+├── src/
+│   ├── app.ts                 # Connects Express middleware and routes
+│   ├── server.ts              # Starts the HTTP server
+│   ├── config/                # Environment, Prisma, and Redis settings
+│   ├── constants/             # Permissions, modules, and audit identifiers
+│   ├── core/                  # Shared auth, audit, cache, HTTP, and services
+│   ├── modules/               # auth, user, roles, permissions, notifications, upload
+│   ├── scripts/               # Seed, CRUD generator, email worker, cleanup
+│   ├── docs/                  # OpenAPI generation and Swagger setup
+│   ├── types/                 # Shared types and Express request declarations
+│   └── utils/                 # Response and pagination helpers
+├── prisma/                    # PostgreSQL schema and migration history
+│   └── mysql/                 # MySQL schema and independent migrations
+├── scripts/                   # Docker service helpers; explained below
+├── tests/                     # Application and database integration checks
+├── docs/                      # Upgrade and operational guidance
+├── Dockerfile                 # Builds the application container
+├── docker-compose.yml         # Active stack for the chosen database
+├── docker-compose.mysql.yml   # Alternative MySQL stack
+├── docker-compose.override.yml # Host port mappings
+├── .env                       # Settings and secrets; ignored by Git
+├── .env.example               # Configuration reference
+├── .env.mysql.example         # MySQL configuration reference
+├── .gitignore
+├── package.json               # Dependencies and application commands
+├── package-lock.json          # Locked dependency versions
+├── prisma.config.ts           # Selects database schema and migrations
+├── tsconfig.json              # TypeScript compiler configuration
+├── eslint.config.js           # Code lint rules
+├── backend-template.json      # Selected template, database, and source revision
+├── template-manifest.json     # Bundled source file hashes and requirements
+├── GETTING-STARTED.md          # Instructions matching CLI choices
+├── DEVELOPER-GUIDE.md          # Feature development and module contracts
+├── README.md                  # Framework setup and configuration
+└── LICENSE
+```
+
+### Inside a feature module
+
+The `user` module demonstrates the pattern:
+
+| File or folder | Responsibility |
+| --- | --- |
+| `user.routes.ts` | Connects registered endpoints to controllers |
+| `user.controller.ts` | Handles HTTP input and responses |
+| `user.schema.ts` | Defines Zod validation and response schemas |
+| `user.service.ts` | Implements business rules |
+| `user.repository.ts` | Reads and writes database records |
+| `dto/` | Defines request and response types |
+| `mappers/` | Converts internal data to public response fields |
+| `queries/` | Builds supported database queries |
+| `policies/` | Implements feature access rules |
+
+Other modules contain the parts they need; not every module has every folder. `src/core/http/endpoint-registry.ts` defines endpoint methods, paths, access, validation, audit, cache, and rate-limit policies. Read `DEVELOPER-GUIDE.md` before adding endpoints.
+
+### Why there are two scripts folders
+
+**Root `scripts/` supports Docker services:**
+
+| File | What it does | Used when |
+| --- | --- | --- |
+| `mysql-entrypoint.sh` | Prepares startup before invoking the official MySQL entrypoint | Starting the MySQL stack |
+| `mysql-init-user.sh` | Sets the app account's password with server-side quoting | Initializing MySQL |
+| `minio.Dockerfile` | Builds the local S3-compatible server and client from pinned official source | Using local MinIO |
+| `init-bucket.sh` | Creates the configured upload bucket | Starting local MinIO |
+| `otel-collector.yaml` | Configures collection of traces and metrics | Using the telemetry collector |
+
+**`src/scripts/` contains application commands:** seeding, CRUD generation/registration, OpenAPI generation, the email worker, and orphan-upload cleanup. For example, `npm run make:crud product` creates a feature scaffold; you still define its business fields, database model, and permissions. Both folders contain working files.
+
+</details>
+
+## Customize your setup
+
+Keep settings in `.env` and restart/redeploy after changes. Generated escaping preserves quotes, dollar signs, backslashes, spaces, and Unicode; do not rewrite it by hand.
+
+| Need | Option |
+| --- | --- |
+| Framework | `--template`, `-t` |
+| Database | `--database postgresql` or `--database mysql` |
+| Remaining defaults without prompts | `--yes`, `-y` |
+| Manual or container setup | `--mode manual` or `--mode docker` |
+| Files only | `--no-install` |
+| Different host/manual API port | `--port 4000` |
+| Database connection settings | `--db-host`, `--db-port`, `--db-name`, `--db-user` |
+| Shared quota and cache | `--redis` or `--no-redis` |
+| Upload storage | `--storage local` or `--storage s3` |
+| S3 host/container connections | `--s3-endpoint`, `--s3-docker-endpoint` |
+| S3 settings | `--s3-region`, `--s3-bucket`, `--s3-access-key` |
+| Go import/module path | `--go-module` |
+| Spring Boot Java namespace | `--java-package` |
+| Complete help or installed version | `--help`, `--version` |
+
+Without Redis, the CLI configures the single-instance memory limiter and disables its cache. Redis provides a shared limiter and cache. Local uploads do not need S3. Selecting the local S3 fixture enables its Compose profile; a remote S3 provider does not start that fixture. For multiple replicas, follow the framework guide's shared Redis configuration.
+
+For automated credentials use the `RIDHUAN_DB_PASSWORD` and `RIDHUAN_S3_SECRET_KEY` environment variables. Passwords are not command arguments. Newline and NUL characters are rejected. MySQL also receives a separate generated root password.
+
+<details>
+<summary>Default service ports and option aliases</summary>
+
+| Framework | API host / container | PostgreSQL host | Redis host | Local S3 host |
+| --- | --- | --- | --- | --- |
+| Express / NestJS | 3000 / 3000 | 5432 | 6379 | 9000 |
+| Go | 8080 / 8080 | 5432 | 6379 | 9000 |
+| ASP.NET Core | 5080 / 8080 | 55432 | 56379 | 19000 (S3Mock) |
+| FastAPI | 8000 / 8000 | 5432 | 6379 | 9000 |
+| Spring Boot | 8080 / 8080 | 5432 | 6379 | 9000 |
+| Laravel | 8000 / 8080 | 5432 | 6379 | 9000 |
+
+MySQL defaults to host port 3306 for every framework. Development database, Redis, and S3 ports bind to localhost. Change conflicting host ports when running several projects. `--port` changes the host/manual API port; container HTTP stays fixed.
+
+Template aliases: `express`, `ts`, `nest`, `go`, `net`, `csharp`, `python`, `py`, `spring`, `java`, `php`. PostgreSQL also accepts `postgres` and `pg`.
+
+</details>
+
+### Common questions
+
+<details>
+<summary>Can I generate into an existing folder?</summary>
+
+The target must be empty and must not be a symlink. The CLI rejects a nonempty destination to protect existing files.
+
+</details>
+
+<details>
+<summary>What if dependency installation fails?</summary>
+
+Generated files and secrets are preserved. The CLI prints a recovery command. Fix the tool/dependency issue, then follow that command and `GETTING-STARTED.md`.
+
+</details>
+
+<details>
+<summary>Can I switch PostgreSQL to MySQL by editing .env?</summary>
+
+Choose the database when generating. The project records that choice and rejects a provider mismatch. Editing `.env` does not convert tables or data; an existing app needs a reviewed database export/import or migration process.
+
+</details>
+
+<details>
+<summary>Is every implementation file explained individually?</summary>
+
+The guides explain the main structure, configuration, and development workflows. They are not a line-by-line description of every implementation file. Use the folder map and module pattern above to locate the relevant code.
+
+</details>
+
+## Where to read next
+
+Inside your generated project:
+
+| Document | Read it when… |
+| --- | --- |
+| `GETTING-STARTED.md` | You want to install and run the app using your choices |
+| `README.md` | You need framework configuration and startup details |
+| `DEVELOPER-GUIDE.md` (Express) | You want to add endpoints or understand module contracts |
+| `docs/REFERENCE.md` | You need detailed configuration, contracts, and implementation reasoning |
+| `docs/HARDENING-UPGRADE.md` | You are upgrading existing data or configuring sessions, SSE, workers, retention, or telemetry |
+| Running `/docs` | You need API requests, responses, and access requirements |
+
+Browse the bundled guides here:
+
+[Express](templates/express-typescript/README.md) · [Express developer guide](templates/express-typescript/DEVELOPER-GUIDE.md) · [NestJS](templates/nestjs/README.md) · [Go](templates/golang/README.md) · [ASP.NET Core](templates/dotnet/README.md) · [FastAPI](templates/fastapi/README.md) · [Spring Boot](templates/springboot/README.md) · [Laravel](templates/laravel/README.md)
+
+Email delivery is at least once: a crash after SMTP accepts an email can cause duplicate delivery. Cleanup is a separate command, not part of HTTP startup; inspect its dry run before applying deletions. Detailed settings follow each framework's actual contracts.
+
+## For maintainers
+
+<details>
+<summary>Build, verify, and package this CLI</summary>
+
+From `create-ridhuan-backend/`:
 
 ```sh
 npm ci
 npm run prepare:templates
 npm run build
 npm test
-node scripts/verify-consumer.mjs express-typescript --runtime
-node scripts/verify-consumer.mjs nestjs --runtime
-node scripts/verify-consumer.mjs golang --runtime
-node scripts/verify-consumer.mjs dotnet --runtime
-node scripts/verify-compose.mjs express-typescript
-node scripts/verify-compose.mjs nestjs
-node scripts/verify-compose.mjs golang
-node scripts/verify-compose.mjs dotnet
 npm pack
 ```
 
-Release snapshots require clean source repositories, explicit file manifests and source commit/hash provenance. `npm run prepare:templates -- --allow-dirty` is only for testing edits locally. Set `CLI_TARBALL` to test a specific artifact; consumer tests install that `.tgz` outside the checkout. CI validates the same artifact on Windows/Linux, performs macOS CLI smoke and Linux Compose acceptance, then allows an explicitly requested release. Publishing is a separate authorized step; do not publish development snapshots.
+`npm pack` also prepares templates and builds through its prepack hook. It creates the archive; it does not publish. Release snapshots require clean source repositories and record source commits and per-file hashes. `--allow-dirty` is for local development snapshots only.
 
-MIT © RidhuanDEV
-
-Credential values containing backslashes use escaped JSON double quotes; literal dollar signs are escaped for Compose. Other special values use single quotes. The framework env loaders preserve these literal values and keep injected environment variables authoritative. Do not hand-edit generated escaping into shell syntax.
-
-## Database selection
+Set `CLI_TARBALL` to a specific archive path to verify that artifact. Examples:
 
 ```sh
-npm create ridhuan-backend@latest my-api -- --template fastapi --database mysql --yes
-npm create ridhuan-backend@latest my-api -- --template golang --database postgresql --mode docker --yes
+node scripts/verify-consumer.mjs express-typescript postgresql --runtime
+node scripts/verify-compose.mjs express-typescript postgresql
 ```
 
-These options are part of the next source revision; use `latest` only after that revision is published. The generated `backend-template.json` records the engine and source provenance. Runtime rejects a provider mismatch. Changing env never converts existing tables/data; use a reviewed export/import process for database engine changes. Each framework owns its separate migration history. PostgreSQL histories are preserved; MySQL introduces an independent baseline.
+Consumer checks install the archive outside the checkout and generate a project. `--runtime` additionally exercises a real database and API. Compose checks exercise the containerized app and dependencies. Use any template ID and either database.
 
-MySQL Compose uses a dedicated application account and a separate generated root password. Its bootstrap helper sets arbitrary application credentials using server-side quoting before the network server starts. Environment secrets and upload files stay ignored. Use verified TLS and a trusted CA for external databases; the localhost Compose database is a development fixture.
+| CI platform | Configured coverage |
+| --- | --- |
+| Linux | Fourteen consumers including database/API runtime, plus fourteen Compose stacks |
+| Windows | Fourteen native/package/generator consumers |
+| macOS | Six native consumers: FastAPI, Spring Boot, and Laravel with both databases |
 
-## Verification matrix
+Jobs use the run's shared immutable package. This describes configured coverage; check the actual run for passing results. It does not establish production deployment, capacity, or recovery.
 
-`node scripts/verify-consumer.mjs <template> <postgresql|mysql> [--runtime]` installs the packed CLI, generates a project, installs dependencies and runs native checks. `node scripts/verify-compose.mjs <template> <postgresql|mysql>` exercises actual migration gating, preservation, auth, notifications/SSE, SMTP TLS, Redis and upload adapters. CI uses one tarball across fourteen combinations on Windows/Linux and runs Spring Boot, Laravel and FastAPI native consumers for both providers on macOS. The macOS stage collects all six independent cases with per-task diagnostics. Configuring these jobs does not mean a remote CI run has passed. Public `npx @latest` acceptance requires the tested version to be published first.
+For the hardening inventory and collected stages:
 
-## Hardening verification and release
+```sh
+npm run test:hardening:plan
+npm run test:hardening -- --stage all
+```
 
-The current source includes sliding refresh families, ordered notification cursors, database email workers, explicit cleanup and optional telemetry for seven frameworks/providers. Read each generated `docs/HARDENING-UPGRADE.md`, the [original five-framework verification](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md), [Spring Boot verification](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/SPRING-BOOT-JAVA-VERIFICATION.md) and [Laravel verification](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/LARAVEL-PHP-VERIFICATION.md). These reports distinguish completed local/runtime/consumer gates from observed hosted CI and production boundaries. A new npm release requires a separate version and publication. SMTP-disabled workers stay idle without DB/SMTP work until shutdown, including Compose `--wait`.
+Diagnostics live in OS TEMP outside the npm payload. Fixtures use owned project labels and clean their own Docker resources. The Spring runtime harness also needs Python 3.13.3 and JDK 25/keytool for client/TLS fixtures; these are verification tools, not host requirements for Docker generation.
 
-`npm run test:hardening:plan` saves the full case inventory before execution. `npm run test:hardening -- --stage all` runs already-authored cases, collects failures with per-case logs, and continues independent scenarios. Use `--only` for a reviewed group of affected cases. No automatic retry/fix loop is used. Every Compose case removes its owned containers, volumes and image tags in `finally`; fixture ownership is scoped so another active test is preserved. Run `npm run test:hardening:cleanup` only after fixture stages have stopped. See the [testing task](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-TASK.md) for coverage and boundaries.
+Evidence: [testing task](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-TASK.md) · [original five frameworks](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) · [Spring Boot](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/SPRING-BOOT-JAVA-VERIFICATION.md) · [Laravel](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/LARAVEL-PHP-VERIFICATION.md).
 
-The complete Spring runtime harness additionally requires Python3.13.3 for a TCP client with a fixed receive window, JDK25/keytool for fixture TLS, and Docker. These are test prerequisites; Docker scaffolding itself still needs no host Java or Python. The hosted workflow can run only macOS or affected Spring Compose gates before full validation. Docker fixtures build all declared profile images before runtime acceptance; build duration does not consume an API scenario timeout.
+Version bumps and npm publication need separate release authorization. Do not publish development snapshots.
+
+</details>
+
+MIT © RidhuanDEV

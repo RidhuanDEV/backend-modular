@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/golang-backend.git",
-    "commit": "dadd6dc8972b9c07ce9ebbc5f8571f8668276441",
+    "commit": "51931874b2ffef65114aa144823e0dc3801b38c3",
     "dirty": false
   },
   "requirements": {
@@ -43,6 +43,7 @@
     "docs/HARDENING-UPGRADE.md": "3c07612559317ba0cb443a932b18af6f21916a60521d035c605d8897ccdb9a67",
     "docs/module-guide.md": "d93148fce1ee6405892b308acea4c64732cfc2880a212252d0b9ab07290a4659",
     "docs/OPERATIONS.md": "bea2d89ba94c6a4a494b6af8d75d0bd1095acafade5942cbd729410b7b286776",
+    "docs/REFERENCE.md": "f8295eb787962cd599e98a6e112de450f77ccdc9db5bcc0d412bdc9149dbe831",
     "docs/testing.md": "6fdfb7623941091af4fb743934eb05e94a449b35b10859fffb85526566a6a7de",
     "gitignore.template": "6691c06e2c87af7dac2e177350140cd77e093524a0b2cf2044821a9ad67fbaf1",
     "go.mod": "94566deef1313b5af0fd02879fe8d13ceac33612c21922b0c4609dad41a4536c",
@@ -167,7 +168,7 @@
     "internal/user/service.go": "2b9e43e75d72a57766d3eefd8a2fb3bdd00e068290b45e9a7227184fdb48abb1",
     "LICENSE": "2d21540dd2845c397a2fa78c35db091877bdfdf174c4a7df59b3f6e7b79f88af",
     "Makefile": "b61da032c4760aa699decbf53afca288f3f9d6350055bc273c927974b4c8ea73",
-    "README.md": "f3d32549439c65c9a542248c8cb1cbe43312b68dc9e7ddfeddf787f0f1506624",
+    "README.md": "f799e25b6deb4d45bbd77c4707b6e47a1daaebe749b23383b0f12cc1bc49fe0a",
     "scripts/compose.migration-failure.yaml": "8a6d2fbb871ced524d7477790b44c5c568ccbca90cbf818fd005b05dc39a88a6",
     "scripts/compose.verify.yaml": "b49d9c491493b893290c1ec410f5802765a0f1e8e367d3df9de5daa461235b94",
     "scripts/init-bucket.sh": "4dd62855a4d9d354f31bffea2d89e4a57b554705e189e440b1c72fea97c87d96",

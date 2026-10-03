@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-fastapi.git",
-    "commit": "2de7aad9ca64ac3eedfb719687278a5889d69f6a",
+    "commit": "90b7fcb196afe2119191e189c0e6c17f88c677e7",
     "dirty": false
   },
   "requirements": {
@@ -32,6 +32,7 @@
     "Dockerfile": "19999bf057bdbef9c7873b25d21ea309f5d24ddafab80f02fe49fc5310806d2c",
     "docs/HARDENING-UPGRADE.md": "e870452ac2a4c64477fba00982ba374ed46206666d40b1fd38afc9fe257bbfda",
     "docs/OPERATIONS.md": "01e1980c58259c3f756eac0e89e3276d566e99d214d5f9ab1b477ea5bf99ecdb",
+    "docs/REFERENCE.md": "a5989a750414328ef2677e9e103b719bbc0470f276f8a869d703a994475b34c4",
     "gitignore.template": "876368ba699e5c8ad61d4d7355e491945736f227062cf7fbec1cb9e96b3a69d3",
     "LICENSE": "ddfe898146ca7cb8acb2caf6f202b555e911cd4be97d76078f817687b8850fc4",
     "migrations/env.py": "ce1017c13f72225596fe528ee626a713aa78ad64a59d458ca760bd46e2684c69",
@@ -43,7 +44,7 @@
     "migrations/postgresql/versions/0003_session_families_and_email_outbox.py": "4c67e2923a135bab09173e793a0740ad974425ce31c7cad7a7b033e96a9ed89c",
     "migrations/script.py.mako": "34d6b7b9f64100da1c2854833cdb20f53cf0ea6c7500f0953ad3cf02b5857976",
     "pyproject.toml": "e0bda326e3e6d7590293dae2fcc39482d93804643c8ec92c7f7f35670c6a023b",
-    "README.md": "c0562d46e8ffb6b738d45a1c37d023e4770da90d39c95bf8a804290810c3ae0e",
+    "README.md": "4e185cbf1d840d276644f8e40445952afe6ba836e1f54e32bb19075c14064996",
     "scripts/init-bucket.sh": "4dd62855a4d9d354f31bffea2d89e4a57b554705e189e440b1c72fea97c87d96",
     "scripts/minio.Dockerfile": "1f41a7baa0a917fb32ee82b8b4523cb144077a7a61469cb580cc4000a876013f",
     "scripts/mysql-entrypoint.sh": "7ddb1c2a7f0a8654a71b00d39dc7deb940886b880572577fce57460448d4f7ab",

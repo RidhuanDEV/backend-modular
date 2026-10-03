@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-laravel.git",
-    "commit": "f5a1ada9d7c0c48eeb133e8cf0653b069457a101",
+    "commit": "060f595a2c59ba6ffed47273501b66b3b32563e0",
     "dirty": false
   },
   "requirements": {
@@ -162,6 +162,7 @@
     "docs/ARCHITECTURE.md": "7acda96352403c79ac76c337926269620c01196ca1c6da9689f36111768cd659",
     "docs/DEPLOYMENT.md": "a1f5d1b1df10faaab84fce2e0992e3de26b37d537ca9774b4e5046ad8d93d149",
     "docs/HARDENING-UPGRADE.md": "9308899ff93c750bcc395bcd34bc5b6d36b9f7cdf67eee8eecf8e02e30c88eb9",
+    "docs/REFERENCE.md": "32f33c4ec0ec6ae104f458beb4231d70255ed8ddbeb33972ad087e02a23fd814",
     "docs/SETUP.md": "d1914ee0b93db4a2d79345e2ddb1953c17bc4ea238cc36b90c76293a3ca1b02c",
     "docs/TESTING.md": "e7198e0d99daecf7fcd75ab285bba8d704440873db29003bfaad88e837a0d750",
     "docs/UPGRADE.md": "9308899ff93c750bcc395bcd34bc5b6d36b9f7cdf67eee8eecf8e02e30c88eb9",
@@ -173,7 +174,7 @@
     "pint.json": "d0d8b06a948fb7fbdb531c89e24d9f6dd5531eb551b3b75247b1b255c8a29db8",
     "public/.htaccess": "b7e379c77639fd56144947dbae84c84eb466d9c686ea81f2f013ae85421da923",
     "public/index.php": "bcda9ec38b78c7f23eed674f019467e330193cafa9b7c64d48036a8b8b04496d",
-    "README.md": "75ca5c305cc6d159891300f2b13a384d50c309c15d79887fb937aa3e00f0216c",
+    "README.md": "faced6915d007fd4403ae0f14ed4570d38c6ea248900efd4c2835f9c7ddcf982",
     "resources/views/welcome.blade.php": "5ab68aae2df265be18189b8a4f48cadaa303666730829cfbf4be418890cdb544",
     "routes/console.php": "0f47689a54b62f2fa99240ff0e081920bad20dc3779b24d76f16e7709eecbed3",
     "routes/web.php": "453bad516ef45af1cbc563530d4b71bc407bd909538efaeda61b3ae80913a602",

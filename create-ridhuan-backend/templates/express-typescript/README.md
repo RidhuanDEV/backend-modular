@@ -1,103 +1,194 @@
-# Modular Express TypeScript Starter
+# Modular Express TypeScript
 
-Express 5, TypeScript strict, Prisma/PostgreSQL, Zod, JWT/RBAC, audit, PostgreSQL notifications with SSE, optional SMTP and Redis cache, rate limiting, local/S3 uploads, and OpenAPI generated from endpoint contracts.
+A typed backend starter for teams building a new API with **PostgreSQL or MySQL**. It gives you Express 5, Prisma, and Zod, connected authentication and permissions, and explicit database and worker commands so you can start with application features.
 
-## Notifications
+[![CI](https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre/actions/workflows/ci.yml)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue?style=flat-square)](https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169e1?style=flat-square)](.env.example) [![MySQL](https://img.shields.io/badge/MySQL-8.4-4479a1?style=flat-square)](.env.mysql.example) [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
-An administrator with `manage_notifications` can call `POST /api/notifications` with `{ "recipientId": "uuid", "title": "...", "body": "...", "sendEmail": false }`. Authenticated recipients can call `GET /api/notifications` for their newest 50 items, `PATCH /api/notifications/:id/read`, and `GET /api/notifications/stream` for SSE. The response contains only `id`, `recipientId`, `title`, `body`, `emailStatus`, `readAt`, and `createdAt`. SSE polls PostgreSQL every three seconds, so notifications from other replicas appear without Redis. Connections close after 14 minutes; refresh the bearer token and reconnect using an authenticated `fetch` stream. Do not put bearer tokens in URLs.
+**Start here:** [Requirements](#requirements) · [Quick start](#quick-start) · [Docker](#docker-quick-start) · [API docs](#api-documentation) · [Structure](#project-structure) · [Guides](#documentation).
 
-SMTP is disabled by default. Set `SMTP_ENABLED=true` plus `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_FROM`, and optional matching `SMTP_USER`/`SMTP_PASSWORD` to send email to the recipient's stored address. If email fails, the database notification stays available with `emailStatus=FAILED`; `PENDING` may remain after a process crash during delivery. Guaranteed email delivery requires an application-specific outbox and retry worker. A large number of SSE clients increases PostgreSQL polling load. The notification API has its own Prisma migration.
+## Features
 
-On upgrade, run the seed explicitly to add `manage_notifications` and `manage_uploads` to the admin role. Existing custom roles need those grants assigned separately.
+- Typed public request/response contracts and feature boundaries.
+- JWT access tokens, rotating opaque refresh tokens, and database-backed permissions (RBAC).
+- Transactional audit logging for required mutations.
+- Persisted notifications and Server-Sent Events (SSE) for recipient updates.
+- A separate SQL email outbox worker with retry and lease recovery; SMTP is optional.
+- Local or S3-compatible file storage with validation and explicit cleanup.
+- Optional Redis caching and shared rate limiting.
+- Separate provider migration histories, explicit seeding, health probes, and API docs.
+- Docker Compose and tests against real PostgreSQL/MySQL databases.
 
-## Create a new project
+## Requirements
 
-Use the unified initializer (selects this template explicitly):
+| Run mode | You need |
+| --- | --- |
+| Manual | Node 24.15+ (below 27) and npm, plus an application-owned database |
+| Docker | Docker Engine/Desktop using Linux containers and Docker Compose v2; host application SDKs are not required |
+| Optional features | Redis for shared quotas/cache; S3 storage and SMTP only when enabled |
 
-```sh
-npx create-ridhuan-backend@latest my-api --template express-typescript --yes
-npm create ridhuan-backend@latest my-api -- --template express-typescript --yes
-```
+Compose fixtures use PostgreSQL 18 and MySQL 8.4. These are the checked-in fixture versions, not a blanket minimum-version claim for other deployments. Native requirements and locks belong to this framework.
 
-The wizard writes `.env`, generates secrets, and installs dependencies. Use `--no-install` to defer installation or `--mode docker` to use containers without host SDK dependencies. It refuses a nonempty destination. Follow the generated `GETTING-STARTED.md` for your selected ports and services. The project is private by default. The separate `create-ridhuanbackendtemplate` package is the legacy Express-only initializer.
+## Quick start
 
-## Run manually
+Run these commands from the framework checkout or generated project. If the CLI already generated your project, keep its ignored `.env` and follow `GETTING-STARTED.md`; do not overwrite generated secrets.
 
-Requires Node 24.15.0 or newer within the supported package engine range, PostgreSQL 18, and a `.env` copied from `.env.example`. Redis is optional when `CACHE_ENABLED=false` and `RATE_LIMIT_STORE=memory`.
+### 1. Install dependencies
 
 ```sh
 npm ci
-npm run prisma:migrate:deploy
-npm run seed
-npm run dev
 ```
 
-`/live` checks that HTTP is serving, and `/ready` checks PostgreSQL plus Redis when Redis is the required rate-limit store. `/health` remains a lightweight compatibility endpoint. Health endpoints bypass the public request quota so probes cannot exhaust it. Point deployment health probes to `/ready`. `/docs` serves Swagger UI with all-modules and per-module views; `/docs/openapi.json` serves the complete OpenAPI 3.1 specification.
+### 2. Configure your database and secrets
 
-## Run in containers
-
-Docker Compose is optional; manual startup above remains supported. `docker-compose.yml` defines the services; `docker-compose.override.yml` exposes host ports through `APP_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, and `MINIO_PORT`.
+For a new PostgreSQL checkout:
 
 ```sh
 cp .env.example .env
+```
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Create a database owned by this application and edit `.env`: set **JWT_SECRET, ADMIN_PASSWORD, and matching database credentials**. Keep connection passwords consistent with your database service. Generate strong independent secrets; never use example values for deployment. Production requires explicit allowed browser origins.
+
+### 3. Migrate, seed, and start
+
+```sh
+npm run prisma:migrate:deploy
+npm run build
+npm run seed
+npm start
+```
+
+Migrations run explicitly before new API replicas. Seed is a separate command; HTTP startup never changes the schema or creates accounts. Open [http://localhost:3000/docs](http://localhost:3000/docs) after the server starts.
+
+### MySQL setup
+
+```sh
+cp .env.mysql.example .env
+```
+
+On PowerShell use `Copy-Item .env.mysql.example .env`. Configure the MySQL provider and connection credentials, then use the migrate/seed/start commands above.
+
+Provider selection does not convert existing data. Never apply one framework's migration history to another application's database.
+
+## Docker quick start
+
+For a fresh source checkout, copy `.env.example` (or `.env.mysql.example` for MySQL) to `.env` and fill in the secrets described above. If the CLI already created `.env`, keep it. Laravel needs an independent APP_KEY and JWT_SECRET; the native initializer or CLI can generate them.
+
+### PostgreSQL
+
+```sh
 docker compose up --build -d --wait
 docker compose exec app npm run seed:prod
 ```
 
-The default stack is app + PostgreSQL. Compose runs the `migrate` service once and starts the app only after migration succeeds; each app replica does not run migrations. Set `CACHE_ENABLED=true`, `RATE_LIMIT_STORE=redis`, and `COMPOSE_PROFILES=redis` for Redis. For MinIO, set `UPLOAD_STORAGE=s3` and include `minio` in `COMPOSE_PROFILES`; `minio-init` creates the bucket. Both profiles can be combined as `COMPOSE_PROFILES=redis,minio`. The unified CLI configures these automatically. For an external S3 service, set `S3_ENDPOINT_DOCKER` and skip the MinIO profile. Run seed explicitly after the first migration. Outside Compose, run `npx prisma migrate deploy` as one release job before starting new replicas.
-
-Set `CORS_ORIGINS` to a comma-separated list of browser origins. It is required when `NODE_ENV=production`; development defaults to `http://localhost:5173,http://localhost:3000` if omitted. No wildcard or credentialed CORS is enabled. Requests without `Origin` remain available to server-side clients.
-
-Uploaded local files use a persistent Compose volume. When running manually, `UPLOAD_LOCAL_DIR` selects the directory. The template accepts PNG, JPEG, and PDF with signature checks; `UPLOAD_ALLOWED_MIME` can narrow this list. `POST /api/upload` uses multipart field `file`; `GET /api/upload/:id` returns metadata. Both require JWT and `manage_uploads` permission. No public file download route is enabled.
-
-For orphaned objects after a failed database write or process crash, run `npm run uploads:cleanup` to list candidates older than `UPLOAD_ORPHAN_GRACE_HOURS`. Review them, then run `npm run uploads:cleanup -- --apply` to delete those without a metadata row. The script operates on the configured local directory or S3 bucket and skips keys outside the template's UUID format.
-
-## Endpoint policies
-
-`src/core/http/endpoint-registry.ts` is the source of method, path, access, audit, rate limit, cache, request schema, response schema, and OpenAPI metadata. Every endpoint must appear there and be mounted once; startup fails if a registered endpoint is missing. `src/core/http/mount-endpoint.ts` applies validation and middleware. `npm run make:crud product` adds a scaffold to the registry and app; fill in its Prisma model, Zod fields, response contract, and business mapping before use.
-
-The defaults in the registry can be changed through `ENDPOINT_POLICIES_JSON` in `.env`, then redeployed. Example:
-
-```dotenv
-ENDPOINT_POLICIES_JSON='{"user.get":{"cache":"off","rateLimit":"internal","audit":"optional"}}'
-```
-
-Unknown endpoint IDs and invalid values fail at startup. `required` audit is written in the same Prisma transaction as a mutation and rejects the response if no audit is written. `optional` is best effort and logs write failures. `none` creates no activity row. GET endpoints changed to `optional` produce a metadata-only READ entry; changing a GET to `required` requires a service audit producer and is rejected by default. Snapshots redact secret-named fields. Historical audit JSON is redacted by the new migration.
-
-Rate limits use `auth`, `public`, and `internal`, each configured with `RATE_LIMIT_*_WINDOW_MS/MAX`. The public limiter also protects authenticated routes before JWT parsing; the internal limiter then keys by user. Configure `TRUST_PROXY_HOPS` only for trusted reverse proxies. Memory rate limiting is suitable for one app instance. Set `APP_INSTANCE_COUNT` and use `RATE_LIMIT_STORE=redis` for multiple app instances. When the configured Redis limiter fails, auth requests fail closed while public/internal limiters pass through; monitor the Redis error logs.
-
-Set `CACHE_ENABLED=true` to activate response data caching on registry endpoints marked `read`. Redis is best effort for the cache; DB reads continue when unavailable. Authorization checks always query PostgreSQL so user/permission changes do not depend on cache invalidation. BullMQ jobs still require Redis when used.
-
-## Time contract and migration
-
-Database instants use `timestamptz(3)` and API timestamps use ISO 8601 UTC. `src/core/time/time.ts` parses instants with explicit offset and formats in validated IANA zones such as `Asia/Jakarta`, `Asia/Makassar`, `Asia/Jayapura`, or overseas zones. Client display should use the viewer's zone. Existing `timestamp` values are interpreted as **UTC** by migration `20260922120000_endpoint_foundation`; verify the source timezone and take a backup before running it against a populated production database.
-
-The historical `20260922120000_endpoint_foundation` SQL was corrected so audit redaction works when upgrading a database that already contains audit rows on PostgreSQL 18. This changes that migration file's checksum. Existing deployments that applied the earlier file should review Prisma migration history before using `migrate dev` against the same database; use the normal release `migrate deploy` path for rollout. Never reset a populated database to reconcile a checksum.
-
-## API documentation and checks
+### MySQL source checkout
 
 ```sh
-npm run build
-npm run api-docs:check
-npx prisma validate
-docker compose config --quiet
-npm run verify:template
+docker compose -f docker-compose.mysql.yml up --build -d --wait
+docker compose -f docker-compose.mysql.yml exec app npm run seed:prod
 ```
 
-`npm run build` compiles TypeScript and writes `dist/docs/openapi.json`. Runtime docs come from the same typed registry and Zod schemas. No OpenAPI JSDoc annotations or manual schema JSON synchronization are needed. See [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md) for the controller/service pattern and rollout notes.
+A CLI-generated MySQL project already uses the selected provider as its active Compose file, so follow `GETTING-STARTED.md` with ordinary `docker compose` commands. Compose waits for migration success and runs a separate worker; seed remains explicit. API containers run without root privileges. Development dependency ports bind to localhost.
 
-GitHub Actions also tests fresh and upgrade migrations against PostgreSQL 18, builds the Docker image, and smoke-tests the packed npm initializer. `create-ridhuanbackendtemplate` is released by `.github/workflows/publish.yml` through npm trusted publishing after its publisher is registered in npm. Run `npm pack --dry-run` in the initializer directory to inspect the files before a release.
+## API documentation
 
-HTTP defaults to port `3000`; `PORT` selects the manual API port and `APP_PORT` the Compose host port. The container always listens on `3000`. Set `REDIS_NAMESPACE` to a unique deployment namespace when projects share Redis; replicas of one deployment must use the same namespace. Build and dev scripts generate Prisma automatically. `verify:template` checks the standalone application; legacy initializer packaging is a repository-only check.
+At the default API port **3000**:
 
-## PostgreSQL or MySQL
+| Path | Purpose |
+| --- | --- |
+| `/docs` | API documentation viewer |
+| `/docs/openapi.json` | Complete OpenAPI specification |
+| `/docs/specs/user.json` | Example module-specific specification |
+| `/live` | HTTP/process liveness |
+| `/ready` | Required database and distributed-quota dependencies |
+| `/health` | Lightweight compatibility health endpoint |
 
-The unified CLI supports `--database postgresql` (default) and `--database mysql`. MySQL defaults to port 3306. Each generated project records the selected provider in `backend-template.json`; its active Compose file and `.env` match that choice. Changing the provider does not convert existing data. PostgreSQL migration history stays intact; MySQL has an independent migration baseline and UTC sessions.
+The docs paths are explicitly implemented by this template. Login/refresh returns the access token as `data.token` and the refresh credential as `data.refreshToken`. Protected requests use `Authorization: Bearer <access-token>`.
 
-For a source checkout, copy `.env.mysql.example` to `.env`, configure credentials, and run `docker compose -f docker-compose.mysql.yml up --build -d --wait`. Seed is a separate explicit operation using the same `-f` option. CLI-generated MySQL projects use the ordinary active Compose filename. MySQL bootstrap uses a separate root password and supports quoted/Unicode application passwords without logging them.
+## Project structure
 
-For an external MySQL database, use `sslaccept=strict` (or `sslmode=verify-full`) and an absolute `sslcert` CA path in `DATABASE_URL`; both the Prisma adapter and migration connection must verify the server. Local Compose is a development fixture. Back up MySQL with MySQL tooling and PostgreSQL with PostgreSQL tooling, preserving migration history and upload metadata/objects. Test restoration into isolated storage/database before relying on a recovery point.
+```text
+src/app.ts                 # Express composition root
+src/server.ts              # HTTP startup
+src/modules/               # Feature routes, controllers, schemas, services, repositories
+src/core/                  # Auth, audit, HTTP, cache, jobs, and telemetry
+src/config/                # Environment and provider connections
+src/scripts/               # Seed, generator, worker, and cleanup
+prisma/                    # PostgreSQL schema and migrations; mysql/ is separate
+scripts/                   # Docker service helpers
+tests/                     # Unit, contract, and database checks
+```
 
-## Hardening upgrade
+### Responsibility boundaries
 
-Read [HARDENING-UPGRADE.md](docs/HARDENING-UPGRADE.md) before migrating existing data. It documents sliding refresh/logout, ordered SSE replay, async email worker/outbox, retention commands and optional OpenTelemetry. Local PostgreSQL/MySQL regression and generated-consumer checks pass; [verification evidence](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) records the exact runtime and CI boundaries.
+Routes and controllers handle HTTP. Zod schemas define request and response contracts. Services own business rules and transaction boundaries; repositories own database queries.
+
+## Configuration and security
+
+| Topic | What you need to know |
+| --- | --- |
+| Authentication | Access tokens last 15 minutes. Refresh tokens rotate; replay revokes their family. Keep signing settings consistent across replicas. |
+| Permissions | Authorization reads current database grants, not stale client permissions. Grant new rights deliberately. |
+| Audit | Required audit and its mutation share a transaction. Public snapshots exclude secrets. |
+| Rate limiting | A local limiter is for one instance. Multiple API replicas require a shared Redis limiter and the framework's replica-count setting. |
+| Cache | Redis cache is optional. Cache failure falls back to database reads; authorization stays authoritative. |
+| Time and CORS | Store instants in UTC and format at presentation boundaries. Configure exact browser origins for production. |
+| Environment | Keep secrets out of Git/logs. Changes require restart or redeployment. |
+
+The complete keys are in [.env.example](.env.example) and [.env.mysql.example](.env.mysql.example). See [technical reference](docs/REFERENCE.md) for endpoint policy, cache generation, provider, proxy, and audit details.
+
+## Notifications, email, and storage
+
+Notifications belong to their recipient. SSE streams persisted events using recipient-owned cursors and bounded batches; they do not keep a database transaction open while sending. Reconnect after token expiry using an authenticated stream, never a token in a URL. Large client counts require deployment-specific capacity tests.
+
+SMTP is off by default. To process enabled email in manual mode, start a separate terminal after the native build:
+
+```sh
+npm run worker
+```
+
+The included outbox worker handles retries and lease recovery. SMTP is **at least once**: a crash after SMTP accepts an email can cause duplicate delivery.
+
+Uploads validate configured size and file signatures. Local/S3 storage and SQL cannot share one transaction; compensation and grace-period cleanup reduce orphaned objects. Cleanup is a separate command, dry-run first, never an API startup task. See the reference and upgrade guide for download semantics, retention, and cleanup commands.
+
+## Add a module
+
+```sh
+npm run make:crud product
+```
+
+The generator is a scaffold, not your business contract. Review fields, response DTOs, permissions, registry wiring, and provider migration drafts before using a new route.
+
+## Testing
+
+```sh
+npm run verify:template
+npm run test:database
+```
+
+Service-free checks and database acceptance are different. Integration checks need real PostgreSQL/MySQL and enabled external services; skipped or inconclusive tests are not passes. Use disposable test databases, not production data.
+
+## Production and upgrades
+
+Configure database TLS with hostname/CA validation, trusted ingress/proxies, exact CORS origins, secret storage, backups, and matched upload restoration. Local Docker dependency settings are development fixtures. Non-root containers, passing CI, and readiness probes do not establish production capacity, high availability, or a tested recovery procedure.
+
+**Before applying migrations to persisted data**, read [HARDENING-UPGRADE.md](docs/HARDENING-UPGRADE.md). It covers sliding refresh sessions/logout, ordered SSE replay, the async outbox worker, retention, optional OpenTelemetry, and coordinated migration considerations.
+
+## Documentation
+
+| Document | Purpose |
+| --- | --- |
+| [Technical reference](docs/REFERENCE.md) | Detailed contracts, settings, examples, and implementation reasoning |
+| [Hardening upgrade](docs/HARDENING-UPGRADE.md) | Read before changing an existing installation |
+| [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md) | Endpoint development, DTOs, audit, and module conventions |
+| `GETTING-STARTED.md` (CLI-generated projects) | Commands matching your chosen framework, database, ports, and run mode |
+
+## License
+
+[MIT](LICENSE). Source: [RidhuanDEV/modular-express-typescript-starter-postgre](https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre).

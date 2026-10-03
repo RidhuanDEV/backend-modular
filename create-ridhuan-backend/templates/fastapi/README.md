@@ -1,16 +1,61 @@
-# Modular FastAPI backend
+# Modular FastAPI
 
-A typed FastAPI template for PostgreSQL or MySQL. It includes authentication, live RBAC, activity audit, uploads, optional Redis, persisted notifications, SSE and optional SMTP. Database migrations and seed operations are explicit.
+A typed backend starter for teams building a new API with **PostgreSQL or MySQL**. It gives you FastAPI, Pydantic, async SQLAlchemy, and Alembic, connected authentication and permissions, and explicit database and worker commands so you can start with application features.
 
-## Start manually
+[![CI](https://github.com/RidhuanDEV/modular-fastapi/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RidhuanDEV/modular-fastapi/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/Python-3.13.3-blue?style=flat-square)](https://github.com/RidhuanDEV/modular-fastapi) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169e1?style=flat-square)](.env.example) [![MySQL](https://img.shields.io/badge/MySQL-8.4-4479a1?style=flat-square)](.env.mysql.example) [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
-Install Python 3.13.3 and [uv](https://docs.astral.sh/uv/getting-started/installation/) 0.12.21 or newer. Use an application-owned database.
+**Start here:** [Requirements](#requirements) · [Quick start](#quick-start) · [Docker](#docker-quick-start) · [API docs](#api-documentation) · [Structure](#project-structure) · [Guides](#documentation).
+
+## Features
+
+- Typed public request/response contracts and feature boundaries.
+- JWT access tokens, rotating opaque refresh tokens, and database-backed permissions (RBAC).
+- Transactional audit logging for required mutations.
+- Persisted notifications and Server-Sent Events (SSE) for recipient updates.
+- A separate SQL email outbox worker with retry and lease recovery; SMTP is optional.
+- Local or S3-compatible file storage with validation and explicit cleanup.
+- Optional Redis caching and shared rate limiting.
+- Separate provider migration histories, explicit seeding, health probes, and API docs.
+- Docker Compose and tests against real PostgreSQL/MySQL databases.
+
+## Requirements
+
+| Run mode | You need |
+| --- | --- |
+| Manual | Python 3.13.3 and uv 0.12.21+, plus an application-owned database |
+| Docker | Docker Engine/Desktop using Linux containers and Docker Compose v2; host application SDKs are not required |
+| Optional features | Redis for shared quotas/cache; S3 storage and SMTP only when enabled |
+
+Compose fixtures use PostgreSQL 18 and MySQL 8.4. These are the checked-in fixture versions, not a blanket minimum-version claim for other deployments. Native requirements and locks belong to this framework.
+
+## Quick start
+
+Run these commands from the framework checkout or generated project. If the CLI already generated your project, keep its ignored `.env` and follow `GETTING-STARTED.md`; do not overwrite generated secrets.
+
+### 1. Install dependencies
 
 ```sh
 uv sync --locked --extra postgresql
 ```
 
-Copy `.env.example` to `.env`, configure PostgreSQL credentials and replace the JWT/admin/S3 placeholders with generated secrets. On Windows use `Copy-Item .env.example .env`; on Linux/macOS use `cp .env.example .env`.
+### 2. Configure your database and secrets
+
+For a new PostgreSQL checkout:
+
+```sh
+cp .env.example .env
+```
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Create a database owned by this application and edit `.env`: set **JWT_SECRET, ADMIN_PASSWORD, and matching database URLs/credentials**. Keep connection passwords consistent with your database service. Generate strong independent secrets; never use example values for deployment. Production requires explicit allowed browser origins.
+
+### 3. Migrate, seed, and start
 
 ```sh
 uv run --locked backend migrate
@@ -18,57 +63,118 @@ uv run --locked backend seed
 uv run --locked backend serve
 ```
 
-API: `http://localhost:8000`. Swagger: `/docs`. OpenAPI: `/docs/openapi.json`; module documents: `/docs/specs/auth.json` and corresponding module names. `/live` checks HTTP; `/ready` checks the database and Redis only when rate limiting uses Redis. `/health` remains a lightweight alias.
+Migrations run explicitly before new API replicas. Seed is a separate command; HTTP startup never changes the schema or creates accounts. Open [http://localhost:8000/docs](http://localhost:8000/docs) after the server starts.
 
-For MySQL 8.4, use `.env.mysql.example`, `DB_PROVIDER=mysql`, and `uv sync --locked --extra mysql`. The chosen URL and provider must agree. Switching provider does not migrate an existing database's data. Keep each application/database's migration ownership separate.
+### MySQL setup
 
-## Docker Compose
+```sh
+cp .env.mysql.example .env
+```
+
+On PowerShell use `Copy-Item .env.mysql.example .env`. Install the selected driver extra:
+
+```sh
+uv sync --locked --extra mysql
+```
+
+Configure the MySQL provider and connection credentials, then use the migrate/seed/start commands above.
+
+Provider selection does not convert existing data. Never apply one framework's migration history to another application's database.
+
+## Docker quick start
+
+For a fresh source checkout, copy `.env.example` (or `.env.mysql.example` for MySQL) to `.env` and fill in the secrets described above. If the CLI already created `.env`, keep it. Laravel needs an independent APP_KEY and JWT_SECRET; the native initializer or CLI can generate them.
+
+### PostgreSQL
 
 ```sh
 docker compose up --build -d --wait
 docker compose exec app backend seed
 ```
 
-For a MySQL checkout, use `docker compose -f compose.mysql.yaml ...` for both commands. A CLI-generated MySQL project already has this variant as `compose.yaml`. Configure `.env` before starting. API containers run as a non-root user; the migration service runs once and must succeed before the API starts. Seed is never automatic. Outside Compose, run `backend migrate` as a release job before starting new replicas.
+### MySQL source checkout
 
-The runtime image has one Uvicorn process. Docker build uses the selected database extra and the locked dependencies. Database/Redis/MinIO development ports bind to loopback. Copy `compose.override.yaml.example` to `compose.override.yaml` to customize published ports; for MySQL override the `mysql` service's port rather than `postgres`.
-
-## Architecture
-
-```text
-src/app/
-  main.py                composition root and resource lifespan
-  api/                   typed policies, dependencies, middleware, envelopes
-  core/                  settings, clock, security, use-case context
-  database/              engine, SQLAlchemy base and native type adapters
-  modules/<feature>/     Pydantic DTO, router, service, repository, ORM model
-  platform/              audit, Redis, cache, limiter, storage and SMTP
-  cli/                   explicit operational commands
-migrations/<provider>/versions/
-contracts/               endpoint inventory and intentional differences
-scripts/                 service-free verification and scaffolding
-tests/                   unit/contract and actual database acceptance
+```sh
+docker compose -f compose.mysql.yaml up --build -d --wait
+docker compose -f compose.mysql.yaml exec app backend seed
 ```
 
-Routers own HTTP; services own use cases and commit boundaries; repositories own queries. Public DTOs use explicit allowlists. An `AsyncSession` belongs to one request/task and is never shared by concurrent tasks. SSE opens short query sessions and never holds a transaction while sending data to a client.
+A CLI-generated MySQL project already uses the selected provider as its active Compose file, so follow `GETTING-STARTED.md` with ordinary `docker compose` commands. Compose waits for migration success and runs a separate worker; seed remains explicit. API containers run without root privileges. Development dependency ports bind to localhost.
 
-## Configuration and extension
+## API documentation
 
-- Access tokens last 15 minutes. Refresh tokens are opaque, stored as SHA-256 hashes and rotated under a row lock. Reuse revokes the complete family. Signing keys, issuer and audience must remain consistent across replicas.
-- Permissions are checked from live database grants. `manage_notifications` is separate from `manage_users` and `manage_uploads`. Listing, reading and streaming notifications are restricted to the authenticated recipient.
-- `ENDPOINT_POLICIES_JSON` changes supported endpoint audit/cache/rate behavior through env and redeployment. Unknown IDs/options and unsupported transactional producers fail startup. Example: `{"user.get":{"cache":"off","rateLimit":"internal"},"user.create":{"audit":"required"}}`.
-- Required audit commits in the same transaction as its mutation. Optional audit failure is logged; business persistence failures still propagate. Snapshots use public DTOs.
-- `RATE_LIMIT_STORE=memory` is for one instance. Multiple replicas/workers require `redis` and `APP_INSTANCE_COUNT` accordingly. Auth limiter failures return 503; public/internal fallback is logged. Health probes bypass throttling so liveness remains independent of Redis.
-- `CACHE_ENABLED=false` works without Redis. `user.get` is the cache example. Cache read/write failures fall back to the database; transactionally incremented database generations prevent stale cache resurrection after a mutation.
-- All stored instants are UTC. PostgreSQL sessions use UTC; MySQL sessions use `+00:00` and `datetime(6)`. `core.clock.in_zone()` renders IANA zones such as `Asia/Jakarta`, `Asia/Makassar`, `Asia/Jayapura` and overseas DST zones.
-- `CORS_ORIGINS` contains explicit origins. Production requires it. Requests without `Origin` remain valid, and cross-origin credentials are disabled.
-- Local upload is the default. `UPLOAD_STORAGE=s3` uses the official boto3 SDK and MinIO/S3 settings. PNG/JPEG/PDF signatures and actual byte limits are checked. `backend cleanup` lists orphan candidates; `backend cleanup --apply` removes candidates older than the configured grace period after a metadata recheck.
-- `SMTP_ENABLED=false` is the default. Failed/disabled email delivery leaves the notification in PostgreSQL/MySQL with `emailStatus=FAILED`. STARTTLS or implicit TLS verifies certificates. Use a trusted deployment CA rather than disabling validation.
-- SSE supports `Last-Event-ID` for recipient-owned notification UUIDs. Inserts serialize per recipient and store a monotonic sequence, so polling cursors follow commit order. Batches are limited to 50; connections expire within 14 minutes or token expiry. Notifications remain available through the list API when disconnected.
+At the default API port **8000**:
 
-Use database TLS and least-privilege accounts for deployed services. Set `DATABASE_TLS=verify-full` and optionally `DATABASE_CA_FILE=/absolute/path/to/ca.pem` for either engine; hostname and CA validation stay enabled. Both the API and Alembic use this connection factory. Development Compose credentials/settings are not deployment credentials.
+| Path | Purpose |
+| --- | --- |
+| `/docs` | API documentation viewer |
+| `/docs/openapi.json` | Complete OpenAPI specification |
+| `/docs/specs/user.json` | Example module-specific specification |
+| `/live` | HTTP/process liveness |
+| `/ready` | Required database and distributed-quota dependencies |
+| `/health` | Lightweight compatibility health endpoint |
 
-## Checks
+The docs paths are explicitly implemented by this template. FastAPI's default `/openapi.json` is replaced by `/docs/openapi.json`. Login/refresh returns the access token as `data.token` and the refresh credential as `data.refreshToken`. Protected requests use `Authorization: Bearer <access-token>`.
+
+## Project structure
+
+```text
+src/app/main.py            # Composition root and resource lifespan
+src/app/api/               # Policies, dependencies, middleware, and envelopes
+src/app/core/              # Settings, clock, security, and use-case context
+src/app/database/          # Engine, ORM base, and provider type adapters
+src/app/modules/           # Feature DTO, router, service, repository, and model
+src/app/platform/          # Audit, Redis, storage, rate limit, and SMTP
+src/app/cli/               # Explicit operational commands
+migrations/                # Separate PostgreSQL/MySQL histories
+contracts/, scripts/, tests/ # Contracts, tools, and real database acceptance
+```
+
+### Responsibility boundaries
+
+Routers handle HTTP. Services implement use cases and transaction boundaries. Repositories contain database queries. Pydantic DTOs define public contracts using explicit field allowlists. An AsyncSession belongs to one request/task and is never shared by concurrent tasks. SSE uses short query sessions and does not keep a transaction open while sending events.
+
+## Configuration and security
+
+| Topic | What you need to know |
+| --- | --- |
+| Authentication | Access tokens last 15 minutes. Refresh tokens rotate; replay revokes their family. Keep signing settings consistent across replicas. |
+| Permissions | Authorization reads current database grants, not stale client permissions. Grant new rights deliberately. |
+| Audit | Required audit and its mutation share a transaction. Public snapshots exclude secrets. |
+| Rate limiting | A local limiter is for one instance. Multiple API replicas require a shared Redis limiter and the framework's replica-count setting. |
+| Cache | Redis cache is optional. Cache failure falls back to database reads; authorization stays authoritative. |
+| Time and CORS | Store instants in UTC and format at presentation boundaries. Configure exact browser origins for production. |
+| Environment | Keep secrets out of Git/logs. Changes require restart or redeployment. |
+
+The complete keys are in [.env.example](.env.example) and [.env.mysql.example](.env.mysql.example). See [technical reference](docs/REFERENCE.md) for endpoint policy, cache generation, provider, proxy, and audit details.
+
+## Notifications, email, and storage
+
+Notifications belong to their recipient. SSE streams persisted events using recipient-owned cursors and bounded batches; they do not keep a database transaction open while sending. Reconnect after token expiry using an authenticated stream, never a token in a URL. Large client counts require deployment-specific capacity tests.
+
+SMTP is off by default. To process enabled email in manual mode, start a separate terminal after the native build:
+
+```sh
+uv run --locked backend worker
+```
+
+The included outbox worker handles retries and lease recovery. SMTP is **at least once**: a crash after SMTP accepts an email can cause duplicate delivery.
+
+Uploads validate configured size and file signatures. Local/S3 storage and SQL cannot share one transaction; compensation and grace-period cleanup reduce orphaned objects. Cleanup is a separate command, dry-run first, never an API startup task. See the reference and upgrade guide for download semantics, retention, and cleanup commands.
+
+## Add a module
+
+```sh
+uv run --locked backend generate-module products
+uv run --locked python scripts/verify.py
+uv run --locked backend revision add_products
+# Review the generated provider migration before applying it.
+uv run --locked backend migrate
+```
+
+The generator is a scaffold, not your business contract. Review fields, response DTOs, permissions, registry wiring, and provider migration drafts before using a new route.
+
+## Testing
 
 ```sh
 uv sync --locked --all-extras
@@ -76,22 +182,26 @@ uv run --locked python scripts/verify.py
 uv run --locked backend check-migrations
 ```
 
-`verify.py` requires no services. Migration drift checks and integration tests require a real selected database. Set `TEST_DB_PROVIDER` and `TEST_DATABASE_URL`, then run `uv run --locked pytest`. Tests do not substitute SQLite for PostgreSQL/MySQL. See `docs/OPERATIONS.md` for release, rollback and backup instructions. Local verification is not evidence of production load, backup restoration or a deployed service.
+Service-free checks and database acceptance are different. Integration checks need real PostgreSQL/MySQL and enabled external services; skipped or inconclusive tests are not passes. Set TEST_DB_PROVIDER and TEST_DATABASE_URL before `uv run --locked pytest`. `backend check-migrations` also requires the selected real database. Use disposable test databases, not production data.
 
-## Generate a module
+## Production and upgrades
 
-```sh
-uv run --locked backend generate-module products
-uv run --locked python scripts/verify.py
-uv run --locked backend revision add_products
-# Review the generated migration before applying it.
-uv run --locked backend migrate
-```
+Configure database TLS with hostname/CA validation, trusted ingress/proxies, exact CORS origins, secret storage, backups, and matched upload restoration. Local Docker dependency settings are development fixtures. Non-root containers, passing CI, and readiness probes do not establish production capacity, high availability, or a tested recovery procedure.
 
-The generator creates typed schemas, ORM model, repository, service and GET router, and registers its endpoint, model and composition imports. It uses the locked development Ruff tool to format its output automatically. Existing modules and entity name collisions are refused. Review authorization and create a migration against the selected engine before calling the generated route. For a reusable template that supports both engines, create and validate separate provider migrations. The generated read example caps its response at 100 items; add explicit pagination for your application.
+**Before applying migrations to persisted data**, read [HARDENING-UPGRADE.md](docs/HARDENING-UPGRADE.md). It covers sliding refresh sessions/logout, ordered SSE replay, the async outbox worker, retention, optional OpenTelemetry, and coordinated migration considerations.
 
-MySQL application passwords are UTF-8. The aiomysql 0.3.2 boundary preserves their UTF-8 bytes despite the driver's internal latin1 conversion; real credential acceptance includes non-Latin passwords. Compose keeps credential bootstrap separate from API migrations.
+## Documentation
 
-## Hardening upgrade
+| Document | Purpose |
+| --- | --- |
+| [Technical reference](docs/REFERENCE.md) | Detailed contracts, settings, examples, and implementation reasoning |
+| [Hardening upgrade](docs/HARDENING-UPGRADE.md) | Read before changing an existing installation |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Release, rollback, database TLS, and backups |
+| [DEPENDENCIES.md](DEPENDENCIES.md) | Locked dependencies and publishers |
+| `GETTING-STARTED.md` (CLI-generated projects) | Commands matching your chosen framework, database, ports, and run mode |
 
-Read [HARDENING-UPGRADE.md](docs/HARDENING-UPGRADE.md) before migrating existing data. It documents sliding refresh/logout, ordered SSE replay, async email worker/outbox, retention commands and optional OpenTelemetry. Local PostgreSQL/MySQL regression and generated-consumer checks pass; [verification evidence](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) records the exact runtime and CI boundaries.
+MySQL credentials, including non-ASCII passwords, are covered by the provider acceptance work. The driver-boundary reasoning is in the technical reference rather than the first-run steps.
+
+## License
+
+[MIT](LICENSE). Source: [RidhuanDEV/modular-fastapi](https://github.com/RidhuanDEV/modular-fastapi).

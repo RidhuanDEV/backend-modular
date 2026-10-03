@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/NET-backend.git",
-    "commit": "afef88a6fe5c75fb0f9307f8cabca682787b50fe",
+    "commit": "d7e1d187aba62218cb3eb1e75811d22f6932a7fe",
     "dirty": false
   },
   "requirements": {
@@ -38,14 +38,16 @@
     "docs/CONTRACTS.md": "5be182d46ab09d0fdbe67eabe4fe9928b895be64666eea730a098e3e34f7a123",
     "docs/HARDENING-UPGRADE.md": "1d313a1db44d9fc16b517672468f07f724bef54631773c73c2ba773150585dd6",
     "docs/OPERATIONS.md": "b64a50fa264291ab4d9ee34551970fa6f90c8997e7afe79c8fd184102816bbcb",
+    "docs/REFERENCE.id.md": "deed23de51e966f758a3d030d6210dbbf9e48ef2767cd9fed1345371acd69f46",
+    "docs/REFERENCE.md": "f125fce30a72d6e075e41a1a1f943cf5327ee9e05ae36837c4bfa0e67ddf9141",
     "dotnet-tools.json": "e48342794ccf9dd33332c04e3c946488ab797c138f07d13b1a26c95b5664b3b9",
     "gitignore.template": "72bf79cf47f79311ea042ac2dd972d749c38603a8c01b17f26cd6d5824b108db",
     "global.json": "289e45aafd6eb59adcc4b7dda4d6fe5f1924065345aa8ab75be4a0c2b9cb00db",
     "LICENSE": "ddfe898146ca7cb8acb2caf6f202b555e911cd4be97d76078f817687b8850fc4",
     "ModularBackend.slnx": "73a278eb13e80f3d1f21117faa12d3702b4ffd2e4f99c5138e0bb08beeb054ae",
     "NuGet.Config": "252b20b8e388c27d76f3b0a043ca6a8f378a79e810f88bf93f45bce7c8ae5327",
-    "README.id.md": "2f4d6c0b4929d1dbc96c8c87214d12c830569c341538673c29921e1542071a91",
-    "README.md": "126dc53aae34eb9c2e1c84c4e4c512acdf43ddad6716259b136ee75e40c19e7c",
+    "README.id.md": "f9f7bd1a94cc7fa2fc968d51775c177af1c2532953a9dbfdb9ee95d512720695",
+    "README.md": "5cfee284545fbcdf5b2b83ef2fd5bfc7fe0ca1e60821582ce423b723cc3fde76",
     "scripts/mysql-entrypoint.sh": "7ddb1c2a7f0a8654a71b00d39dc7deb940886b880572577fce57460448d4f7ab",
     "scripts/mysql-init-user.sh": "657b96c3bb1d73184d3cdfeed99056d1ad54b0a073bef9ba932436a4b852470c",
     "scripts/otel-collector.yaml": "ec14cf8f3ceeca6bb4c6754b4de13097f98babb9ca7874e36bd3fdc3f5ae3c82",

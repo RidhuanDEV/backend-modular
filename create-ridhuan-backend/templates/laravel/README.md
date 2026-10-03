@@ -1,78 +1,192 @@
-# Modular Laravel backend
+# Modular Laravel
 
-Laravel 13 / PHP 8.5 (64-bit), PostgreSQL or MySQL, native FormRequests, readonly DTOs, Eloquent, Resources, gates, JWT/RBAC and Artisan. Optional Redis cache/shared quota, local/S3 uploads, SQL notifications/SSE, SMTP outbox, retention and portable OpenTelemetry.
+A typed backend starter for teams building a new API with **PostgreSQL or MySQL**. It gives you Laravel 13, Eloquent, FormRequests, readonly DTOs, Resources, and gates, connected authentication and permissions, and explicit database and worker commands so you can start with application features.
 
-## Manual Windows/Linux setup
+[![CI](https://github.com/RidhuanDEV/modular-laravel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RidhuanDEV/modular-laravel/actions/workflows/ci.yml)
+[![PHP](https://img.shields.io/badge/PHP-8.5-blue?style=flat-square)](https://github.com/RidhuanDEV/modular-laravel) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169e1?style=flat-square)](.env.example) [![MySQL](https://img.shields.io/badge/MySQL-8.4-4479a1?style=flat-square)](.env.mysql.example) [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
-Install PHP 8.5 x64 and Composer 2.9.8+. Extensions: PDO, selected pdo_pgsql/pdo_mysql, ctype, curl, dom, fileinfo, mbstring, openssl, tokenizer and xml; zip improves package installation. Redis/OTel PECL extensions are optional. On Windows ComposerSetup/Herd batch launchers are supported by the unified CLI; RIDHUAN_PHP_BINARY and RIDHUAN_COMPOSER_PHAR select isolated native executable/PHAR paths.
+**Start here:** [Requirements](#requirements) · [Quick start](#quick-start) · [Docker](#docker-quick-start) · [API docs](#api-documentation) · [Structure](#project-structure) · [Guides](#documentation).
+
+## Features
+
+- Typed public request/response contracts and feature boundaries.
+- JWT access tokens, rotating opaque refresh tokens, and database-backed permissions (RBAC).
+- Transactional audit logging for required mutations.
+- Persisted notifications and Server-Sent Events (SSE) for recipient updates.
+- A separate SQL email outbox worker with retry and lease recovery; SMTP is optional.
+- Local or S3-compatible file storage with validation and explicit cleanup.
+- Optional Redis caching and shared rate limiting.
+- Separate provider migration histories, explicit seeding, health probes, and API docs.
+- Docker Compose and tests against real PostgreSQL/MySQL databases.
+
+## Requirements
+
+| Run mode | You need |
+| --- | --- |
+| Manual | 64-bit PHP 8.5 and Composer 2.9.8+, with the selected PDO driver and required extensions, plus an application-owned database |
+| Docker | Docker Engine/Desktop using Linux containers and Docker Compose v2; host application SDKs are not required |
+| Optional features | Redis for shared quotas/cache; S3 storage and SMTP only when enabled |
+
+Compose fixtures use PostgreSQL 18 and MySQL 8.4. These are the checked-in fixture versions, not a blanket minimum-version claim for other deployments. Native requirements and locks belong to this framework.
+
+## Quick start
+
+Run these commands from the framework checkout or generated project. If the CLI already generated your project, keep its ignored `.env` and follow `GETTING-STARTED.md`; do not overwrite generated secrets.
+
+### 1. Install dependencies
 
 ```sh
 composer install --no-interaction --prefer-dist
 php artisan backend:initialize --provider=postgresql --port=8000
-# Edit ignored .env: provision dedicated DB and configure credentials first.
+```
+
+Initialization creates fresh secrets and refuses to replace an existing `.env`. Required PHP extensions are listed in [setup](docs/SETUP.md); there is no SQLite fallback.
+
+### 2. Configure your database and secrets
+
+Create a database owned by this application and edit `.env`: set **APP_KEY, a distinct JWT_SECRET, ADMIN_PASSWORD, and matching database credentials**. Keep connection passwords consistent with your database service. Generate strong independent secrets; never use example values for deployment. Production requires explicit allowed browser origins.
+
+### 3. Migrate, seed, and start
+
+```sh
 php artisan backend:migrate --force
 php artisan backend:seed
 composer build
 php artisan backend:validate-config
 php artisan serve --host=127.0.0.1 --port=8000
-# Separate terminal, when SMTP enabled:
+```
+
+Migrations run explicitly before new API replicas. Seed is a separate command; HTTP startup never changes the schema or creates accounts. Open [http://localhost:8000/docs](http://localhost:8000/docs) after the server starts.
+
+### MySQL setup
+
+For a fresh project, use `php artisan backend:initialize --provider=mysql --port=8000` instead of the PostgreSQL initializer. Configure its dedicated MySQL database before running the migrate/seed/start commands.
+
+Provider selection does not convert existing data. Never apply one framework's migration history to another application's database.
+
+## Docker quick start
+
+For a fresh source checkout, copy `.env.example` (or `.env.mysql.example` for MySQL) to `.env` and fill in the secrets described above. If the CLI already created `.env`, keep it. Laravel needs an independent APP_KEY and JWT_SECRET; the native initializer or CLI can generate them.
+
+### PostgreSQL
+
+```sh
+docker compose up --build -d --wait
+docker compose --profile seed run --rm seeder
+```
+
+### MySQL source checkout
+
+```sh
+docker compose -f compose.mysql.yaml up --build -d --wait
+docker compose -f compose.mysql.yaml --profile seed run --rm seeder
+```
+
+A CLI-generated MySQL project already uses the selected provider as its active Compose file, so follow `GETTING-STARTED.md` with ordinary `docker compose` commands. Compose waits for migration success and runs a separate worker; seed remains explicit. API containers run without root privileges. Development dependency ports bind to localhost.
+
+## API documentation
+
+At the default API port **8000**:
+
+| Path | Purpose |
+| --- | --- |
+| `/docs` | API documentation viewer |
+| `/docs/openapi.json` | Complete OpenAPI specification |
+| `/docs/specs/user.json` | Example module-specific specification |
+| `/live` | HTTP/process liveness |
+| `/ready` | Required database and distributed-quota dependencies |
+| `/health` | Lightweight compatibility health endpoint |
+
+The docs paths are explicitly implemented by this template. Login/refresh returns the access token as `data.token` and the refresh credential as `data.refreshToken`. Protected requests use `Authorization: Bearer <access-token>`.
+
+## Project structure
+
+```text
+app/Modules/               # Native feature requests, DTOs, resources, services, policies
+app/Infrastructure/        # Storage, messaging, and platform integrations
+app/Support/               # Shared contracts, endpoint registry, and configuration
+app/Console/               # Explicit Artisan operational commands
+database/                  # Separate provider migrations and seeding
+routes/                    # Registry-backed route wiring
+public/                    # Private-safe HTTP document root
+config/, bootstrap/        # Laravel configuration and composition
+docs/, scripts/, tests/    # Guides, verification tools, and tests
+```
+
+### Responsibility boundaries
+
+FormRequests validate HTTP input. Readonly DTOs carry use-case data. Services own business rules and transactions. Eloquent models own persistence; Resources explicitly select public fields and gates enforce permissions. Native Artisan commands own migrations, seed, worker, cleanup, and module generation.
+
+## Configuration and security
+
+| Topic | What you need to know |
+| --- | --- |
+| Authentication | Access tokens last 15 minutes. Refresh tokens rotate; replay revokes their family. Keep signing settings consistent across replicas. |
+| Permissions | Authorization reads current database grants, not stale client permissions. Grant new rights deliberately. |
+| Audit | Required audit and its mutation share a transaction. Public snapshots exclude secrets. |
+| Rate limiting | A local limiter is for one instance. Multiple API replicas require a shared Redis limiter and the framework's replica-count setting. |
+| Cache | Redis cache is optional. Cache failure falls back to database reads; authorization stays authoritative. |
+| Time and CORS | Store instants in UTC and format at presentation boundaries. Configure exact browser origins for production. |
+| Environment | Keep secrets out of Git/logs. Changes require restart or redeployment. |
+
+The complete keys are in [.env.example](.env.example) and [.env.mysql.example](.env.mysql.example). See [technical reference](docs/REFERENCE.md) for endpoint policy, cache generation, provider, proxy, and audit details.
+
+## Notifications, email, and storage
+
+Notifications belong to their recipient. SSE streams persisted events using recipient-owned cursors and bounded batches; they do not keep a database transaction open while sending. Reconnect after token expiry using an authenticated stream, never a token in a URL. Large client counts require deployment-specific capacity tests.
+
+SMTP is off by default. To process enabled email in manual mode, start a separate terminal after the native build:
+
+```sh
 php artisan notifications:work
 ```
 
-No SQLite fallback. For MySQL use initializer --provider=mysql and a separate database. Native migrate/status/rollback use only selected provider history. Composer discovery and initialization never query the database. Initialization refuses to replace existing .env; migrations/seed are explicit. Seed reruns preserve existing passwords and customized grants. Initial admin credentials are saved only in ignored .env.
+The included outbox worker handles retries and lease recovery. SMTP is **at least once**: a crash after SMTP accepts an email can cause duplicate delivery.
 
-/live and /health are independent of DB/Redis; /ready verifies DB and Redis when distributed quota is selected. /docs serves the API explorer; /docs/openapi.json and /docs/specs/{module}.json come from Scramble and source requests/resources/routes.
+Uploads validate configured size and file signatures. Local/S3 storage and SQL cannot share one transaction; compensation and grace-period cleanup reduce orphaned objects. Cleanup is a separate command, dry-run first, never an API startup task. Keep S3_PREFIX dedicated to one application database. See the reference and upgrade guide for download semantics, retention, and cleanup commands.
 
-## Containers
-
-```sh
-# Set DB_PASSWORD and matching POSTGRES_PASSWORD in .env, plus APP_KEY/JWT secrets.
-docker compose up --build -d --wait
-docker compose exec app php artisan backend:seed
-# Source checkout MySQL uses its provider file:
-docker compose -f compose.mysql.yaml up --build -d --wait
-docker compose -f compose.mysql.yaml exec app php artisan backend:seed
-```
-
-Host HTTP defaults to 8000 on web:8080. app is PHP-FPM, worker runs notifications:work, migrate completes once before app/worker; seeder profile stays explicit. PostgreSQL 18 stores /var/lib/postgresql, MySQL 8.4 owns a separate volume. All services have project scoped names. Redis, MinIO and Collector are optional profiles. Host dependency ports bind loopback; production TLS/domain/private DB topology needs deployment configuration. No fixed container names.
-
-## Contracts
-
-33 operations are traced to Express source 55198bb. Public camelCase fields, UUIDs and UTC ISO timestamps use explicit resources. Laravel validation returns 422; malformed/unknown/foreign notification cursor returns 400 before SSE headers. User pagination supports page/limit/search/sortBy/orderBy/fields with public projection. POST/PATCH/DELETE require their concern permissions. Role/user managers cannot grant or modify roles outside their own permissions. JWT access lasts 15 minutes, refresh slides 30 days without an absolute cap. Replay revokes its family and commits before responding 401; logout consumes known old traces and returns 204 for unknown/repeated tokens. Existing access lasts until expiry, active user lookup remains authoritative. Refresh/logout default audit is required in this Laravel profile.
-
-Uploads default max 10 MiB and PNG/JPEG/PDF detected content. GET /api/upload/{id} keeps baseline metadata; optional ?download=true returns private streamed bytes under manage_uploads. Metadata hides internal keys. SQL/audit failure compensates objects; crash orphans are handled after grace and final reference recheck. Filesystem/object store and SQL are separate transactions.
-
-Notifications list newest 50 and expose X-Next-Cursor when older data exists. SSE uses bearer headers, UUID Last-Event-ID and internal sequence; never put tokens in URLs. Initial stream sends unread items; resumed streams include read items after the recipient cursor. Native stream drains batches before polling 3s, heartbeat15s, stops on expiry/inactive/disconnect/DB outage. FPM defaults to 8 children with 4 SSE slots, preserving ordinary HTTP capacity. artisan serve is development-only. See deployment limitations.
-
-## Configuration and operations
-
-Environment changes require redeployment: php artisan config:clear, update .env/injected configuration, php artisan config:cache, restart HTTP and worker. Never build config cache containing deployment secrets into an image. APP_KEY is distinct from JWT_SECRET. RATE_LIMIT_STORE=file uses Laravel file cache under bounded flock mutexes across FPM processes. Multiple app instances require Redis; namespaces identify one deployment. Auth quota outage returns503; public/internal use best effort file fallback. Cache is optional Redis; checks authorize from SQL before reading cache. Generation invalidation is deployment scoped; no global Redis flush. ENDPOINT_POLICIES_JSON allows only audit/cache/rateLimit with declared producer capabilities. Stream/mutations cannot be cached.
+## Add a module
 
 ```sh
-php artisan backend:cleanup --dry-run
-php artisan backend:cleanup --apply
 php artisan make:backend-module Invoice
 php artisan backend:verify-contract
 php artisan backend:openapi-export
 ```
 
-Cleanup is bounded and explicit; active family traces, pending jobs, persisted notifications and referenced/fresh files survive. Audit deletion is disabled; opt in with retention365d. Module generation creates native name-field CRUD scaffolds, requests/data/resource/service/model/policy/registry and both migration drafts; review fields, migrate and grant its concern permission explicitly. It rejects collisions/path traversal and preserves existing modules.
+The generator is a scaffold, not your business contract. Review fields, response DTOs, permissions, registry wiring, and provider migration drafts before using a new route.
 
-SMTP defaults off and worker stays idle without DB polling. Enabled SMTP uses verified Symfony transport, immutable snapshots, SKIP LOCKED claims, five attempts and fenced leases. Parent renews every20s during blocking child delivery, default lease60s, SMTP timeout25s, child timeout120s. Retry delays5/30/120/600s. Abandoned fifth attempt becomes FAILED. SMTP is at least once; acceptance followed by process crash can duplicate delivery. Linux signals and Windows console events trigger bounded shutdown; --stop-file supplies a portable supervisor stop request. Children cannot finalize SQL jobs.
-
-OTEL_ENABLED defaults false with no connections. Official API/SDK/exporter uses bounded HTTP OTLP export and service identity; operation/status/time only, no email, password, bearer, SQL bindings or request body. Collector outage is optional. Metrics/spans do not establish production throughput or recovery guarantees.
-
-## Quality and verification
+## Testing
 
 ```sh
 composer build
 composer analyse
 php vendor/bin/pint --test
 php vendor/bin/phpunit
-node scripts/verify.mjs --stage native
-node scripts/verify.mjs --stage integration
 ```
 
-Scripts are fully authored before execution, record independent failures, timeouts and cleanup evidence in OS TEMP. Gate status and actual limitations are recorded in docs/VERIFICATION.md. Configuring CI is separate from observing a passing run. npm integration is local/source until separately authorized npm release; no version bump/publish is implied.
+Service-free checks and database acceptance are different. Integration checks need real PostgreSQL/MySQL and enabled external services; skipped or inconclusive tests are not passes. Use disposable test databases, not production data.
 
-Read docs/SETUP.md, docs/ARCHITECTURE.md, docs/DEPLOYMENT.md, docs/UPGRADE.md and docs/TESTING.md. MIT.
+## Production and upgrades
+
+Configure database TLS with hostname/CA validation, trusted ingress/proxies, exact CORS origins, secret storage, backups, and matched upload restoration. Local Docker dependency settings are development fixtures. Non-root containers, passing CI, and readiness probes do not establish production capacity, high availability, or a tested recovery procedure.
+
+**Before applying migrations to persisted data**, read [HARDENING-UPGRADE.md](docs/HARDENING-UPGRADE.md). It covers sliding refresh sessions/logout, ordered SSE replay, the async outbox worker, retention, optional OpenTelemetry, and coordinated migration considerations.
+
+## Documentation
+
+| Document | Purpose |
+| --- | --- |
+| [Technical reference](docs/REFERENCE.md) | Detailed contracts, settings, examples, and implementation reasoning |
+| [Hardening upgrade](docs/HARDENING-UPGRADE.md) | Read before changing an existing installation |
+| [docs/SETUP.md](docs/SETUP.md) | Extensions, credentials, provider, and storage setup |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Native boundaries and contracts |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | PHP-FPM/Nginx, capacity boundaries, and deployment |
+| [docs/UPGRADE.md](docs/UPGRADE.md) | Migration and compatibility guidance |
+| [docs/TESTING.md](docs/TESTING.md) | Verification commands and limits |
+| [docs/VERIFICATION.md](docs/VERIFICATION.md) | Recorded acceptance evidence |
+| [DEPENDENCIES.md](DEPENDENCIES.md) | Official dependencies and licenses |
+| `GETTING-STARTED.md` (CLI-generated projects) | Commands matching your chosen framework, database, ports, and run mode |
+
+## License
+
+[MIT](LICENSE). Source: [RidhuanDEV/modular-laravel](https://github.com/RidhuanDEV/modular-laravel).

@@ -13,7 +13,14 @@ Backend Modular brings seven backend starters together behind one CLI: **`create
 
 This repository contains the CLI, bundled template snapshots, the framework source repositories as Git submodules, and shared verification documentation. Your generated application contains only the framework you select.
 
-**Explore:** [Quick start](#quick-start) · [Frameworks](#frameworks) · [What you get](#what-you-get) · [Repository map](#repository-map) · [Metrics](#repository-metrics) · [CI explained](#how-verification-works) · [Contribute](#work-on-this-repository)
+**Explore:** [Quick start](#quick-start) · [Frameworks](#frameworks) · [Features](#features) · [Repository map](#repository-map) · [Metrics](#repository-metrics) · [CI explained](#how-verification-works) · [Contribute](#work-on-this-repository)
+
+## Requirements
+
+- **CLI:** Node `^22.13.0` or `>=24.0.0 <27`.
+- **Docker mode:** Docker Engine/Desktop with Linux containers and Compose 2.24.4+.
+- **Manual mode:** the selected framework tools and a dedicated database; see the [framework requirements](create-ridhuan-backend/README.md#choose-a-framework).
+- **Optional:** Redis, S3-compatible storage, and SMTP only when selected.
 
 ## Quick start
 
@@ -23,7 +30,7 @@ This repository contains the CLI, bundled template snapshots, the framework sour
 npx create-ridhuan-backend@latest my-api
 ```
 
-The wizard guides you through the setup. For an Express project with PostgreSQL in Docker:
+The wizard asks for your framework, database, ports, and manual or Docker setup. For an Express project with PostgreSQL in Docker:
 
 ```sh
 npx create-ridhuan-backend@latest my-api --template express-typescript --database postgresql --mode docker --yes
@@ -62,7 +69,7 @@ All seven templates in this source revision support **PostgreSQL and MySQL**.
 
 Read the [CLI framework table](create-ridhuan-backend/README.md#choose-a-framework) for host tool requirements. Each framework keeps its own contracts, migrations, and development conventions.
 
-## What you get
+## Features
 
 | Included | Purpose |
 | --- | --- |
@@ -184,7 +191,7 @@ The distinction comes from the [workflow path filters](.github/workflows/cli-tem
 | [Spring Boot report](docs/SPRING-BOOT-JAVA-VERIFICATION.md) | Spring-specific implementation and verification evidence |
 | [Laravel report](docs/LARAVEL-PHP-VERIFICATION.md) | Laravel-specific implementation and verification evidence |
 
-Inside a generated project, read `GETTING-STARTED.md` first, its framework `README.md` for configuration, and `docs/HARDENING-UPGRADE.md` before upgrading existing data.
+Inside a generated project, read `GETTING-STARTED.md` first. The framework `README.md` gives a features/requirements/quick-start overview; `docs/REFERENCE.md` keeps deeper contracts and operational details. Read `docs/HARDENING-UPGRADE.md` before upgrading persisted data.
 
 ## Work on this repository
 

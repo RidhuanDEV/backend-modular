@@ -1,154 +1,63 @@
 # Modular Go Backend
 
+A typed backend starter for teams building a new API with **PostgreSQL or MySQL**. It gives you Chi, Huma, sqlc, and Goose, connected authentication and permissions, and explicit database and worker commands so you can start with application features.
+
 [![CI](https://github.com/RidhuanDEV/golang-backend/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RidhuanDEV/golang-backend/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/badge/Go-1.27.1-blue?style=flat-square)](https://github.com/RidhuanDEV/golang-backend) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169e1?style=flat-square)](.env.example) [![MySQL](https://img.shields.io/badge/MySQL-8.4-4479a1?style=flat-square)](.env.mysql.example) [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
-Starter **modular monolith** untuk membangun HTTP API dengan Go, PostgreSQL, Chi, Huma, dan sqlc. Cocok untuk tim yang ingin memulai dari auth, RBAC, audit, upload lokal/S3, rate limiting, cache Redis opsional, OpenAPI, dan container setup yang sudah terhubung.
+**Start here:** [Requirements](#requirements) · [Quick start](#quick-start) · [Docker](#docker-quick-start) · [API docs](#api-documentation) · [Structure](#project-structure) · [Guides](#documentation).
 
-## Notifications dan SMTP opsional
+## Features
 
-Notifikasi disimpan di PostgreSQL oleh migrasi Goose. Pemegang izin `manage_notifications` dapat membuatnya melalui `POST /api/notifications` dengan `recipientId`, `title`, `body`, dan `sendEmail` opsional. Penerima yang login memakai `GET /api/notifications` (50 terbaru), `PATCH /api/notifications/{id}/read`, dan `GET /api/notifications/stream` untuk SSE. Respons publik hanya memuat `id`, `recipientId`, `title`, `body`, `emailStatus`, `readAt`, dan `createdAt`. SSE melakukan polling PostgreSQL setiap tiga detik sehingga notifikasi dari replica lain tetap muncul tanpa Redis. Koneksi berakhir setelah 14 menit; perbarui bearer token lalu sambungkan lagi memakai `fetch` dengan header Authorization. Jangan menaruh token di URL.
+- Typed public request/response contracts and feature boundaries.
+- JWT access tokens, rotating opaque refresh tokens, and database-backed permissions (RBAC).
+- Transactional audit logging for required mutations.
+- Persisted notifications and Server-Sent Events (SSE) for recipient updates.
+- A separate SQL email outbox worker with retry and lease recovery; SMTP is optional.
+- Local or S3-compatible file storage with validation and explicit cleanup.
+- Optional Redis caching and shared rate limiting.
+- Separate provider migration histories, explicit seeding, health probes, and API docs.
+- Docker Compose and tests against real PostgreSQL/MySQL databases.
 
-SMTP mati secara default. Isi `SMTP_ENABLED=true`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_FROM`, serta pasangan `SMTP_USER`/`SMTP_PASSWORD` bila dibutuhkan. Email dikirim ke alamat tersimpan milik penerima. Jika email gagal, notifikasi tetap tersedia dengan `emailStatus=FAILED`; status `PENDING` bisa tertinggal bila proses berhenti saat pengiriman. Untuk jaminan pengiriman email, proyek turunan perlu menambah outbox dan pekerja retry. Banyak klien SSE menambah beban polling PostgreSQL.
+## Requirements
 
-Saat upgrade, jalankan seed secara eksplisit untuk menambahkan `manage_notifications` dan `manage_uploads` pada role admin. Role khusus yang sudah ada perlu diberi izin tersebut secara terpisah.
+| Run mode | You need |
+| --- | --- |
+| Manual | Go 1.27.1, plus an application-owned database |
+| Docker | Docker Engine/Desktop using Linux containers and Docker Compose v2; host application SDKs are not required |
+| Optional features | Redis for shared quotas/cache; S3 storage and SMTP only when enabled |
 
-Proyek ini ditujukan untuk satu aplikasi yang dikembangkan dan dirilis sebagai satu unit dengan batas package per fitur. Pilih layanan terpisah bila fitur perlu dirilis, diskalakan, atau dimiliki secara independen. Database aplikasi ini milik proyek Go dan tidak berbagi schema dengan starter Express atau stack lain.
+Compose fixtures use PostgreSQL 18 and MySQL 8.4. These are the checked-in fixture versions, not a blanket minimum-version claim for other deployments. Native requirements and locks belong to this framework.
 
-Perlu Go 1.27.1 untuk initializer dan mode manual. Compose memerlukan Docker Engine/Desktop serta Docker Compose v2. Mode manual memerlukan PostgreSQL 18; Redis hanya diperlukan bila cache atau rate store Redis diaktifkan.
+## Quick start
 
-## Fitur
+Run these commands from the framework checkout or generated project. If the CLI already generated your project, keep its ignored `.env` and follow `GETTING-STARTED.md`; do not overwrite generated secrets.
 
-- Register/login JWT, RBAC berbasis grant terbaru dari PostgreSQL, dan permission terpisah untuk user, role, dan permission.
-- Registry endpoint bertipe untuk auth, akses, audit, rate group, cache, dan OpenAPI.
-- Audit before/after pada transaksi mutasi; upload memverifikasi signature file dan mendukung storage lokal atau S3.
-- Redis opsional untuk rate limit lintas replica dan cache; satu instance dapat menggunakan rate limiter memory.
-- Liveness/readiness, graceful shutdown, OpenTelemetry HTTP, Goose migrations, dan Compose.
-- Template initializer membuat project baru dan secret JWT tanpa menyalin `.env` atau data lokal.
-- API contract yang sejalan dengan keluarga template Express dan .NET, diverifikasi oleh tes parity. Penjelasan dan cara menyesuaikannya ada di [contract parity](docs/contract-parity.md).
-
-## Buat proyek baru
-
-Initializer saat ini dijalankan dari checkout repository; belum dipublikasikan sebagai paket `go run ...@latest` atau `gonew`.
-
-```sh
-git clone https://github.com/RidhuanDEV/golang-backend.git
-cd golang-backend
-go run ./cmd/initproject ../my-api
-cd ../my-api
-```
-
-Wizard meminta module path, port, database, pilihan Redis, dan storage. Ia membuat `.env` baru dengan JWT secret acak. Isi `ADMIN_EMAIL` dan `ADMIN_PASSWORD` di `.env` bila ingin membuat akun admin saat menjalankan seed. Jangan gunakan kredensial contoh di production.
-
-Untuk melewati unduh dependency saat inisialisasi:
+### 1. Install dependencies
 
 ```sh
-go run ./cmd/initproject --no-install ../my-api
+go mod download
 ```
 
-Tujuan yang sudah berisi file akan ditolak. Initializer tidak menyalin `.git`, `.env`, atau direktori upload dari checkout.
+### 2. Configure your database and secrets
 
-## Quick start dengan Compose
-
-Perlu Docker Engine/Desktop dan Docker Compose v2. Jalankan di folder project hasil initializer:
+For a new PostgreSQL checkout:
 
 ```sh
-# Initializer membuat .env. Pastikan JWT_SECRET dan kredensial DB terisi.
-# Opsional: tambahkan ADMIN_EMAIL dan ADMIN_PASSWORD sebelum seed.
-docker compose up --build -d
-docker compose run --rm --entrypoint seed app
+cp .env.example .env
 ```
 
-Compose menjalankan migrasi satu kali sebelum API dimulai. Seed tetap perintah eksplisit. API tersedia di `http://localhost:8080`, OpenAPI JSON di `/docs/openapi.json`, dan viewer di `/docs`.
-
-Untuk mengecek register dan login, jalankan setelah seed. Ganti email dan password dengan milik Anda:
-
-```sh
-curl -sS http://localhost:8080/api/auth/register -H 'Content-Type: application/json' -d '{"email":"dev@example.com","password":"change-this-password"}'
-curl -sS http://localhost:8080/api/auth/login -H 'Content-Type: application/json' -d '{"email":"dev@example.com","password":"change-this-password"}'
-# Salin token dari data.token pada response login.
-curl -sS http://localhost:8080/api/auth/me -H 'Authorization: Bearer <token>'
-# Saat access token kedaluwarsa, rotasi refresh token dan simpan nilai baru dari data.refreshToken.
-curl -sS http://localhost:8080/api/auth/refresh -H 'Content-Type: application/json' -d '{"refreshToken":"<refresh-token>"}'
-```
-
-PowerShell juga dapat memakai `Invoke-RestMethod`:
+Windows PowerShell:
 
 ```powershell
-$body = @{ email = 'dev@example.com'; password = 'change-this-password' } | ConvertTo-Json
-Invoke-RestMethod http://localhost:8080/api/auth/register -Method Post -ContentType 'application/json' -Body $body
-$login = Invoke-RestMethod http://localhost:8080/api/auth/login -Method Post -ContentType 'application/json' -Body $body
-$token = $login.data.token
-Invoke-RestMethod http://localhost:8080/api/auth/me -Headers @{ Authorization = "Bearer $token" }
+Copy-Item .env.example .env
 ```
 
-Untuk mencoba endpoint admin, set `ADMIN_EMAIL` dan `ADMIN_PASSWORD` sebelum seed, login memakai nilai tersebut, lalu panggil `GET /api/users` dengan bearer token. Login mengembalikan access token 15 menit di `data.token` dan refresh token opaque 30 hari di `data.refreshToken`. Kirim refresh token ke `POST /api/auth/refresh` untuk rotasi; token lama hanya dapat dipakai sekali. Endpoint protected menerima `Authorization: Bearer <token>`.
+Create a database owned by this application and edit `.env`: set **JWT_SECRET, ADMIN_PASSWORD, and matching database credentials**. Keep connection passwords consistent with your database service. Generate strong independent secrets; never use example values for deployment. Production requires explicit allowed browser origins.
 
-## Cakupan API dan permission
+Inside an unrelated Go workspace, set `GOWORK=off` for these commands. The native initializer `go run ./cmd/initproject ../my-api` can generate a separate project with fresh settings.
 
-| Area | Endpoint utama | Akses |
-| --- | --- | --- |
-| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, `GET /api/auth/me` | Register/login/refresh publik dan dibatasi rate group `auth`; `me` memerlukan JWT |
-| User | `GET/POST /api/users`, `GET/PATCH/DELETE /api/users/{id}` | `manage_users` |
-| Role | `GET/POST /api/roles`, `GET/PATCH/DELETE /api/roles/{id}`, `POST /api/roles/{id}/permissions` | `manage_roles` |
-| Permission | `GET/POST /api/permissions`, `GET/PATCH/DELETE /api/permissions/{id}` | `manage_permissions` |
-| Upload | `POST /api/upload`, `GET /api/upload/{id}` | `manage_uploads` |
-| Notifications | `POST /api/notifications`; `GET /api/notifications`, `PATCH /api/notifications/{id}/read`, `GET /api/notifications/stream` | `manage_notifications` untuk membuat; penerima yang login untuk membaca miliknya |
-| System/docs | `/health`, `/live`, `/ready`, `/docs`, `/docs/openapi.json`, `/docs/specs/{module}.json` | Publik |
-
-Seed membuat role `admin` dan `user`, serta permission `manage_users`, `manage_roles`, `manage_permissions`, `manage_uploads`, dan `manage_notifications`; semua permission itu diberikan ke role admin. Endpoint register memberi role `user`. DTO auth/user hanya menampilkan ID, email, role, dan timestamp publik; password serta `deletedAt` internal tidak dikirim. Upload memakai izin `manage_uploads`; endpoint GET upload hanya mengembalikan metadata, bukan bytes atau presigned URL. Tentukan alur download sesuai kebutuhan aplikasi.
-
-## Arsitektur
-
-```mermaid
-flowchart LR
-  APP[Composition root<br/>cmd/api + internal/app] --> HTTP[Chi + Huma<br/>internal/httpapi]
-  APP --> USE[Use cases per feature<br/>auth, user, role, permission, upload]
-  HTTP --> USE
-  USE --> SQL[sqlc queries<br/>internal/db/queries]
-  SQL --> PG[(PostgreSQL)]
-  USE --> AUDIT[audit]
-  USE --> STORE[storage interface]
-  STORE --> LOCAL[Local files]
-  STORE --> S3[S3 compatible]
-```
-
-`internal/httpapi` owns transport DTOs, Huma operations, registry policy, and error envelopes. Feature services own use cases. `internal/db/queries` is the source for generated sqlc methods under `internal/db/sqlc`; `internal/model` contains response/domain data types. `cmd/api` and `internal/app` wire concrete dependencies. Goose migrations live in `internal/db/migrations` and are embedded by the DB package.
-
-The repository tests endpoint/OpenAPI consistency and API contract parity. They do not currently enforce every package dependency rule with a dedicated architecture checker. Keep feature packages independent of HTTP transport and put new wiring in the composition root.
-
-## Tambah modul
-
-Ikuti [panduan membuat modul](docs/module-guide.md) untuk langkah lengkap: migration, query sqlc, service, endpoint Huma, registry, permission, audit, dan verifikasi. Perubahan database dibuat oleh migration Goose; jangan mengubah model sqlc generated secara manual.
-
-## Konfigurasi penting
-
-[`.env.example`](.env.example) mencantumkan seluruh opsi. Perubahan environment berlaku setelah proses dimulai ulang atau deployment baru.
-
-| Variable | Default | Kegunaan |
-| --- | --- | --- |
-| `PORT` / `APP_PORT` | `8080` | Port manual / port host Compose; container tetap 8080 |
-| `DATABASE_URL` | local PostgreSQL | PostgreSQL milik aplikasi ini |
-| `JWT_SECRET` | placeholder | Wajib, minimal 32 karakter; initializer menghasilkan nilai acak |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | kosong | Opsional; membuat akun admin saat seed |
-| `CORS_ORIGINS` | localhost:5173, localhost:3000 | Origin browser yang diizinkan; production wajib eksplisit |
-| `RATE_LIMIT_STORE` | `memory` | `redis` untuk berbagi quota antar replica |
-| `APP_INSTANCE_COUNT` | `1` | Set jumlah replica; nilai lebih dari satu mewajibkan Redis limiter |
-| `RATE_LIMIT_<AUTH\|PUBLIC\|INTERNAL>_WINDOW_MS` | `900000` | Jendela quota tiap group |
-| `RATE_LIMIT_<AUTH\|PUBLIC\|INTERNAL>_MAX` | `20` / `100` / `300` | Maksimum request per group per jendela |
-| `CACHE_ENABLED` | `false` | Aktifkan cache Redis opsional untuk endpoint yang mendukungnya |
-| `ENDPOINT_POLICIES_JSON` | `{}` | Override audit, rate group, dan cache per endpoint ID |
-| `UPLOAD_ENABLED` | `true` | Aktif/nonaktif upload |
-| `UPLOAD_STORAGE` | `local` | `local` atau `s3`; folder lokal diatur oleh `UPLOAD_LOCAL_DIR` |
-| `REDIS_URL` | localhost | Diperlukan bila rate store atau cache memakai Redis |
-| `OTEL_ENABLED` | `false` | Kirim trace dan metrik HTTP via OTLP HTTP |
-
-Permintaan tanpa header `Origin` tetap dapat diproses untuk klien server-to-server atau CLI. Browser tetap mengikuti allowlist CORS; ini tidak mengizinkan origin browser yang tidak terdaftar. Detail policy, cache outage, rate behavior, proxy, dan storage ada di [konfigurasi operasi](docs/OPERATIONS.md).
-
-Untuk menyalakan dependency opsional lewat Compose, set `COMPOSE_PROFILES=redis`, `minio`, atau `redis,minio` di `.env`. Gunakan MinIO profile untuk development lokal; untuk production pilih layanan S3 yang aktif dipelihara.
-
-## Tanpa Docker
-
-Salin `.env.example` ke `.env`, atur `DATABASE_URL` ke database kosong dan isi secret, lalu:
+### 3. Migrate, seed, and start
 
 ```sh
 go run ./cmd/migrate
@@ -156,44 +65,130 @@ go run ./cmd/seed
 go run ./cmd/api
 ```
 
-Jalankan di PowerShell dengan perintah Go yang sama; `.env` dimuat oleh aplikasi. Migrasi dan seed tidak berjalan otomatis saat API startup. Lihat [panduan testing](docs/testing.md) untuk integration test dan regenerasi query tanpa `make`.
+Migrations run explicitly before new API replicas. Seed is a separate command; HTTP startup never changes the schema or creates accounts. Open [http://localhost:8080/docs](http://localhost:8080/docs) after the server starts.
 
-## API docs dan security
-
-Huma menghasilkan OpenAPI dari operasi HTTP yang sama dengan request runtime. `/docs/openapi.json` menyediakan spesifikasi; `/docs` memuat Redoc 2.5.4 dari jsDelivr dengan versi dan SRI integrity hash yang dipin. Bila Content Security Policy diterapkan, izinkan `https://cdn.jsdelivr.net` pada `script-src` dan origin API sendiri pada `connect-src`. Jika dokumentasi tidak boleh publik, batasi path `/docs` pada ingress/reverse proxy; aplikasi belum memiliki env flag untuk menonaktifkannya.
-
-Access JWT berlaku 15 menit dan refresh token opaque menggunakan sliding 30 hari sejak rotasi sukses terakhir. Refresh token hanya disimpan sebagai SHA-256 hash, dirotasi setiap kali dipakai, dan pemakaian ulang token yang telah dicabut membatalkan seluruh keluarga token. Setiap rotasi sukses memperpanjang expiry keluarga menjadi waktu UTC server + 30 hari tanpa batas absolut. Access token lama tanpa claim `tokenUse` ditolak setelah upgrade ini; pengguna perlu login sekali lagi. `POST /api/auth/logout` menerima refresh token aktif maupun token sebelum rotasi dan mencabut seluruh keluarga sesi, dengan respons 204. Akun dan permission tetap diperiksa terhadap database pada request terlindungi. Password dibatasi 72 byte karena bcrypt, upload memakai UUID dan memeriksa signature file, credentialed CORS nonaktif, dan forwarded headers tidak dipercaya secara default.
-
-## Testing dan operasional
-
-`go test ./...` menjalankan unit/contract tests. Tanpa `DATABASE_URL`, integration tests PostgreSQL di-skip; hasil itu tidak membuktikan alur database lulus. Tes Redis juga memerlukan Redis sesuai environment. Gunakan database disposable, bukan database production. Login dan refresh selalu memakai rate group `auth`; limiter memory membagi kuota hanya dalam satu instance. Untuk beberapa replica, atur `APP_INSTANCE_COUNT` sesuai jumlah replica, `RATE_LIMIT_STORE=redis`, `REDIS_URL`, dan Compose profile `redis`. Jika Redis limiter gagal, endpoint auth menolak request dengan 503.
-
-- [Testing, generation, dan CI](docs/testing.md)
-- [Runbook deployment, backup, dan restore](docs/OPERATIONS.md)
-- [Contract parity antar template](docs/contract-parity.md)
-
-## Lisensi dan kontribusi
-
-Repository ini belum menyertakan file lisensi. Hak penggunaan ulang belum diberikan secara eksplisit; tentukan dan tambahkan lisensi sebelum mendistribusikan template. Panduan kontribusi ada di [CONTRIBUTING.md](CONTRIBUTING.md); pelaporan kerentanan dijelaskan di [SECURITY.md](SECURITY.md).
-
-Untuk initializer Go, password database dibuat acak atau diambil dari `RIDHUAN_DB_PASSWORD`; nilainya tidak dicetak. CLI npm menyediakan prompt password tersamarkan. Port default Go adalah 8080; gunakan override host bila port telah digunakan.
-
-## Unified npm initializer
+### MySQL setup
 
 ```sh
-npx create-ridhuan-backend@latest my-api --template golang --yes
+cp .env.mysql.example .env
 ```
 
-Follow the generated `GETTING-STARTED.md` for manual migrations, explicit seed, and hybrid or Docker setup. `--port` changes the manual and Compose host port (default `8080`); the container remains on `8080`. The selected optional services are activated by `COMPOSE_PROFILES`. `REDIS_NAMESPACE` must be unique per deployment and shared by its replicas when using a common Redis server.
+On PowerShell use `Copy-Item .env.mysql.example .env`. Configure the MySQL provider and connection credentials, then use the migrate/seed/start commands above.
 
-## PostgreSQL or MySQL
+Provider selection does not convert existing data. Never apply one framework's migration history to another application's database.
 
-The unified CLI supports `--database postgresql` (default) and `--database mysql`. MySQL defaults to port 3306. Each generated project records the selected provider in `backend-template.json`; its active Compose file and `.env` match that choice. Changing the provider does not convert existing data. PostgreSQL migration history stays intact; MySQL has an independent migration baseline and UTC sessions.
+## Docker quick start
 
-For a source checkout, copy `.env.mysql.example` to `.env`, configure credentials, and run `docker compose -f compose.mysql.yaml up --build -d --wait`. Seed is a separate explicit operation using the same `-f` option. CLI-generated MySQL projects use the ordinary active Compose filename. MySQL bootstrap uses a separate root password and supports quoted/Unicode application passwords without logging them.
+For a fresh source checkout, copy `.env.example` (or `.env.mysql.example` for MySQL) to `.env` and fill in the secrets described above. If the CLI already created `.env`, keep it. Laravel needs an independent APP_KEY and JWT_SECRET; the native initializer or CLI can generate them.
 
-For an external MySQL database, set `sslmode=verify-full` in `DATABASE_URL`; optionally provide an absolute `sslrootcert` CA path. The driver validates the server hostname and certificate chain. Local Compose is a development fixture. Follow [operations](docs/OPERATIONS.md) for provider-specific backup/restore and failed migration recovery.
+### PostgreSQL
 
-## Hardening upgrade
+```sh
+docker compose up --build -d --wait
+docker compose run --rm --entrypoint seed app
+```
 
-Read [HARDENING-UPGRADE.md](docs/HARDENING-UPGRADE.md) before migrating existing data. It documents sliding refresh/logout, ordered SSE replay, async email worker/outbox, retention commands and optional OpenTelemetry. Local PostgreSQL/MySQL regression and generated-consumer checks pass; [verification evidence](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) records the exact runtime and CI boundaries.
+### MySQL source checkout
+
+```sh
+docker compose -f compose.mysql.yaml up --build -d --wait
+docker compose -f compose.mysql.yaml run --rm --entrypoint seed app
+```
+
+A CLI-generated MySQL project already uses the selected provider as its active Compose file, so follow `GETTING-STARTED.md` with ordinary `docker compose` commands. Compose waits for migration success and runs a separate worker; seed remains explicit. API containers run without root privileges. Development dependency ports bind to localhost.
+
+## API documentation
+
+At the default API port **8080**:
+
+| Path | Purpose |
+| --- | --- |
+| `/docs` | API documentation viewer |
+| `/docs/openapi.json` | Complete OpenAPI specification |
+| `/docs/specs/user.json` | Example module-specific specification |
+| `/live` | HTTP/process liveness |
+| `/ready` | Required database and distributed-quota dependencies |
+| `/health` | Lightweight compatibility health endpoint |
+
+The docs paths are explicitly implemented by this template. Login/refresh returns the access token as `data.token` and the refresh credential as `data.refreshToken`. Protected requests use `Authorization: Bearer <access-token>`.
+
+## Project structure
+
+```text
+cmd/api/                   # HTTP process entrypoint
+cmd/migrate/               # Explicit database migration command
+cmd/seed/                  # Explicit initial-data command
+cmd/worker/                # Email worker process
+internal/app/              # Dependency composition
+internal/httpapi/          # Transport, DTOs, Huma operations, and policies
+internal/db/               # Goose migrations, sqlc queries, and generated adapters
+internal/auth/, user/, ... # Feature use cases
+docs/                      # Module, testing, and operations guides
+```
+
+### Responsibility boundaries
+
+Huma operations and transport DTOs live in internal/httpapi. Feature services own use cases. SQL queries live in internal/db/queries; sqlc produces the typed database methods. cmd/api and internal/app wire concrete dependencies.
+
+## Configuration and security
+
+| Topic | What you need to know |
+| --- | --- |
+| Authentication | Access tokens last 15 minutes. Refresh tokens rotate; replay revokes their family. Keep signing settings consistent across replicas. |
+| Permissions | Authorization reads current database grants, not stale client permissions. Grant new rights deliberately. |
+| Audit | Required audit and its mutation share a transaction. Public snapshots exclude secrets. |
+| Rate limiting | A local limiter is for one instance. Multiple API replicas require a shared Redis limiter and the framework's replica-count setting. |
+| Cache | Redis cache is optional. Cache failure falls back to database reads; authorization stays authoritative. |
+| Time and CORS | Store instants in UTC and format at presentation boundaries. Configure exact browser origins for production. |
+| Environment | Keep secrets out of Git/logs. Changes require restart or redeployment. |
+
+The complete keys are in [.env.example](.env.example) and [.env.mysql.example](.env.mysql.example). See [technical reference](docs/REFERENCE.md) for endpoint policy, cache generation, provider, proxy, and audit details.
+
+## Notifications, email, and storage
+
+Notifications belong to their recipient. SSE streams persisted events using recipient-owned cursors and bounded batches; they do not keep a database transaction open while sending. Reconnect after token expiry using an authenticated stream, never a token in a URL. Large client counts require deployment-specific capacity tests.
+
+SMTP is off by default. To process enabled email in manual mode, start a separate terminal after the native build:
+
+```sh
+go run ./cmd/worker
+```
+
+The included outbox worker handles retries and lease recovery. SMTP is **at least once**: a crash after SMTP accepts an email can cause duplicate delivery.
+
+Uploads validate configured size and file signatures. Local/S3 storage and SQL cannot share one transaction; compensation and grace-period cleanup reduce orphaned objects. Cleanup is a separate command, dry-run first, never an API startup task. See the reference and upgrade guide for download semantics, retention, and cleanup commands.
+
+## Add a module
+
+Follow [the Go module guide](docs/module-guide.md). Define the use case and public contract, add the selected provider migration, register its endpoint/policy, and grant its permission explicitly.
+
+## Testing
+
+```sh
+go vet ./...
+go test ./...
+```
+
+Service-free checks and database acceptance are different. Integration checks need real PostgreSQL/MySQL and enabled external services; skipped or inconclusive tests are not passes. Use disposable test databases, not production data.
+
+## Production and upgrades
+
+Configure database TLS with hostname/CA validation, trusted ingress/proxies, exact CORS origins, secret storage, backups, and matched upload restoration. Local Docker dependency settings are development fixtures. Non-root containers, passing CI, and readiness probes do not establish production capacity, high availability, or a tested recovery procedure.
+
+**Before applying migrations to persisted data**, read [HARDENING-UPGRADE.md](docs/HARDENING-UPGRADE.md). It covers sliding refresh sessions/logout, ordered SSE replay, the async outbox worker, retention, optional OpenTelemetry, and coordinated migration considerations.
+
+## Documentation
+
+| Document | Purpose |
+| --- | --- |
+| [Technical reference](docs/REFERENCE.md) | Detailed contracts, settings, examples, and implementation reasoning |
+| [Hardening upgrade](docs/HARDENING-UPGRADE.md) | Read before changing an existing installation |
+| [docs/module-guide.md](docs/module-guide.md) | Adding a module and database queries |
+| [docs/testing.md](docs/testing.md) | Service-free, database, and generation checks |
+| [docs/contract-parity.md](docs/contract-parity.md) | Contract parity and intentional differences |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Deployment, backup, and restoration |
+| `GETTING-STARTED.md` (CLI-generated projects) | Commands matching your chosen framework, database, ports, and run mode |
+
+## License
+
+[MIT](LICENSE). Source: [RidhuanDEV/golang-backend](https://github.com/RidhuanDEV/golang-backend).

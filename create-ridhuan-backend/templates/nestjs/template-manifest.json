@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-nestjs.git",
-    "commit": "fa179269ba8b4fd37d60487913d2f98a9ae7b2ca",
+    "commit": "50093a861e6ebe6cab01a75db7157a6973858ecc",
     "dirty": false
   },
   "requirements": {
@@ -24,10 +24,11 @@
     "compose.yaml": "72ee07961b234ca40da59abe760f79eacf39baddfb2ff1409446ebc061f85db0",
     "contracts/express-endpoints.json": "8a2778c276109e779e76added0b07e3a6c8c3b6acc7c605208b19e09b2982325",
     "contracts/notification-endpoints.json": "e6ddc49035216409cca1e99d396e6d089926ac5a07b2efe3840daf57c66c470b",
-    "contracts/README.md": "210bf3688de7df384ec0604999e01c56a78979be77834cf1f60e02f24effda26",
+    "contracts/README.md": "7842d9ad04bab0e1ec74d2934e93e2a1878919b5711d4393274b313f57166f06",
     "Dockerfile": "11d10064c138f992c2451fe0a612b164bc3ea2d1a80dd635745b5df5a6b8f132",
     "docs/HARDENING-UPGRADE.md": "0ed903dfe28c8cdee0e6dd2d014c488f6490c13252e0efec7bfa17d7fac2e4b3",
     "docs/NESTJS-PRODUCTION-TEMPLATE-PLAN.md": "6a6774fde17c4dd82f129834a29749c4b96eaca20a545440fd820fb7cf237d38",
+    "docs/REFERENCE.md": "8159f5467b82f49b74d35615b3f07e176664e3d6b0d6a75f2f754f601c19e2f4",
     "gitignore.template": "fc30bbbd33bade1ce3f035c5dad8631270c06d064e28f5969b24e31c75291afa",
     "LICENSE": "ddfe898146ca7cb8acb2caf6f202b555e911cd4be97d76078f817687b8850fc4",
     "nest-cli.json": "104488252f14e27c4e80ca10cfb229f678b13c76106da929a6b4cbd9f3307473",
@@ -45,7 +46,7 @@
     "prisma/mysql/schema.prisma": "03282adad356c39b2237304b254de291d1104ed4fbe2b2c1433ae6529f4ac515",
     "prisma/schema.prisma": "3b9b077d7aef20f38fdea87b7649dc29e1f435d92c8bf0c9ff087342f33f62ce",
     "prisma.config.ts": "36d8defc3f92ae28d4970dd929c6736ad2d07e50275e8bda1652e16fc51d7dfa",
-    "README.md": "8e0e0496ff33afd1cfadaf3f16453c98ffd9f06cbc07f3206d4a3ad16b914dae",
+    "README.md": "c08938658ed68e141079bf6a24f3ae1a9cf47f91b0f0da372d80bd1353169f2c",
     "scripts/init-bucket.sh": "4dd62855a4d9d354f31bffea2d89e4a57b554705e189e440b1c72fea97c87d96",
     "scripts/minio.Dockerfile": "1f41a7baa0a917fb32ee82b8b4523cb144077a7a61469cb580cc4000a876013f",
     "scripts/mysql-entrypoint.sh": "7ddb1c2a7f0a8654a71b00d39dc7deb940886b880572577fce57460448d4f7ab",

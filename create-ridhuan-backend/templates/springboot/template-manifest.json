@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-springboot.git",
-    "commit": "ed2f0d73dfbe16ed0725ea9da6a08218ff0dec7f",
+    "commit": "28a6e9ce99d510e80f0cadd1d64ddc44a52074b0",
     "dirty": false
   },
   "requirements": {
@@ -32,6 +32,7 @@
     "docs/ARCHITECTURE.md": "19dfdb3f66711bdfb3ddb8e9ee71c10a3492bffc8c2e8d7d6ef9a3aff45de579",
     "docs/DEPLOYMENT.md": "9bed614ba40db7957beebbe5a66a4436e2c4b68de0304234033aeed82375f855",
     "docs/HARDENING-UPGRADE.md": "aa7f9aca3cca6202fc16f84d764a1c97568d24710e4fcb50cca19309f88b8de4",
+    "docs/REFERENCE.md": "2057734fc9c0e9d6b3fe481e431d721252aa7a0e5838d61640b88b2ca1aea634",
     "docs/SETUP.md": "63693144b7d5336e20ecda2bd91f9edf6e7cd53bbf966850f9baf3c9d6e9612c",
     "docs/TESTING.md": "6635ca99eb4d81bfa6a0605077745e4b03dad3a724955d4c4ad297b3d48cb513",
     "docs/UPGRADE.md": "c9adb9fed47af287fc9609d93216ed678dea4ff7f80af6a16f959259634c33b4",
@@ -41,7 +42,7 @@
     "mvnw": "cae96cef89ebea3531221f4ae17c23cf8edf67d00eae8306d4186ae1bbed4d02",
     "mvnw.cmd": "4a361e1374a3e5ad6d03e18e9adc0cf181ac5058ac6203b76f0ba3b456b56481",
     "pom.xml": "25ac8392d27d8656bac636fa051fe787591f3bf34d603456e2c103c8d51f45d2",
-    "README.md": "52812464d3bd629ec2206646ecba79034e39e5d42a4962f8d35e13df6f05c406",
+    "README.md": "4df84ebdcd38787d36d142e40900221ddbeb7bec89c1314f8364ddd952ec14a6",
     "scripts/minio.Dockerfile": "d0c154b1eb70ad4679c38a9a5683966e71e962e68fa1adc833ae2daee7601872",
     "scripts/mysql-entrypoint.sh": "7ddb1c2a7f0a8654a71b00d39dc7deb940886b880572577fce57460448d4f7ab",
     "scripts/mysql-init-user.sh": "657b96c3bb1d73184d3cdfeed99056d1ad54b0a073bef9ba932436a4b852470c",

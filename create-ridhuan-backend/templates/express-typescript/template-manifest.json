@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre.git",
-    "commit": "aa148779cf4c5e19de46d2e812c4af151c6b9cc1",
+    "commit": "d5549055eb4a2512f4415a7187f05f4007a02ce2",
     "dirty": false
   },
   "requirements": {
@@ -25,6 +25,7 @@
     "docker-compose.yml": "5fd7d77ca1f6f06ed451f49b509dd80a3a0d0ae9d72f2cce26b91138cb544472",
     "Dockerfile": "7eb2647e23c36833c884dc341cf577ca19e20bcfa4afff03a504574d89c586f3",
     "docs/HARDENING-UPGRADE.md": "98cd4696711f4b2f9e270728bbd3ca1299601dc595c875e2a2167f612fcce3a5",
+    "docs/REFERENCE.md": "9585de613b309b5a0ec5efaddf2283711e43b966dbf8d7bfa2a479c57ebd3c26",
     "eslint.config.js": "81b4308be86fd1b4df5bd906addf69f9334a9288bd1ac0a8b5b78c58b6074d80",
     "gitignore.template": "27cf55c154e1df717966921431a8bd88825dbf373842e62b81abbd5f510ac903",
     "LICENSE": "2d21540dd2845c397a2fa78c35db091877bdfdf174c4a7df59b3f6e7b79f88af",
@@ -42,7 +43,7 @@
     "prisma/mysql/schema.prisma": "f737d1c6cc939b28bf3a75dd44f9f729da68a5f010f84149027586dc0caf7e9a",
     "prisma/schema.prisma": "511dabf14cc4f87820b03f0b72ac951d23d8053e319fd5682bc0f9c2e2ac0f5f",
     "prisma.config.ts": "e789821ce96053f8e02819a1bceabf3e82cc695148bcf06368ffedda03257d57",
-    "README.md": "18523c66c5712ec2ee328ce0336b4a4eede470aa8d592eb84a94b6c27d9beb82",
+    "README.md": "dc9e9b004717afb21a9701171c0c4564ed2ba81146e7afd0eb8c22cdb4649205",
     "scripts/init-bucket.sh": "4dd62855a4d9d354f31bffea2d89e4a57b554705e189e440b1c72fea97c87d96",
     "scripts/minio.Dockerfile": "1f41a7baa0a917fb32ee82b8b4523cb144077a7a61469cb580cc4000a876013f",
     "scripts/mysql-entrypoint.sh": "7ddb1c2a7f0a8654a71b00d39dc7deb940886b880572577fce57460448d4f7ab",
