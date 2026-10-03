@@ -5,7 +5,7 @@ Java 25 LTS, Spring Boot 4.1.1 and Spring MVC. PostgreSQL (default) or MySQL 8.4
 Use a Java 25 JDK. No global Maven required. Windows uses `mvnw.cmd`; Linux/macOS `./mvnw`.
 ```powershell
 .\mvnw.cmd -B -DskipTests dependency:go-offline
-.\mvnw.cmd -B -Dmaven.test.skip=true package
+.\mvnw.cmd -B "-Dmaven.test.skip=true" package
 java -jar target/app.jar --app.mode=initialize
 java -jar target/app.jar --app.mode=migrate
 java -jar target/app.jar --app.mode=seed
@@ -16,7 +16,8 @@ java -jar target/app.jar --app.mode=email-worker
 Initialize refuses existing .env and performs no DB operations. For MySQL add `--db.provider=mysql`. Process/CLI env overrides local dotenv; quoted values use dotenv-java. Inspect the ignored .env and create the selected database before migrate. HTTP/worker never migrate or seed automatically. Repeat seed preserves an existing admin password.
 
 ```sh
-docker compose up --build -d --wait
+docker compose build app
+docker compose up -d --wait
 docker compose --profile seed run --rm seeder
 ```
 Use `-f compose.mysql.yaml` and the MySQL env sample for MySQL. Migration failure prevents HTTP/worker startup. Optional profiles: redis, s3, telemetry. Never use sample credentials in production.

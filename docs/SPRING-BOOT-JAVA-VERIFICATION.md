@@ -1,18 +1,18 @@
 # Spring Boot and shared CLI verification
 
-Updated 2026-10-03. Implementation, full builds and final local gates PASS. Source repositories are pushed to main with observed passing CI. The root main push and complete hosted matrix remain pending; no npm version bump or publication was performed.
+Updated 2026-10-03. Implementation, full builds and the original complete local gates PASS. Source repositories and the initial root integration are pushed to main. The complete hosted matrix exposed portability and fixture defects; their affected reruns are in progress. No npm version bump or publication was performed.
 
 ## Source and provenance
 
 | Repository | Verified remote main | Observed CI |
 | --- | --- | --- |
-| [Spring Boot](https://github.com/RidhuanDEV/modular-springboot) | `15c991e096c73161dcebba418d2034de205208d7` | [37107233465](https://github.com/RidhuanDEV/modular-springboot/actions/runs/37107233465), Windows/Linux2/2 PASS |
+| [Spring Boot](https://github.com/RidhuanDEV/modular-springboot) | `ed2f0d73dfbe16ed0725ea9da6a08218ff0dec7f` | [37113991879](https://github.com/RidhuanDEV/modular-springboot/actions/runs/37113991879), Windows/Linux2/2 PASS |
 | [Express](https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre) | `aa148779cf4c5e19de46d2e812c4af151c6b9cc1` | [37106757439](https://github.com/RidhuanDEV/modular-express-typescript-starter-postgre/actions/runs/37106757439), PostgreSQL/MySQL2/2 PASS |
 | [Laravel](https://github.com/RidhuanDEV/modular-laravel) | `f5a1ada9d7c0c48eeb133e8cf0653b069457a101` | [37101349709](https://github.com/RidhuanDEV/modular-laravel/actions/runs/37101349709),3/3 PASS; separate [Laravel receipt](LARAVEL-PHP-VERIFICATION.md) |
 
 Root baseline is `b913b0ee4ecb6b57e5c2c17fcfd9bf0d3bb14ce5`. Other source heads are preserved: NestJS `fa179269ba8b4fd37d60487913d2f98a9ae7b2ca`, Go `dadd6dc8972b9c07ce9ebbc5f8571f8668276441`, .NET `afef88a6fe5c75fb0f9307f8cabca682787b50fe`, FastAPI `2de7aad9ca64ac3eedfb719687278a5889d69f6a`.
 
-Clean manifests identify these actual source commits with `dirty:false`; payload counts are Spring146, Laravel182, Express129, NestJS115, Go166, .NET140 and FastAPI103. The immutable source-CI artifact is `spring-source-ci-artifact-794a31d3d5a54f158524249366733989/create-ridhuan-backend-1.4.0.tgz` under OS TEMP, SHA1 `5d44bea722610e5b3100b1ddc1848039675c0764`,1012 archive entries. Runtime code is identical to the locally verified EOF artifact; subsequent source changes are CI quoting and verification documentation.
+Clean manifests identify these actual source commits with `dirty:false`; payload counts are Spring146, Laravel182, Express129, NestJS115, Go166, .NET140 and FastAPI103. The latest immutable clean artifact is `spring-final-clean-artifact-88da02cfc7ff4a92a930d87d4b5e2cbc/create-ridhuan-backend-1.4.0.tgz` under OS TEMP, SHA256 `86a73d188b578676db8920b35de868d18ab03057fce2e2331a3883cd0c1ac282`,1012 archive entries. Production Java code is identical to the locally verified EOF artifact; subsequent source changes are CI quoting, cold wrapper tooling, the native temp-path fixture, Compose image ownership and documentation.
 
 ## Completed gates
 
@@ -41,6 +41,16 @@ Every Docker fixture uses its own project/name/label and finally cleanup with ab
 
 ## Remaining release verification
 
-Root clean artifact checks PASS (four collecting gates `springboot-final-stage-RPMBNy`); final main commit/push and the complete hosted matrix (28 Windows/Linux consumers,14 Compose jobs, macOS smoke) are not yet complete. Record the actual root remote HEAD and all CI conclusions before checking plan S12 and Laravel L9. Publishing remains a separate instruction.
+Root main integration `569c4b60f5f03f3d1290e1de55a4a7da8d0270d7` and workflow correction `26a5f1fb67380761c234eaf66e71f0a717cca6e0` are pushed. [Initial full hosted matrix](https://github.com/RidhuanDEV/backend-modular/actions/runs/37108297533) collected 39 PASS, five FAIL and one intentionally skipped publish job. All 28 Windows/Linux consumers and all ten existing-framework Compose jobs passed. The five failures were macOS, both Spring Compose providers and both Laravel Compose providers. Its artifact SHA256 is `352ba8378d1c4d95aadd11207f015e57bfaef6dbab0113db1b44c212ba858349`; diagnostics remain under OS TEMP `spring-root-ci-37108297533`.
+
+[Affected macOS collecting stage](https://github.com/RidhuanDEV/backend-modular/actions/runs/37109202701) ran all six consumers: Laravel and FastAPI passed for both providers, while Spring exposed a fixture temp-path symlink on macOS. Spring source `d7ee6ee56440f4f5a3f2e692645b4076efe2dc35` resolves the test fixture with `toRealPath()` and includes curl in the official Maven Wrapper builder. Its [Windows/Linux source CI](https://github.com/RidhuanDEV/modular-springboot/actions/runs/37111910838) passed both jobs, and the complete native seven-gate/17-test collecting phase `springboot-verification-68f0604d5a2240e59f626f236b49bc7b` passed. The macOS runner no longer attempts Docker cleanup for a stage that allocates no Docker resources.
+
+Hosted Spring MySQL failed during the cold wrapper download (HTTP403), before runtime scenarios. Hosted PostgreSQL collected 12/18 PASS; SMTP fixture host resolution, controlled TCP backpressure and replica diagnostics were corrected as groups. A subsequent local prerequisite phase `springboot-final-stage-1ye3Aq` failed before scenarios because four Compose services exported the same image tag concurrently; only app now builds the common image. Full build phase `spring-macos-full-build-NQ9gOA` passed five tasks with test execution disabled, including an empty-wrapper-cache Docker build. Corrected phase `springboot-final-stage-68la8e` passed all six affected scenarios per provider,12 total, with owned cleanup verified. The final complete hosted matrix remains required.
+
+Hosted Laravel collected 13/14 PASS per provider: only the cold MinIO build exceeded the S3 scenario timeout. The corrected harness builds all declared images in a separate prerequisite gate. Complete local reruns passed 15/15 per provider (`laravel-compose-logs-3QO8XI`, `laravel-compose-logs-IDt3qB`) with cleanup verified; source `f5a1ada9d7c0c48eeb133e8cf0653b069457a101` is unchanged. All original FAILED phases remain recorded.
+
+Latest clean artifact checks passed all four collecting gates `springboot-final-stage-FIFOPN`, including all14 generated combinations and981 file checksums. Source-first commits and clean snapshot generation are complete. Affected hosted scopes, the corrected main push and the complete hosted matrix (28 Windows/Linux consumers,14 Compose jobs, six macOS consumers) remain pending. Record the actual root remote HEAD and all CI conclusions before checking plan S12 and Laravel L9. Publishing remains a separate instruction.
+
+Automatic approval review rejected recursive deletion of a local Python bytecode cache. The cache is ignored by Git and excluded from npm; it remains local. No Docker cleanup was blocked, and no rejected deletion was bypassed.
 
 These gates do not establish production ingress/TLS/HTTP2 behavior, load capacity, HA/failover, real external email delivery or backup restoration. SMTP delivery remains at least once; SQL/object-store compensation is not a distributed transaction.

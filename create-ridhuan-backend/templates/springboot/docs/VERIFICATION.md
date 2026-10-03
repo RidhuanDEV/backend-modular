@@ -35,9 +35,17 @@ The Servlet lifecycle candidate was withdrawn: polling isAsyncStarted cannot det
 
 The older MySQL Compose invocation was explicitly interrupted because its immutable artifact predates S3 namespaces; it is not PASS. Its six containers, two volumes, one network and one image were removed and absence verified. Every other fixture cleanup result remains recorded in its diagnostic report.
 
+## Hosted portability corrections
+
+The first shared matrix recorded39 passing jobs and five failures. MacOS native consumers exposed the fixture's `/var/folders` symlink ancestor: both providers reported12/13 unit tests passing and one `CoreTest.localStorageOwnsPaths` error. The storage guard correctly rejects symlink ancestors. The fixture now supplies `temp.toRealPath()`; production Java behavior is unchanged. The focused seven Core tests pass (`springboot-verification-d323dcacd4594d359c58c7100482c1ca`), followed by all seven native gates/17 tests (`springboot-verification-68f0604d5a2240e59f626f236b49bc7b`).
+
+The MySQL hosted Docker build received HTTP403 while the official Maven Wrapper used its Java downloader for the distribution archive. The build stage now includes maintained curl alongside unzip. A full production-image build with an empty, unique `MAVEN_USER_HOME` proves the official curl download and pinned distribution checksum; Java/CLI/full-image builds pass with tests disabled (`spring-macos-full-build-5YHRpm`). Its image was removed and owned-resource absence verified. The Windows quick-start Maven property is quoted to preserve the PowerShell argument. Shared SMTP host-gateway/slow-client/replica and cold MinIO fixture diagnostics remain tracked by the root report; their hosted correction results must be observed.
+
 ## Outstanding release gates
 
+A subsequent collecting prerequisite phase (`springboot-final-stage-1ye3Aq`) exposed concurrent Compose exporters app/migrate/worker/seeder targeting the same shared image tag. Both providers failed before API scenarios; cleanup passed. Only app now declares the build, while the three native process modes reuse its image. Getting-started commands explicitly build app before startup. Full build phase `spring-macos-full-build-NQ9gOA` passed five tasks with tests disabled. The corrected collecting phase `springboot-final-stage-68la8e` passed six affected scenarios per provider (12 total), including slow-client timeout/recovery, outbox fencing, two-worker retry/renewal, graceful shutdown, shared replica quota and SMTP TLS/hostname verification. All owned resources were removed and absence verified. Production Java code is unchanged; the final hosted matrix remains required.
+
 - Complete clean final snapshot/package checks and full GitHub consumer/Compose/macOS matrix.
-- Commit/push Spring and affected Express sources before root submodule/snapshot updates; verify exact remote main heads and every triggered CI result.
+- Verify corrected Spring source CI, update the root source pointer/snapshot, and observe the complete corrected shared matrix. Spring and affected Express source commits precede root pointer updates; no force push is used.
 
 Baseline source heads: Express55198bb, NestJSfa179269, Godadd6dc, .NETafef88a6, FastAPI2de7aad9; rootb913b0e. Diagnostics stay outside template/npm payload. Local gates and CI do not establish production capacity, ingress behavior, external delivery, failover or backup restore.

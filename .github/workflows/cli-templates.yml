@@ -34,7 +34,7 @@ on:
       verification:
         description: Verification stage to run before full release validation
         type: choice
-        options: [full, macos-smoke]
+        options: [full, macos-smoke, spring-compose]
         default: full
       publish:
         description: Publish the tested artifact (requires npm trusted publisher)
@@ -43,7 +43,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: cli-${{ github.ref }}
+  group: cli-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.verification || 'full' }}
   cancel-in-progress: true
 defaults:
   run:
@@ -73,7 +73,7 @@ jobs:
           path: create-ridhuan-backend/*.tgz
           if-no-files-found: error
   consumer:
-    if: github.event_name != 'workflow_dispatch' || inputs.verification != 'macos-smoke'
+    if: github.event_name != 'workflow_dispatch' || inputs.verification == 'full'
     needs: package
     strategy:
       fail-fast: false
@@ -149,6 +149,7 @@ jobs:
             ${{ runner.temp }}/laravel-manual-logs-*/**
             ${{ runner.temp }}/laravel-integration-logs-*/**
   macos-smoke:
+    if: github.event_name != 'workflow_dispatch' || inputs.verification != 'spring-compose'
     needs: package
     runs-on: macos-latest
     steps:
@@ -207,7 +208,7 @@ jobs:
       # Each matrix job has its own runner; cap concurrency without sharing RAM.
       max-parallel: 3
       matrix:
-        template: [express-typescript, nestjs, golang, dotnet, fastapi, springboot, laravel]
+        template: ${{ fromJSON(inputs.verification == 'spring-compose' && '["springboot"]' || '["express-typescript","nestjs","golang","dotnet","fastapi","springboot","laravel"]') }}
         database: [postgresql, mysql]
     steps:
       - uses: actions/checkout@v4
@@ -216,14 +217,30 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24.15.0
+      - uses: actions/setup-python@v5
+        if: matrix.template == 'springboot'
+        with:
+          python-version: '3.13.3'
+      - uses: actions/setup-java@v4
+        if: matrix.template == 'springboot'
+        with:
+          distribution: temurin
+          java-version: '25'
       - uses: actions/download-artifact@v4
         with:
           name: cli-package
           path: create-ridhuan-backend/artifact
       - run: npm ci
       - run: npm run build
-      - run: CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)" node scripts/verify-compose.mjs '${{ matrix.template }}' '${{ matrix.database }}'
+      - name: Collect Compose acceptance
+        run: |
+          export CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)"
+          if [ "$TEST_GATE_SCOPE" = spring-compose ]; then
+            export SPRING_SCENARIOS=sse-slow-client-write-timeout-and-slot-recovery,outbox-snapshot-delivery-fencing,two-workers-renewal-snapshot-and-accepted-retry,worker-real-lease-renewal-and-compose-graceful-shutdown,shared-redis-quota-across-two-replicas,smtp-starttls-implicit-tls-hostname-verification
+          fi
+          node scripts/verify-compose.mjs '${{ matrix.template }}' '${{ matrix.database }}'
         env:
+          TEST_GATE_SCOPE: ${{ inputs.verification }}
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
           TMPDIR: ${{ runner.temp }}

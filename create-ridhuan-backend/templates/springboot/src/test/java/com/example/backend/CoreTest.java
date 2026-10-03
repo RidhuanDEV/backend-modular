@@ -109,7 +109,7 @@ class CoreTest {
 
   @Test
   void localStorageOwnsPaths() throws Exception {
-    var storage = new LocalStorage(settings(Map.of("UPLOAD_DIR", temp.toString())));
+    var storage = new LocalStorage(settings(Map.of("UPLOAD_DIR", temp.toRealPath().toString())));
     String key = UUID.randomUUID().toString();
     storage.put(key, new ByteArrayInputStream("data".getBytes()), 4, "text/plain");
     try (var input = storage.open(key)) {

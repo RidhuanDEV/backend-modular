@@ -7,7 +7,8 @@ export function nextSteps(
   const descriptor = templateRegistry[answers.templateId];
   const steps = [`cd "${answers.projectName}"`];
   if (answers.mode === "docker") {
-    steps.push("docker compose up --build -d --wait");
+    if (answers.templateId === "springboot") steps.push("docker compose build app", "docker compose up -d --wait");
+    else steps.push("docker compose up --build -d --wait");
     steps.push(
       (answers.templateId === "springboot" || answers.templateId === "laravel")
         ? "docker compose --profile seed run --rm seeder"
@@ -24,13 +25,13 @@ export function nextSteps(
   } else {
     if (noInstall)
       steps.push(
-        `${descriptor.install.command === "mvnw" ? process.platform === "win32" ? ".\\mvnw.cmd" : "./mvnw" : descriptor.install.command} ${descriptor.install.args.join(" ")}${answers.templateId === "fastapi" ? ` --extra ${answers.databaseProvider}` : ""}`,
+        `${descriptor.install.command === "mvnw" ? process.platform === "win32" ? ".\\mvnw.cmd" : "./mvnw" : descriptor.install.command} ${descriptor.install.args.map(argument => answers.templateId === "springboot" && argument.startsWith("-D") ? '"' + argument + '"' : argument).join(" ")}${answers.templateId === "fastapi" ? ` --extra ${answers.databaseProvider}` : ""}`,
       );
     steps.push(
       `# Provide ${answers.databaseProvider} ${answers.dbHost}:${answers.dbPort} and create database ${answers.dbName} first.`,
     );
     if (answers.templateId === "springboot") {
-      steps.push(`${process.platform === "win32" ? ".\\mvnw.cmd" : "./mvnw"} -B -Dmaven.test.skip=true package`, "java -jar target/app.jar --app.mode=migrate", "java -jar target/app.jar --app.mode=seed", "java -jar target/app.jar --app.mode=http");
+      steps.push(`${process.platform === "win32" ? ".\\mvnw.cmd" : "./mvnw"} -B "-Dmaven.test.skip=true" package`, "java -jar target/app.jar --app.mode=migrate", "java -jar target/app.jar --app.mode=seed", "java -jar target/app.jar --app.mode=http");
     } else if (answers.templateId === "laravel") {
       steps.push("php artisan backend:migrate --force", "php artisan backend:seed", "php artisan serve --host=127.0.0.1 --port=" + answers.appPort);
     } else if (answers.templateId === "dotnet") {

@@ -3,7 +3,7 @@ import { mkdtemp, readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { randomUUID, createHash, createHmac } from "node:crypto";
-import { createServer, createConnection } from "node:net";
+import { createServer } from "node:net";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { command } from "../dist/process.js";
@@ -28,6 +28,11 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
   "smtp-starttls-implicit-tls-hostname-verification","database-outage-live-ready-and-stream-eof"
  ];
  assert(!selected||(selected.length>0&&new Set(selected).size===selected.length&&selected.every(id=>scenarioInventory.includes(id))),"Unknown, duplicate or unavailable runtime scenario");
+ if(!selected||selected.includes("sse-slow-client-write-timeout-and-slot-recovery")){
+  const python=command("python",["--version"],resolve(import.meta.dirname,".."));
+  assert.equal(python.status,0,"Python3.13.3 is required by the controlled slow TCP fixture");
+  assert.match((python.stdout??"")+(python.stderr??""),/Python 3\.13\.3(?:\s|$)/);
+ }
  const cli=resolve(import.meta.dirname,".."),fixture=await mkdtemp(join(tmpdir(),"spring-runtime-"+provider+"-"));
  const project=join(fixture,"runtime-java"),owner="spring-"+randomUUID().replaceAll("-",""),results=[],children=[];
  const apiPort=await port(),dbPort=await port(),redisPort=await port(),s3Port=await port(),smtpPort=await port(),smtpControl=await port(),otelPort=await port(),dbService=provider==="mysql"?"mysql":"postgres";
@@ -38,7 +43,9 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
  await writeFile(join(logs,"plan.json"),JSON.stringify({provider,mode,scenarioInventory,selected:selected??scenarioInventory,assertions:"Defined complete scenario tasks below",cleanup:"owned fixture resources finally; verify absence"},null,2));
  function run(name,args,cwd=project,allowed=false){const r=command(name,args,cwd,false,env);if(!allowed)assert.equal(r.status,0,(r.error?.message??"")+(r.stdout??"")+(r.stderr??""));return r;}
  const compose=(...args)=>run("docker",["compose","--project-name",owner,"-f","compose.yaml","-f","fixture.yaml","-f","optional.yaml",...args]);
- async function scenario(id,task){if(selected&&!selected.includes(id))return;try{await task();results.push({id,status:"PASS"});console.log("PASS "+id);}catch(error){results.push({id,status:"FAIL",error:error instanceof Error?error.message:String(error),stack:error instanceof Error?error.stack:undefined});console.error("FAIL "+id+": "+results.at(-1).error);}}
+ async function scenario(id,task){if(selected&&!selected.includes(id))return;try{await task();results.push({id,status:"PASS"});console.log("PASS "+id);}catch(error){results.push({id,status:"FAIL",error:error instanceof Error?error.message:String(error),stack:error instanceof Error?error.stack:undefined,cause:error instanceof Error&&error.cause instanceof Error?{message:error.cause.message,code:typeof error.cause.code==="string"?error.cause.code:undefined,stack:error.cause.stack}:undefined});console.error("FAIL "+id+": "+results.at(-1).error);if(results.at(-1).cause)console.error(JSON.stringify(results.at(-1).cause));
+   if(mode==="compose"){const state=run("docker",["compose","--project-name",owner,"-f","compose.yaml","-f","fixture.yaml","-f","optional.yaml","ps","-a","--format","json"],project,true);await writeFile(join(logs,id+"-compose-state.json"),state.stdout??"");const captured=run("docker",["compose","--project-name",owner,"-f","compose.yaml","-f","fixture.yaml","-f","optional.yaml","logs","--no-color","--tail","100","app","worker"],project,true);await writeFile(join(logs,id+"-compose.log"),(captured.stdout??"")+(captured.stderr??""));}
+  }}
  async function request(path,{body,method="GET",token,status=200,headers={}}={}){
   const response=await fetch("http://127.0.0.1:"+apiPort+path,{method,headers:{...(body?{"content-type":"application/json"}:{}),...(token?{authorization:"Bearer "+token}:{}),...headers},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(20000)});
   const text=await response.text();assert.equal(response.status,status,method+" "+path+": "+text);return status===204?null:JSON.parse(text);
@@ -82,7 +89,7 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
   for(const [key,value]of Object.entries(replacement))generatedEnv=generatedEnv.replace(new RegExp("^"+key+"=.*$","m"),key+"='"+value.replaceAll("'","\\'")+"'");
   await writeFile(join(project,".env"),generatedEnv);
   Object.assign(env,{PORT:String(apiPort),DB_PROVIDER:provider,DB_HOST:"127.0.0.1",DB_PORT:String(dbPort),DB_NAME:"runtime_java",DB_USER:provider==="mysql"?"backend":"postgres", POSTGRES_DB:"runtime_java", POSTGRES_USER:"postgres", MYSQL_DATABASE:"runtime_java", MYSQL_USER:"backend",ADMIN_PASSWORD:"fixture-admin-password",JWT_SECRET:jwt,RATE_AUTH_MAX:"10000",RATE_PUBLIC_MAX:"10000",RATE_INTERNAL_MAX:"10000",SMTP_ENABLED:"true",SMTP_HOST:"127.0.0.1",SMTP_PORT:String(smtpPort),SMTP_AUTH:"false",SMTP_STARTTLS:"false",SMTP_SSL:"false"});
-  await writeFile(join(project,"fixture.yaml"),"services:\n  app:\n    image: "+image+"\n    environment:\n      RATE_AUTH_MAX: '10000'\n      RATE_PUBLIC_MAX: '10000'\n      RATE_INTERNAL_MAX: '10000'\n      SMTP_HOST: host.docker.internal\n  "+dbService+":\n"+(provider==="mysql"?"    environment:\n      MYSQL_ROOT_HOST: '%'\n":"")+"    ports: !override ['127.0.0.1:"+dbPort+":"+(provider==="mysql"?3306:5432)+"']\n  redis:\n    ports: !override ['127.0.0.1:"+redisPort+":6379']\n  minio:\n    ports: !override ['127.0.0.1:"+s3Port+":9000']\n");
+  await writeFile(join(project,"fixture.yaml"),"services:\n  app:\n    image: "+image+"\n    extra_hosts: ['host.docker.internal:host-gateway']\n    environment:\n      RATE_AUTH_MAX: '10000'\n      RATE_PUBLIC_MAX: '10000'\n      RATE_INTERNAL_MAX: '10000'\n      SMTP_HOST: host.docker.internal\n  worker:\n    extra_hosts: ['host.docker.internal:host-gateway']\n  "+dbService+":\n"+(provider==="mysql"?"    environment:\n      MYSQL_ROOT_HOST: '%'\n":"")+"    ports: !override ['127.0.0.1:"+dbPort+":"+(provider==="mysql"?3306:5432)+"']\n  redis:\n    ports: !override ['127.0.0.1:"+redisPort+":6379']\n  minio:\n    ports: !override ['127.0.0.1:"+s3Port+":9000']\n");
   await writeFile(join(project,"optional.yaml"),JSON.stringify({services:{}}));
   await writeFile(join(fixture,"ownership.json"),JSON.stringify({owner,project,mode,provider}));console.log("SPRING_FIXTURE="+fixture);console.log("SPRING_OWNER="+owner);
   started=true;compose("up","-d","--wait",dbService,"redis");
@@ -90,8 +97,9 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
   // HTTP, migrations and workers continue to use the generated application account.
   sql=provider==="mysql"?await mysql.createConnection({host:"127.0.0.1",port:dbPort,user:"root",password:env.MYSQL_ROOT_PASSWORD,database:"runtime_java",dateStrings:true}):new pg.Client({host:"127.0.0.1",port:dbPort,user:"postgres",password,database:"runtime_java"});sql.on("error",error=>results.push({id:"fixture-database-connection",status:"FAIL",error:error.code??"Database connection lost"}));if(provider!=="mysql")await sql.connect();
   smtp=await createSmtpFixture({port:smtpPort,httpPort:smtpControl});
-  if(mode==="compose"){compose("build","app");compose("up","-d","--wait","app","worker");compose("--profile","seed","run","--rm","seeder");}
+  if(mode==="compose"){compose("--profile","*","build");compose("up","-d","--no-build","--wait","app","worker");compose("--profile","seed","run","--rm","seeder");}
   else{
+   if(!selected||selected.includes("s3-upload-download-and-compensation"))compose("--profile","s3","build","minio","minio-init");
    run("mvnw",["-B","-Dmaven.test.skip=true","package"]);
    await java("generate-module",["--module.name=Invoice"]);
    run("mvnw",["-B","-Dmaven.test.skip=true","spotless:apply","package"]);
@@ -206,23 +214,20 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
   await scenario("sse-slow-client-write-timeout-and-slot-recovery",async()=>{
    const email="slow-"+randomUUID()+"@example.com",recipient=(await request("/api/auth/register",{method:"POST",body:{email,password:"fixture-password"},status:201})).data;
    const access=(await request("/api/auth/login",{method:"POST",body:{email,password:"fixture-password"}})).data.token;
-   // Eight MiB exceeds the paused TCP receive window; server queries remain bounded to 50 rows.
+   // The client fixes SO_RCVBUF before connecting; Linux receive autotuning cannot absorb the backlog.
    for(let batch=0;batch<20;batch++){
     const values=Array.from({length:100},(_,i)=>"('"+randomUUID()+"','"+recipient.id+"',"+(batch*100+i+1)+",'slow','"+"x".repeat(4000)+"','NOT_REQUESTED',CURRENT_TIMESTAMP)");
     await query("INSERT INTO notifications(id,recipient_id,sequence,title,body,email_status,created_at) VALUES "+values.join(","));
    }
    await query("INSERT INTO notification_counters(recipient_id,sequence) VALUES('"+recipient.id+"',2000)");
-   const socket=createConnection({host:"127.0.0.1",port:apiPort});let received="",failure;
-   socket.on("error",error=>{failure=error;});socket.pause();
    try{
-    await new Promise((resolve,reject)=>{socket.once("connect",resolve);socket.once("error",reject);});
-    socket.write("GET /api/notifications/stream HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer "+access+"\r\nConnection: close\r\n\r\n");
-    await wait(16000);
-    await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error("Slow client was not disconnected within the write budget")),12000);socket.on("data",data=>{if(received.length<512)received+=data.toString().slice(0,512-received.length);});socket.once("close",()=>{clearTimeout(timer);resolve();});if(socket.destroyed){clearTimeout(timer);resolve();}else socket.resume();});
-    assert(received.startsWith("HTTP/1.1 200"),"Slow-client stream did not open: "+(failure?.code??received));
+    const client=command("python",[join(cli,"scripts/fixtures/spring-slow-client.py"),String(apiPort)],project,false,{...env,SPRING_SLOW_CLIENT_TOKEN:access});
+    await writeFile(join(logs,"slow-client-window.log"),(client.stdout??"")+(client.stderr??""));
+    assert.equal(client.status,0,(client.error?.message??"")+(client.stdout??"")+(client.stderr??""));
+    const observation=JSON.parse(client.stdout);assert(observation.opened&&observation.closed);assert(observation.actualReceiveBuffer<=16384);
     await request("/api/auth/me",{token});
     const recovered=await fetch("http://127.0.0.1:"+apiPort+"/api/notifications/stream",{headers:{authorization:"Bearer "+token},signal:AbortSignal.timeout(5000)});assert.equal(recovered.status,200);await recovered.body.cancel();
-   }finally{socket.destroy();await query("DELETE FROM notifications WHERE recipient_id='"+recipient.id+"'");await query("UPDATE app_users SET deleted_at=CURRENT_TIMESTAMP WHERE id='"+recipient.id+"'");}
+   }finally{await query("DELETE FROM notifications WHERE recipient_id='"+recipient.id+"'");await query("UPDATE app_users SET deleted_at=CURRENT_TIMESTAMP WHERE id='"+recipient.id+"'");}
   });
   await scenario("local-upload-stream-content",async()=>{
    const content="%PDF-1.4\nfixture content",form=new FormData();form.append("file",new Blob([content],{type:"application/pdf"}),"../../fixture\r\n.pdf");
@@ -325,13 +330,19 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
     compose("exec","-T","redis","redis-cli","FLUSHDB");
     const attempts=await Promise.all(Array.from({length:12},(_,n)=>fetch("http://127.0.0.1:"+(n%2?secondPort:apiPort)+"/api/auth/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email:"unknown@example.com",password:"fixture-password"}),signal:AbortSignal.timeout(15000)})));
     assert(attempts.every(r=>[401,429].includes(r.status)));assert.equal(attempts.filter(r=>r.status===401).length,5);
+   }catch(error){
+    if(mode==="compose"){
+     const state=run("docker",["compose","--project-name",owner,"-f","compose.yaml","-f","fixture.yaml","-f","optional.yaml","ps","-a","--format","json"],project,true);await writeFile(join(logs,"quota-replica-before-cleanup-state.json"),state.stdout??"");
+     const captured=run("docker",["compose","--project-name",owner,"-f","compose.yaml","-f","fixture.yaml","-f","optional.yaml","logs","--no-color","--tail","100","replica"],project,true);await writeFile(join(logs,"quota-replica-before-cleanup.log"),(captured.stdout??"")+(captured.stderr??""));
+    }
+    throw error;
    }finally {
     if(mode==="compose"){compose("stop","replica");compose("rm","-f","replica");const data=JSON.parse(await readFile(join(project,"optional.yaml"),"utf8"));delete data.services.replica;await writeFile(join(project,"optional.yaml"),JSON.stringify(data));}else await stop(second);
     await reconfigure({RATE_AUTH_MAX:"10000",RATE_AUTH_WINDOW_SECONDS:"60",REDIS_NAMESPACE:owner});
    }
   });
   await scenario("s3-upload-download-and-compensation",async()=>{
-   compose("--profile","s3","up","--build","-d","--wait","minio-init");
+   compose("--profile","s3","up","--no-build","-d","--wait","minio-init");
    await reconfigure({UPLOAD_STORAGE:"s3",S3_PREFIX:owner,S3_ENDPOINT:mode==="compose"?"http://minio:9000":"http://127.0.0.1:"+s3Port});
    const form=new FormData(),content="%PDF-1.4\ns3 owned fixture";form.append("file",new Blob([content],{type:"application/pdf"}),"s3.pdf");
    const response=await fetch("http://127.0.0.1:"+apiPort+"/api/upload",{method:"POST",headers:{authorization:"Bearer "+token},body:form,signal:AbortSignal.timeout(30000)});assert.equal(response.status,201);const id=(await response.json()).data.id;

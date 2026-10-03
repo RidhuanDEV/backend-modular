@@ -51,8 +51,8 @@ async function listen(server) { await new Promise((resolve, reject) => { server.
 async function port() { const server = createServer(); const p = await listen(server); await new Promise((resolve) => server.close(resolve)); return p; }
 const smtpPort = await listen(smtp), collectorPort = await listen(collector);
 const httpPort = await port(), dbPort = await port(), redisPort = await port(), s3Port = await port();
-const inventory = ['startup-migration-seed', 'health-docs-private-root', 'auth-rbac-wire', 'local-upload-download', 'sse-backlog-cursor-expiry-admission-cancel', 'smtp-parent-renewal-two-children', 'smtp-failure-recovery', 'smtp-tls-verification', 'redis-shared-quota-cache-outage', 's3-storage-compensation', 'cleanup-dry-apply', 'telemetry-active-outage', 'database-outage-live-ready', 'owned-cleanup'];
-await writeFile(join(logs, 'inventory.json'), JSON.stringify({ provider, fixture, database, cases: inventory, apiTimeoutMs: 15000, startupTimeoutMs: 900000, scenarioTimeoutMs: 180000, cleanup: 'finally down --volumes --remove-orphans and owned image tags; check labels' }, null, 2));
+const inventory = ['full-image-build', 'startup-migration-seed', 'health-docs-private-root', 'auth-rbac-wire', 'local-upload-download', 'sse-backlog-cursor-expiry-admission-cancel', 'smtp-parent-renewal-two-children', 'smtp-failure-recovery', 'smtp-tls-verification', 'redis-shared-quota-cache-outage', 's3-storage-compensation', 'cleanup-dry-apply', 'telemetry-active-outage', 'database-outage-live-ready', 'owned-cleanup'];
+await writeFile(join(logs, 'inventory.json'), JSON.stringify({ provider, fixture, database, cases: inventory, apiTimeoutMs: 15000, buildTimeoutMs: 900000, startupTimeoutMs: 900000, scenarioTimeoutMs: 180000, cleanup: 'finally down --volumes --remove-orphans and owned image tags; check labels' }, null, 2));
 await writeFile(join(logs, 'ownership.json'), JSON.stringify({ project: fixture, workingDirectory: project, fixture, provider }, null, 2));
 let sequence = 0, interrupted = false;
 const cancellation = new AbortController();
@@ -60,7 +60,7 @@ let activeScenario;
 let checkpoint;
 const selected = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1]?.split(',') : null;
 if (selected && (!selected.length || selected.some((id) => !inventory.includes(id)))) throw new Error('Unknown Compose scenario');
-const prerequisites = new Set(['startup-migration-seed', 'health-docs-private-root', 'auth-rbac-wire']);
+const prerequisites = new Set(['full-image-build', 'startup-migration-seed', 'health-docs-private-root', 'auth-rbac-wire']);
 async function mark(id) { checkpoint = id; await writeFile(join(logs, 'checkpoint.json'), JSON.stringify({ id, at: new Date().toISOString() })); }
 async function run(name, args, cwd = project) {
   const log = join(logs, `${++sequence}-${basename(name).replace(/[^a-zA-Z0-9._-]/g, '-')}.log`);
@@ -76,7 +76,7 @@ async function scenario(id, body) {
   if (selected && !selected.includes(id) && !prerequisites.has(id)) return;
   if (interrupted) { results.push({ id, exitCode: 1, error: 'Interrupted' }); return; }
   const started = Date.now();
-  const timeoutMs = id === 'startup-migration-seed' ? 900000 : 180000;
+  const timeoutMs = id === 'full-image-build' || id === 'startup-migration-seed' ? 900000 : 180000;
   activeScenario = new AbortController(); checkpoint = undefined; const timeout = setTimeout(() => activeScenario?.abort(), timeoutMs);
   try { await body(); assert(!activeScenario.signal.aborted, 'Scenario exceeded deadline'); results.push({ id, exitCode: 0, ms: Date.now() - started }); console.log(`${id}: PASSED`); }
   catch (error) {
@@ -102,9 +102,14 @@ try {
   await run(process.execPath, [join(root, 'dist/bin/index.js'), 'acceptance-api', '--template', 'laravel', '--database', provider, '--yes', '--no-install', '--mode', 'docker', '--port', String(httpPort), '--db-port', String(dbPort), '--db-name', database, '--db-user', 'backend'], scratch);
   await env({ COMPOSE_PROJECT_NAME: fixture, APP_ENV: 'testing', ADMIN_PASSWORD: 'FixtureOnly!123', RATE_LIMIT_AUTH_MAX: '10000', RATE_LIMIT_PUBLIC_MAX: '10000', RATE_LIMIT_INTERNAL_MAX: '10000', SSE_LIFETIME_SECONDS: '6', SSE_MAX_CONNECTIONS_PER_INSTANCE: '2', REDIS_PORT: String(redisPort), MINIO_PORT: String(s3Port), SMTP_HOST: 'host.docker.internal', SMTP_PORT: String(smtpPort), OTEL_EXPORTER_OTLP_ENDPOINT: `http://host.docker.internal:${collectorPort}` });
   await writeFile(join(project, 'acceptance.yaml'), `services:\n${provider === 'mysql' ? '  mysql:\n    environment:\n      MYSQL_ROOT_HOST: "%"\n' : ''}  app:\n    extra_hosts: ["host.docker.internal:host-gateway"]\n    environment:\n      OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:${collectorPort}\n  worker:\n    extra_hosts: ["host.docker.internal:host-gateway"]\n    environment:\n      OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:${collectorPort}\n`);
-  // Build/package gate ran before this stage; Compose acceptance assembles the generated consumer.
+  // Cold image compilation must finish before any runtime acceptance deadline starts.
+  await scenario('full-image-build', async () => {
+    await mark('build-all-images');
+    await compose('--profile', '*', 'build');
+  });
+  if (results.at(-1)?.exitCode !== 0) throw new Error('Full image build prerequisite failed');
   await scenario('startup-migration-seed', async () => {
-    await compose('up', '--build', '-d', '--wait', '--wait-timeout', '240'); await compose('exec', '-T', 'app', 'php', 'artisan', 'backend:seed'); await compose('exec', '-T', 'app', 'php', 'artisan', 'backend:seed');
+    await compose('up', '--no-build', '-d', '--wait', '--wait-timeout', '240'); await compose('exec', '-T', 'app', 'php', 'artisan', 'backend:seed'); await compose('exec', '-T', 'app', 'php', 'artisan', 'backend:seed');
     const login = await (await api('/api/auth/login', 'POST', { email: 'admin@example.com', password: 'FixtureOnly!123' })).json(); adminToken = login.data.token;
     const me = await (await api('/api/auth/me', 'GET', undefined, adminToken)).json(); actorId = me.data.id;
   });
@@ -228,7 +233,7 @@ try {
     await env({ RATE_LIMIT_STORE: 'file', RATE_LIMIT_AUTH_MAX: '10000', CACHE_ENABLED: 'false', COMPOSE_PROFILES: '', APP_INSTANCE_COUNT: '1' }); await compose('up', '-d', '--force-recreate', '--scale', 'app=1', 'app'); await compose('up', '-d', '--force-recreate', 'web'); await wait(async () => (await fetch(url + '/ready')).status === 200);
   });
   await scenario('s3-storage-compensation', async () => {
-    await env({ COMPOSE_PROFILES: 's3', UPLOAD_STORAGE: 's3', S3_ACCESS_KEY_ID: 'fixture-access', S3_SECRET_ACCESS_KEY: 'fixture-secret-12345', S3_BUCKET: 'uploads' }); await compose('up', '-d', '--build', '--wait', 'minio'); await compose('run', '--rm', 'minio-init'); await compose('up', '-d', '--force-recreate', 'app'); await wait(async () => (await fetch(url + '/ready')).status === 200);
+    await env({ COMPOSE_PROFILES: 's3', UPLOAD_STORAGE: 's3', S3_ACCESS_KEY_ID: 'fixture-access', S3_SECRET_ACCESS_KEY: 'fixture-secret-12345', S3_BUCKET: 'uploads' }); await compose('up', '-d', '--no-build', '--wait', 'minio'); await compose('run', '--rm', '--no-deps', '--pull', 'never', 'minio-init'); await compose('up', '-d', '--no-build', '--force-recreate', 'app'); await wait(async () => (await fetch(url + '/ready')).status === 200);
     const form = new FormData(); form.set('file', new Blob(['%PDF-1.7\nfixture S3\n%%EOF'], { type: 'application/pdf' }), 's3.pdf'); const uploaded = await (await api('/api/upload', 'POST', form, adminToken, 201)).json(); assert.match(await (await api('/api/upload/' + uploaded.data.id + '?download=true', 'GET', undefined, adminToken)).text(), /fixture S3/);
     const before = JSON.parse(inspect());
     inspect('fault-audit-on');

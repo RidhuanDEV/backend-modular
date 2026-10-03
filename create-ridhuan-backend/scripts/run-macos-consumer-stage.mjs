@@ -1,8 +1,7 @@
-import {mkdtemp, writeFile, readFile, mkdir, copyFile} from "node:fs/promises";
+import {mkdtemp, writeFile, readFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join, resolve} from "node:path";
 import {collectProcessCase} from "./hardening-process.mjs";
-import {cleanupHardeningFixtures} from "./hardening-fixture-cleanup.mjs";
 
 const root=resolve(import.meta.dirname,"..");
 const cases=["springboot","laravel","fastapi"].flatMap(template=>
@@ -31,12 +30,6 @@ try {
       results.push({id:task.id,status:result.exitCode===0?"PASS":"FAIL",...result,log});
       if(result.exitCode!==0)console.error((await readFile(log,"utf8")).slice(-20000));
     } catch(error){results.push({id:task.id,status:"FAIL",exitCode:1,error:String(error),log});}
-    finally {
-      const ownership=join(output,task.id+"-ownership");await mkdir(ownership);
-      try{await copyFile(log,join(ownership,"hardening-task.log"));}catch(error){results.push({id:task.id+"-log",status:"FAIL",error:String(error)});}
-      try{const cleanup=await cleanupHardeningFixtures(ownership);if(cleanup.failures.length)results.push({id:task.id+"-cleanup",status:"FAIL",cleanup});}
-      catch(error){results.push({id:task.id+"-cleanup",status:"FAIL",error:String(error)});}
-    }
     console.log(results.find(result=>result.id===task.id).status+" "+task.id);
   }
 } finally {
