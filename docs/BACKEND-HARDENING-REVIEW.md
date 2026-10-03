@@ -146,19 +146,19 @@ Express/NestJS/Go/.NET sequence backfill is by created time then ID. Existing Fa
 
 **Coordinated upgrade:** back up DB/history/objects; pause old API/notification writers; run one release migration; then start new HTTP/worker processes; seed stays explicit. Old writers lack family/counter inserts and must not run alongside the changed schema. MySQL DDL is not one rollbackable transaction; inspect/recover partial upgrades rather than blindly rerun. Database provider switching does not convert existing data.
 
-## Preparation performed and verification deferred
+## Preparation and completed verification
 
-Performed as implementation: dependency/lock resolution, source formatting, Prisma clients/diff scaffolding, sqlc native ports/decorators, Alembic/Goose-native migration sources, and official EF scaffolding/designer/model snapshots. **EF scaffolding compiled Infrastructure as its required tool step; it is not a completed application build/test gate.** Development snapshots copy selected source and record dirty provenance/checksums; this is not consumer/runtime acceptance. CLI built distribution remains the prior build until Task9.
+Implementation preparation included dependency/lock resolution, formatting, Prisma clients, sqlc ports/decorators, Alembic/Goose migrations, and official EF scaffolding/designers/model snapshots. Scaffolding was distinct from acceptance testing. Task 9 subsequently completed native, database, consumer and runtime gates; final CLI snapshots record clean source commit provenance. Exact revisions, CI links, package hashes and verification boundaries are in [the test report](BACKEND-HARDENING-TEST-RESULTS.md).
 
-Not run for this change:
+Completed for this change:
 
-- [ ] Application build/typecheck/lint, native unit/integration/API-contract verification.
-- [ ] Fresh or upgrade migration execution on PostgreSQL/MySQL.
-- [ ] Auth/audit/SSE concurrency, expiry, retention and failure injection.
-- [ ] SMTP retry/recovery/multi-worker/lease and duplicate-delivery scenarios.
-- [ ] Cleanup dry-run/apply/concurrency/ref recheck and telemetry/redaction/exporter-outage tests.
-- [ ] Packed CLI generation→install→build for ten combinations, package/checksum/dependency/secret audit.
-- [ ] Ten Compose image/migration/worker/seed/root/live/ready/outage combinations.
-- [ ] Windows/Linux consumers, macOS smoke and remote CI.
+- [x] Application build/typecheck/lint, native unit/integration/API-contract verification.
+- [x] Fresh and upgrade migration execution on PostgreSQL/MySQL.
+- [x] Auth/audit/SSE concurrency, expiry, retention and failure injection.
+- [x] SMTP retry/recovery/multi-worker/lease and duplicate-delivery scenarios.
+- [x] Cleanup dry-run/apply/concurrency/ref checks and telemetry/redaction/exporter-outage tests, within the documented boundaries.
+- [x] Packed CLI generation→install→build for ten combinations, package/checksum/dependency/secret audit.
+- [x] Ten Compose image/migration/worker/seed/live/ready/outage combinations, using each framework's registered health routes.
+- [x] Twenty Windows/Linux consumer CI jobs, macOS smoke and all native CI runs.
 
-**Next gate:** user reviews Tasks1–8 and requests tests. Then execute [Task9](BACKEND-HARDENING-TEST-TASK.md), repair proven failures and report evidence. Commit/push/version/publication are subsequent release instructions; these changes are not ready to publish on the strength of source inspection alone.
+**Release status:** implementation and testing are complete, and all six repositories were committed/pushed to main. npm version bump and publication remain separate user-directed release actions. Production load and deployment/backup-restore verification remain outside this acceptance evidence.
