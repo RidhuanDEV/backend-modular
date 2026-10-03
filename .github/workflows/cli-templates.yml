@@ -34,7 +34,7 @@ on:
       verification:
         description: Verification stage to run before full release validation
         type: choice
-        options: [full, macos-smoke, spring-compose]
+        options: [full, macos-smoke, spring-compose, laravel-compose]
         default: full
       publish:
         description: Publish the tested artifact (requires npm trusted publisher)
@@ -42,6 +42,10 @@ on:
         default: false
       spring_scenarios:
         description: Reviewed affected Spring scenarios (comma-separated; empty uses the six portability cases)
+        type: string
+        default: ''
+      laravel_scenarios:
+        description: Reviewed affected Laravel scenarios (comma-separated; empty uses Redis quota/cache/outage)
         type: string
         default: ''
 permissions:
@@ -153,7 +157,7 @@ jobs:
             ${{ runner.temp }}/laravel-manual-logs-*/**
             ${{ runner.temp }}/laravel-integration-logs-*/**
   macos-smoke:
-    if: github.event_name != 'workflow_dispatch' || inputs.verification != 'spring-compose'
+    if: github.event_name != 'workflow_dispatch' || inputs.verification == 'full' || inputs.verification == 'macos-smoke'
     needs: package
     runs-on: macos-latest
     steps:
@@ -212,7 +216,7 @@ jobs:
       # Each matrix job has its own runner; cap concurrency without sharing RAM.
       max-parallel: 3
       matrix:
-        template: ${{ fromJSON(inputs.verification == 'spring-compose' && '["springboot"]' || '["express-typescript","nestjs","golang","dotnet","fastapi","springboot","laravel"]') }}
+        template: ${{ fromJSON(inputs.verification == 'spring-compose' && '["springboot"]' || inputs.verification == 'laravel-compose' && '["laravel"]' || '["express-typescript","nestjs","golang","dotnet","fastapi","springboot","laravel"]') }}
         database: [postgresql, mysql]
     steps:
       - uses: actions/checkout@v4
@@ -242,10 +246,15 @@ jobs:
           if [ "$TEST_GATE_SCOPE" = spring-compose ]; then
             export SPRING_SCENARIOS="${SPRING_TEST_SCENARIOS:-sse-slow-client-write-timeout-and-slot-recovery,outbox-snapshot-delivery-fencing,two-workers-renewal-snapshot-and-accepted-retry,worker-real-lease-renewal-and-compose-graceful-shutdown,shared-redis-quota-across-two-replicas,smtp-starttls-implicit-tls-hostname-verification}"
           fi
-          node scripts/verify-compose.mjs '${{ matrix.template }}' '${{ matrix.database }}'
+          if [ "$TEST_GATE_SCOPE" = laravel-compose ]; then
+            node scripts/verify-laravel-compose.mjs '${{ matrix.database }}' --only "${LARAVEL_TEST_SCENARIOS:-redis-shared-quota-cache-outage}"
+          else
+            node scripts/verify-compose.mjs '${{ matrix.template }}' '${{ matrix.database }}'
+          fi
         env:
           TEST_GATE_SCOPE: ${{ inputs.verification }}
           SPRING_TEST_SCENARIOS: ${{ inputs.spring_scenarios }}
+          LARAVEL_TEST_SCENARIOS: ${{ inputs.laravel_scenarios }}
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
           TMPDIR: ${{ runner.temp }}

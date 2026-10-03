@@ -82,7 +82,7 @@ async function scenario(id, body) {
   catch (error) {
     const diagnosticLog = join(logs, id + '-runtime.log');
     const diagnostic = await collectProcessCase({ executable: 'docker', args: ['compose', '-p', fixture, '-f', 'compose.yaml', '-f', 'acceptance.yaml', '--profile', '*', 'logs', '--no-color', '--tail', '100', 'app', 'web', 'worker'], cwd: project, signal: cancellation.signal }, diagnosticLog, process.env, 30000);
-    results.push({ id, exitCode: 1, error: error.message, checkpoint, timedOut: activeScenario.signal.aborted && !cancellation.signal.aborted, timeoutMs, diagnosticExitCode: diagnostic.exitCode, ms: Date.now() - started }); console.log(`${id}: FAILED`);
+    results.push({ id, exitCode: 1, error: error.message, stack: error.stack, cause: error.cause instanceof Error ? { name: error.cause.name, message: error.cause.message, code: error.cause.code, stack: error.cause.stack } : undefined, checkpoint, timedOut: activeScenario.signal.aborted && !cancellation.signal.aborted, timeoutMs, diagnosticExitCode: diagnostic.exitCode, ms: Date.now() - started }); console.log(`${id}: FAILED`);
   }
   finally { clearTimeout(timeout); activeScenario = undefined; await writeFile(join(logs, id + '.json'), JSON.stringify(results.at(-1), null, 2)); }
 }
@@ -219,18 +219,34 @@ try {
     await env({ SMTP_ENABLED: 'false', SMTP_SECURE: 'false', SMTP_HOST: 'host.docker.internal', SMTP_PORT: String(smtpPort) }); await compose('up', '-d', '--wait', '--no-deps', '--force-recreate', 'worker');
   });
   await scenario('redis-shared-quota-cache-outage', async () => {
+    await mark('redis-start-two-replicas');
     await env({ COMPOSE_PROFILES: 'redis', RATE_LIMIT_STORE: 'redis', RATE_LIMIT_AUTH_MAX: '7', RATE_LIMIT_AUTH_WINDOW_SECONDS: '300', CACHE_ENABLED: 'true', APP_INSTANCE_COUNT: '2' }); await compose('up', '-d', '--wait', 'redis'); await compose('up', '-d', '--wait', '--force-recreate', '--scale', 'app=2', 'app');
-    const replicas = (await compose('ps', '-q', 'app')).trim().split(/\r?\n/).filter(Boolean); assert.equal(replicas.length, 2, 'Two distributed quota replicas required');
-    await compose('up', '-d', '--force-recreate', 'web'); await wait(async () => (await fetch(url + '/ready')).status === 200);
-    const attempts = await Promise.all(Array.from({ length: 20 }, () => fetch(url + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'unknown@example.com', password: 'FixtureOnly!123' }) }))); assert.equal(attempts.filter((r) => r.status === 401).length, 7); assert.equal(attempts.filter((r) => r.status === 429).length, 13);
+    await mark('redis-web-ready');
+    // Recreating web must neither rescale its dependencies to one app nor race its listener.
+    await compose('up', '-d', '--wait', '--no-deps', '--force-recreate', 'web');
+    const replicas = (await compose('ps', '-q', 'app')).trim().split(/\r?\n/).filter(Boolean); assert.equal(replicas.length, 2, 'Two distributed quota replicas required after web recreation');
+    await api('/ready');
+    await mark('redis-twenty-quota-requests');
+    const attempts = await Promise.allSettled(Array.from({ length: 20 }, async () => {
+      const signal = AbortSignal.any([cancellation.signal, activeScenario.signal, AbortSignal.timeout(15000)]);
+      const response = await fetch(url + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'unknown@example.com', password: 'FixtureOnly!123' }), signal });
+      await response.arrayBuffer(); return response.status;
+    }));
+    await writeFile(join(logs, 'redis-quota-attempts.json'), JSON.stringify(attempts.map((result, index) => result.status === 'fulfilled' ? { index, status: result.value } : { index, error: result.reason.message, stack: result.reason.stack, cause: result.reason.cause instanceof Error ? { message: result.reason.cause.message, code: result.reason.cause.code } : undefined }), null, 2));
+    assert.equal(attempts.filter((result) => result.status === 'rejected').length, 0, 'All twenty quota requests must complete without transport failures');
+    assert.equal(attempts.filter((result) => result.status === 'fulfilled' && result.value === 401).length, 7);
+    assert.equal(attempts.filter((result) => result.status === 'fulfilled' && result.value === 429).length, 13);
+    await mark('redis-cache-authorization-projections-invalidation');
     await api('/api/users', 'GET', undefined, adminToken); await api('/api/users', 'GET', undefined, memberToken, 403);
     const onlyIds = await (await api('/api/users?search=member%40example.com&fields=id', 'GET', undefined, adminToken)).json(); assert.equal(onlyIds.data.length, 1); assert.deepEqual(Object.keys(onlyIds.data[0]), ['id']);
     const emailFields = await (await api('/api/users?search=member%40example.com&fields=email', 'GET', undefined, adminToken)).json(); assert.deepEqual(Object.keys(emailFields.data[0]), ['email']); assert.equal(emailFields.data[0].email, 'member@example.com');
     await api('/api/users/' + memberId, 'PATCH', { email: 'changed@example.com' }, adminToken);
     const invalidated = await (await api('/api/users?search=member%40example.com&fields=id', 'GET', undefined, adminToken)).json(); assert.equal(invalidated.data.length, 0, 'Mutation must invalidate cached filtered response');
     await api('/api/users/' + memberId, 'PATCH', { email: 'member@example.com' }, adminToken);
+    await mark('redis-outage-fail-closed');
     await compose('stop', 'redis'); await api('/live'); await api('/ready', 'GET', undefined, undefined, 503); await api('/api/auth/login', 'POST', { email: 'unknown@example.com', password: 'FixtureOnly!123' }, undefined, 503);
-    await env({ RATE_LIMIT_STORE: 'file', RATE_LIMIT_AUTH_MAX: '10000', CACHE_ENABLED: 'false', COMPOSE_PROFILES: '', APP_INSTANCE_COUNT: '1' }); await compose('up', '-d', '--force-recreate', '--scale', 'app=1', 'app'); await compose('up', '-d', '--force-recreate', 'web'); await wait(async () => (await fetch(url + '/ready')).status === 200);
+    await mark('redis-file-store-recovery');
+    await env({ RATE_LIMIT_STORE: 'file', RATE_LIMIT_AUTH_MAX: '10000', CACHE_ENABLED: 'false', COMPOSE_PROFILES: '', APP_INSTANCE_COUNT: '1' }); await compose('up', '-d', '--wait', '--force-recreate', '--scale', 'app=1', 'app'); await compose('up', '-d', '--wait', '--no-deps', '--force-recreate', 'web'); await api('/ready');
   });
   await scenario('s3-storage-compensation', async () => {
     await env({ COMPOSE_PROFILES: 's3', UPLOAD_STORAGE: 's3', S3_ACCESS_KEY_ID: 'fixture-access', S3_SECRET_ACCESS_KEY: 'fixture-secret-12345', S3_BUCKET: 'uploads' }); await compose('up', '-d', '--no-build', '--wait', 'minio'); await compose('run', '--rm', '--no-deps', '--pull', 'never', 'minio-init'); await compose('up', '-d', '--no-build', '--force-recreate', 'app'); await wait(async () => (await fetch(url + '/ready')).status === 200);
