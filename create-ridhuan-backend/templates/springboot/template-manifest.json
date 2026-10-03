@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-springboot.git",
-    "commit": "2f4de122cbbbacccb1dfac849571232e84842b83",
+    "commit": "8efee6759c12793851419a018d40a1889a1813c3",
     "dirty": false
   },
   "requirements": {
@@ -42,7 +42,7 @@
     "mvnw": "cae96cef89ebea3531221f4ae17c23cf8edf67d00eae8306d4186ae1bbed4d02",
     "mvnw.cmd": "4a361e1374a3e5ad6d03e18e9adc0cf181ac5058ac6203b76f0ba3b456b56481",
     "pom.xml": "25ac8392d27d8656bac636fa051fe787591f3bf34d603456e2c103c8d51f45d2",
-    "README.md": "9521dea0330b391e515d604e3b0f821ca528ceaf106aaa318c2fd75433e521c3",
+    "README.md": "46b71bbbcdff43f0c31484a7e4c815c7823f5463c64f4bcad06b4a8ea8f4077c",
     "scripts/minio.Dockerfile": "d0c154b1eb70ad4679c38a9a5683966e71e962e68fa1adc833ae2daee7601872",
     "scripts/mysql-entrypoint.sh": "7ddb1c2a7f0a8654a71b00d39dc7deb940886b880572577fce57460448d4f7ab",
     "scripts/mysql-init-user.sh": "657b96c3bb1d73184d3cdfeed99056d1ad54b0a073bef9ba932436a4b852470c",

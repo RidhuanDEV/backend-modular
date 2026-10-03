@@ -17,10 +17,14 @@ class Guid(TypeDecorator[UUID]):
             else dialect.type_descriptor(CHAR(36, collation="utf8mb4_bin"))
         )
 
-    def process_bind_param(self, value: UUID | None, dialect: Dialect) -> UUID | str | None:
+    def process_bind_param(
+        self, value: UUID | None, dialect: Dialect
+    ) -> UUID | str | None:
         if value is None:
             return None
         return value if dialect.name == "postgresql" else str(value)
 
-    def process_result_value(self, value: UUID | str | None, dialect: Dialect) -> UUID | None:
+    def process_result_value(
+        self, value: UUID | str | None, dialect: Dialect
+    ) -> UUID | None:
         return UUID(value) if isinstance(value, str) else value

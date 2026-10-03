@@ -14,16 +14,32 @@ final class AccessPolicy
 {
     public function permits(User $user, string $name): bool
     {
-        return DB::table('role_permissions')->join('permissions', 'permissions.id', '=', 'role_permissions.permission_id')->where('role_id', $user->role_id)->where('permissions.name', $name)->exists();
+        return DB::table('role_permissions')
+            ->join(
+                'permissions',
+                'permissions.id',
+                '=',
+                'role_permissions.permission_id',
+            )
+            ->where('role_id', $user->role_id)
+            ->where('permissions.name', $name)
+            ->exists();
     }
 
     /** @param list<string> $ids */
     public function within(User $actor, array $ids): void
     {
-        $role = Role::query()->with('permissions')->find($actor->role_id) ?? throw new ApiException(403, 'Actor role is unavailable');
-        $owned = $role->permissions->map(fn (Permission $permission): string => $permission->id)->all();
+        $role =
+            Role::query()->with('permissions')->find($actor->role_id) ??
+            throw new ApiException(403, 'Actor role is unavailable');
+        $owned = $role->permissions
+            ->map(fn(Permission $permission): string => $permission->id)
+            ->all();
         if (array_diff($ids, $owned) !== []) {
-            throw new ApiException(403, 'Cannot grant or modify privileges outside actor permissions');
+            throw new ApiException(
+                403,
+                'Cannot grant or modify privileges outside actor permissions',
+            );
         }
     }
 
@@ -33,6 +49,13 @@ final class AccessPolicy
         if ($role === null) {
             throw new ApiException(404, 'Role not found');
         }
-        $this->within($actor, array_values($role->permissions->map(fn (Permission $p): string => $p->id)->all()));
+        $this->within(
+            $actor,
+            array_values(
+                $role->permissions
+                    ->map(fn(Permission $p): string => $p->id)
+                    ->all(),
+            ),
+        );
     }
 }

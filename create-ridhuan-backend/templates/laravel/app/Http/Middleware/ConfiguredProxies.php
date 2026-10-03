@@ -17,10 +17,13 @@ final class ConfiguredProxies extends TrustProxies
     public function handle(Request $request, Closure $next): Response
     {
         $proxy = Settings::string('backend.proxy');
-        $this->proxies = $proxy === '' ? [] : array_map(trim(...), explode(',', $proxy));
+        $this->proxies =
+            $proxy === '' ? [] : array_map(trim(...), explode(',', $proxy));
         $response = parent::handle($request, $next);
-        if (! $response instanceof Response) {
-            throw new UnexpectedValueException('HTTP middleware must return a response');
+        if (!($response instanceof Response)) {
+            throw new UnexpectedValueException(
+                'HTTP middleware must return a response',
+            );
         }
 
         return $response;

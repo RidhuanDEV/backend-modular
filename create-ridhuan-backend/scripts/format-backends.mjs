@@ -6,10 +6,6 @@ import { command } from "../dist/process.js";
 const root = resolve(import.meta.dirname, "../..");
 const check = process.argv.includes("--check");
 const logs = mkdtempSync(join(tmpdir(), "ridhuan-format-"));
-const excluded = [
-  "src/ModularBackend.Infrastructure/Persistence/Migrations",
-  "src/ModularBackend.Infrastructure/Persistence/MySqlMigrations",
-];
 const tasks = [
   [
     "express",
@@ -21,8 +17,8 @@ const tasks = [
   [
     "laravel",
     "modular-laravel",
-    "composer",
-    [check ? "format:check" : "format"],
+    "npm",
+    ["run", check ? "format:check" : "format"],
   ],
   [
     "springboot",
@@ -49,14 +45,7 @@ const tasks = [
     "dotnet",
     "modular-NET",
     "dotnet",
-    [
-      "format",
-      "whitespace",
-      "ModularBackend.slnx",
-      ...(check ? ["--verify-no-changes"] : []),
-      "--exclude",
-      ...excluded,
-    ],
+    ["tool", "run", "csharpier", check ? "check" : "format", "src", "tests", "tools"],
   ],
   [
     "golang",

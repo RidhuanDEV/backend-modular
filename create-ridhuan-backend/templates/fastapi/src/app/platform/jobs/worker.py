@@ -15,7 +15,13 @@ from app.database.engine import create_database, sessions
 from app.modules.notifications.models import Notification
 from app.platform.jobs.models import EmailJob
 from app.platform.mail.service import send_notification
-from app.platform.telemetry import email_attempt, instrument, outbox_state, setup, shutdown
+from app.platform.telemetry import (
+    email_attempt,
+    instrument,
+    outbox_state,
+    setup,
+    shutdown,
+)
 
 logger = logging.getLogger(__name__)
 RETRY_SECONDS = (5, 30, 120, 600)
@@ -32,7 +38,9 @@ class Claim:
     attempts: int
 
 
-async def claim(factory: async_sessionmaker[AsyncSession], settings: Settings) -> Claim | None:
+async def claim(
+    factory: async_sessionmaker[AsyncSession], settings: Settings
+) -> Claim | None:
     async with factory() as session, session.begin():
         instant = now()
         job = await session.scalar(
@@ -40,7 +48,8 @@ async def claim(factory: async_sessionmaker[AsyncSession], settings: Settings) -
             .where(
                 or_(
                     (EmailJob.status == "PENDING") & (EmailJob.available_at <= instant),
-                    (EmailJob.status == "PROCESSING") & (EmailJob.lease_until <= instant),
+                    (EmailJob.status == "PROCESSING")
+                    & (EmailJob.lease_until <= instant),
                 )
             )
             .order_by(EmailJob.available_at, EmailJob.id)
@@ -103,7 +112,9 @@ async def renew(
                 ):
                     lost.set()
                     return
-                job.lease_until = now() + timedelta(seconds=settings.worker_lease_seconds)
+                job.lease_until = now() + timedelta(
+                    seconds=settings.worker_lease_seconds
+                )
         except Exception:
             lost.set()
             logger.warning("Email lease renewal failed", extra={"job_id": str(item.id)})
@@ -123,7 +134,8 @@ async def deliver(
         success = True
     except Exception:
         logger.warning(
-            "Email attempt failed", extra={"job_id": str(item.id), "attempt": item.attempts}
+            "Email attempt failed",
+            extra={"job_id": str(item.id), "attempt": item.attempts},
         )
     finally:
         done.set()
@@ -131,7 +143,9 @@ async def deliver(
     if lost.is_set():
         return
     async with factory() as session, session.begin():
-        job = await session.scalar(select(EmailJob).where(EmailJob.id == item.id).with_for_update())
+        job = await session.scalar(
+            select(EmailJob).where(EmailJob.id == item.id).with_for_update()
+        )
         if (
             job is None
             or job.lease_id != item.lease
@@ -151,7 +165,9 @@ async def deliver(
             )
         else:
             job.status = "PENDING"
-            job.available_at = now() + timedelta(seconds=RETRY_SECONDS[item.attempts - 1])
+            job.available_at = now() + timedelta(
+                seconds=RETRY_SECONDS[item.attempts - 1]
+            )
     email_attempt(
         "SENT"
         if success
@@ -166,7 +182,10 @@ async def worker(settings: Settings) -> None:
         logger.info("SMTP disabled; worker is idle until shutdown")
         idle = asyncio.Event()
         loop = asyncio.get_running_loop()
-        previous = {signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)}
+        previous = {
+            signum: signal.getsignal(signum)
+            for signum in (signal.SIGINT, signal.SIGTERM)
+        }
 
         def halt_idle(_signum: int, _frame: FrameType | None) -> None:
             loop.call_soon_threadsafe(idle.set)
@@ -184,7 +203,9 @@ async def worker(settings: Settings) -> None:
     factory = sessions(engine)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
-    previous = {signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)}
+    previous = {
+        signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)
+    }
 
     def halt(_signum: int, _frame: FrameType | None) -> None:
         loop.call_soon_threadsafe(stop.set)
@@ -207,7 +228,8 @@ async def worker(settings: Settings) -> None:
                         )
                     )
                     outbox_state(
-                        count or 0, (now() - oldest).total_seconds() if oldest is not None else 0
+                        count or 0,
+                        (now() - oldest).total_seconds() if oldest is not None else 0,
                     )
                 item = await claim(factory, settings)
                 if item is not None:
@@ -216,7 +238,9 @@ async def worker(settings: Settings) -> None:
             except Exception:
                 logger.warning("Email worker database unavailable")
             try:
-                await asyncio.wait_for(stop.wait(), timeout=settings.worker_poll_seconds)
+                await asyncio.wait_for(
+                    stop.wait(), timeout=settings.worker_poll_seconds
+                )
             except TimeoutError:
                 pass
 

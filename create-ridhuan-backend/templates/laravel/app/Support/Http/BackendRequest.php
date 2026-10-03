@@ -26,7 +26,9 @@ abstract class BackendRequest extends FormRequest
     {
         $password = $this->input('password');
         if (is_string($password) && strlen($password) > 72) {
-            throw ValidationException::withMessages(['password' => 'Maximum 72 UTF-8 bytes']);
+            throw ValidationException::withMessages([
+                'password' => 'Maximum 72 UTF-8 bytes',
+            ]);
         }
     }
 }

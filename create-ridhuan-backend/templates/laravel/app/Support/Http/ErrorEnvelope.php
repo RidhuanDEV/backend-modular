@@ -18,8 +18,10 @@ final class ErrorEnvelope
      * @param  array<string,list<string>>  $errors
      * @return array{success:false,message:string,errors:array<string,list<string>>}
      */
-    public static function validationResponse(string $message, array $errors): array
-    {
+    public static function validationResponse(
+        string $message,
+        array $errors,
+    ): array {
         return ['success' => false, 'message' => $message, 'errors' => $errors];
     }
 
@@ -28,12 +30,12 @@ final class ErrorEnvelope
     {
         $result = [];
         foreach ($exception->errors() as $field => $messages) {
-            if (! is_string($field) || ! is_array($messages)) {
+            if (!is_string($field) || !is_array($messages)) {
                 throw new \LogicException('Invalid validation boundary');
             }
             $items = [];
             foreach ($messages as $message) {
-                if (! is_string($message)) {
+                if (!is_string($message)) {
                     throw new \LogicException('Invalid validation message');
                 }
                 $items[] = $message;

@@ -42,11 +42,20 @@ async def get_user(ctx: Context, id: UUID, run: Runtime) -> UserResponse:
 async def list_users(ctx: Context, query: UserQuery) -> UserList:
     conditions: list[ColumnElement[bool]] = [User.deleted_at.is_(None)]
     if query.search:
-        conditions.append(func.lower(User.email).contains(query.search.lower(), autoescape=True))
-    total = await ctx.session.scalar(select(func.count()).select_from(User).where(*conditions)) or 0
-    column = {"email": User.email, "createdAt": User.created_at, "updatedAt": User.updated_at}[
-        query.sortBy
-    ]
+        conditions.append(
+            func.lower(User.email).contains(query.search.lower(), autoescape=True)
+        )
+    total = (
+        await ctx.session.scalar(
+            select(func.count()).select_from(User).where(*conditions)
+        )
+        or 0
+    )
+    column = {
+        "email": User.email,
+        "createdAt": User.created_at,
+        "updatedAt": User.updated_at,
+    }[query.sortBy]
     order = column.desc() if query.orderBy == "desc" else column.asc()
     rows = await ctx.session.scalars(
         select(User)
@@ -90,7 +99,9 @@ async def update_user(ctx: Context, id: UUID, dto: UpdateUser) -> UserResponse:
     await role_within_actor(ctx.session, ctx.require_actor(), user.role_id)
     before = public_user(user)
     if dto.roleId is not None:
-        user.role = await role_within_actor(ctx.session, ctx.require_actor(), dto.roleId)
+        user.role = await role_within_actor(
+            ctx.session, ctx.require_actor(), dto.roleId
+        )
         user.role_id = dto.roleId
     if dto.email is not None:
         user.email = str(dto.email)

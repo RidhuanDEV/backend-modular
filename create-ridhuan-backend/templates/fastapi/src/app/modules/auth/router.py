@@ -20,7 +20,9 @@ async def login(dto: Login, ctx: RequestContext, run: AppRuntime) -> Success[Tok
 
 
 @router.post("/refresh", operation_id=EndpointId.REFRESH)
-async def refresh(dto: Refresh, ctx: RequestContext, run: AppRuntime) -> Success[Tokens]:
+async def refresh(
+    dto: Refresh, ctx: RequestContext, run: AppRuntime
+) -> Success[Tokens]:
     return Success(data=await service.refresh(ctx, dto.refreshToken, run.settings))
 
 

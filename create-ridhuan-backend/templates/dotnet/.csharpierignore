@@ -1,0 +1,6 @@
+**/bin/
+**/obj/
+**/*.g.cs
+**/*.generated.cs
+**/Persistence/Migrations/
+**/Persistence/MySqlMigrations/

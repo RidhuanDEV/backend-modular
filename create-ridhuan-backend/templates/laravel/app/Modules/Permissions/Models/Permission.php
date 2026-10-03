@@ -27,6 +27,9 @@ final class Permission extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['created_at' => 'immutable_datetime', 'updated_at' => 'immutable_datetime'];
+        return [
+            'created_at' => 'immutable_datetime',
+            'updated_at' => 'immutable_datetime',
+        ];
     }
 }

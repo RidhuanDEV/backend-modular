@@ -12,7 +12,9 @@ def email_address(value: str) -> str:
     try:
         # HTTP format validation; no DNS dependency. Reserved .test is accepted for
         # generated fixtures and developer projects, as in the reference templates.
-        return validate_email(value, check_deliverability=False, test_environment=True).normalized
+        return validate_email(
+            value, check_deliverability=False, test_environment=True
+        ).normalized
     except EmailNotValidError as error:
         raise ValueError("Invalid email") from error
 

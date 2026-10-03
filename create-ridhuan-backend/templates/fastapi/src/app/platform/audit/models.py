@@ -24,10 +24,12 @@ class ActivityLog(Base):
     endpoint_id: Mapped[str] = mapped_column(String(128))
     request_id: Mapped[str] = mapped_column(String(128))
     before: Mapped[JsonValue] = mapped_column(
-        JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql"), nullable=True
+        JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql"),
+        nullable=True,
     )
     after: Mapped[JsonValue] = mapped_column(
-        JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql"), nullable=True
+        JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql"),
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(UTCInstant(), default=now)
     __table_args__ = (

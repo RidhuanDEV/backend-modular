@@ -41,7 +41,10 @@ async def create(
             if len(header) < 16:
                 header = (header + chunk)[:16]
         mime, extension = content_mime(header)
-        if mime not in settings.upload_allowed_mime.split(",") or upload.content_type != mime:
+        if (
+            mime not in settings.upload_allowed_mime.split(",")
+            or upload.content_type != mime
+        ):
             raise ApiError(400, "File MIME does not match content")
         filename = PurePosixPath((upload.filename or "upload").replace("\\", "/")).name
         if len(filename) > 255 or any(ord(char) < 32 for char in filename):

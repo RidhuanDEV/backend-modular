@@ -17,11 +17,23 @@ use Symfony\Component\HttpFoundation\Response;
 
 final class RoleController
 {
-    public function __construct(private readonly RoleService $service, private readonly Actor $actor) {}
+    public function __construct(
+        private readonly RoleService $service,
+        private readonly Actor $actor,
+    ) {}
 
     public function list(): JsonResponse
     {
-        return Api::data($this->service->list()->map(fn (Role $m): array => (new RoleResource($m))->toArray(request()))->all());
+        return Api::data(
+            $this->service
+                ->list()
+                ->map(
+                    fn(Role $m): array => new RoleResource($m)->toArray(
+                        request(),
+                    ),
+                )
+                ->all(),
+        );
     }
 
     public function get(string $id): JsonResponse
@@ -31,12 +43,29 @@ final class RoleController
 
     public function create(CreateNameRequest $request): JsonResponse
     {
-        return Api::resource(new RoleResource($this->service->create($request->nameValue() ?? throw new \LogicException('Required name'), $this->actor->user())), 201);
+        return Api::resource(
+            new RoleResource(
+                $this->service->create(
+                    $request->nameValue() ??
+                        throw new \LogicException('Required name'),
+                    $this->actor->user(),
+                ),
+            ),
+            201,
+        );
     }
 
     public function update(UpdateNameRequest $request, string $id): JsonResponse
     {
-        return Api::resource(new RoleResource($this->service->update($id, $request->nameValue(), $this->actor->user())));
+        return Api::resource(
+            new RoleResource(
+                $this->service->update(
+                    $id,
+                    $request->nameValue(),
+                    $this->actor->user(),
+                ),
+            ),
+        );
     }
 
     public function delete(string $id): Response
@@ -46,8 +75,18 @@ final class RoleController
         return response()->noContent();
     }
 
-    public function assignPermissions(AssignPermissionsRequest $request, string $id): JsonResponse
-    {
-        return Api::resource(new RoleResource($this->service->assign($id, $request->ids(), $this->actor->user())));
+    public function assignPermissions(
+        AssignPermissionsRequest $request,
+        string $id,
+    ): JsonResponse {
+        return Api::resource(
+            new RoleResource(
+                $this->service->assign(
+                    $id,
+                    $request->ids(),
+                    $this->actor->user(),
+                ),
+            ),
+        );
     }
 }

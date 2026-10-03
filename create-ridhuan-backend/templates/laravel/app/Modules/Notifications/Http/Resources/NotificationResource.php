@@ -21,6 +21,14 @@ final class NotificationResource extends JsonResource
     {
         $m = $this->model;
 
-        return ['id' => $m->id, 'recipientId' => $m->recipient_id, 'title' => $m->title, 'body' => $m->body, 'emailStatus' => $m->email_status->value, 'readAt' => $m->read_at?->toIso8601ZuluString('microsecond'), 'createdAt' => $m->created_at->toIso8601ZuluString('microsecond')];
+        return [
+            'id' => $m->id,
+            'recipientId' => $m->recipient_id,
+            'title' => $m->title,
+            'body' => $m->body,
+            'emailStatus' => $m->email_status->value,
+            'readAt' => $m->read_at?->toIso8601ZuluString('microsecond'),
+            'createdAt' => $m->created_at->toIso8601ZuluString('microsecond'),
+        ];
     }
 }

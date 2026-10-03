@@ -23,7 +23,9 @@ use Dedoc\Scramble\Support\Type\StringType as InferStringType;
 
 final class EndpointDocumentation implements OperationTransformer
 {
-    public function __construct(private readonly TypeTransformer $transformer) {}
+    public function __construct(
+        private readonly TypeTransformer $transformer,
+    ) {}
 
     public function handle(Operation $operation, RouteInfo $routeInfo): void
     {
@@ -34,15 +36,20 @@ final class EndpointDocumentation implements OperationTransformer
         $definition = app(EndpointRegistry::class)->get($name);
         $operation->setOperationId($name);
         $operation->setTags([$definition->module]);
-        $operation->security = $definition->authenticated ? [new SecurityRequirement(['bearerAuth' => []])] : [];
+        $operation->security = $definition->authenticated
+            ? [new SecurityRequirement(['bearerAuth' => []])]
+            : [];
         $operation->setExtensionProperty('audit', $definition->audit);
         $operation->setExtensionProperty('permission', $definition->permission);
         $operation->setExtensionProperty('rate-group', $definition->rate);
-        if ($definition->media === 'text/event-stream' || $definition->media === 'text/html') {
+        if (
+            $definition->media === 'text/event-stream' ||
+            $definition->media === 'text/html'
+        ) {
             $response = new Response($definition->status);
             $response->setDescription($definition->media);
-            $schema = new Schema;
-            $schema->type = new StringType;
+            $schema = new Schema();
+            $schema->type = new StringType();
             $response->setContent($definition->media, $schema);
             $operation->responses = [$response];
         } elseif ($definition->status === 204) {
@@ -52,12 +59,22 @@ final class EndpointDocumentation implements OperationTransformer
         }
         app(Infer::class)->analyzeClass(ErrorEnvelope::class);
         foreach ([400, 401, 403, 404, 409, 422, 429, 500, 503] as $status) {
-            $arguments = [new InferStringType];
+            $arguments = [new InferStringType()];
             if ($status === 422) {
-                $arguments[] = new InferArrayType(new InferArrayType(new InferStringType), new InferStringType);
+                $arguments[] = new InferArrayType(
+                    new InferArrayType(new InferStringType()),
+                    new InferStringType(),
+                );
             }
-            $type = ReferenceTypeResolver::getInstance()->resolve(new GlobalScope, new StaticMethodCallReferenceType(ErrorEnvelope::class, $status === 422 ? 'validationResponse' : 'make', $arguments));
-            $errorSchema = new Schema;
+            $type = ReferenceTypeResolver::getInstance()->resolve(
+                new GlobalScope(),
+                new StaticMethodCallReferenceType(
+                    ErrorEnvelope::class,
+                    $status === 422 ? 'validationResponse' : 'make',
+                    $arguments,
+                ),
+            );
+            $errorSchema = new Schema();
             $errorSchema->type = $this->transformer->transform($type);
             $response = new Response($status);
             $response->setDescription('API error');

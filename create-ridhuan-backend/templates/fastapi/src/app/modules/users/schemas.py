@@ -55,7 +55,8 @@ class UserQuery(DTO):
     @classmethod
     def public_fields(cls, value: str | None) -> str | None:
         if value is not None and (
-            not value or any(field not in {"id", "email", "roleId"} for field in value.split(","))
+            not value
+            or any(field not in {"id", "email", "roleId"} for field in value.split(","))
         ):
             raise ValueError("fields allows only id,email,roleId")
         return value

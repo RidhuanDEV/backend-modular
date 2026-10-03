@@ -43,11 +43,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Model::preventLazyLoading(! app()->isProduction());
+        Model::preventLazyLoading(!app()->isProduction());
         DB::listen(function (QueryExecuted $event): void {
             app(Telemetry::class)->measure('db.query', $event->time / 1000);
         });
-        $this->loadMigrationsFrom(database_path('migrations/'.Settings::string('backend.provider')));
+        $this->loadMigrationsFrom(
+            database_path('migrations/' . Settings::string('backend.provider')),
+        );
         Auth::viaRequest('backend-jwt', function (Request $request): ?User {
             $token = $request->bearerToken();
             if ($token === null) {
@@ -57,9 +59,16 @@ class AppServiceProvider extends ServiceProvider
 
             return User::query()->find($claims->userId);
         });
-        Gate::define('backend.permission', fn (User $user, string $permission): bool => app(AccessPolicy::class)->permits($user, $permission));
+        Gate::define(
+            'backend.permission',
+            fn(User $user, string $permission): bool => app(
+                AccessPolicy::class,
+            )->permits($user, $permission),
+        );
         $documentation = Scramble::configure();
-        $documentation->routes(fn (Route $route): bool => $route->getName() !== null);
+        $documentation->routes(
+            fn(Route $route): bool => $route->getName() !== null,
+        );
         $documentation->withOperationTransformers(EndpointDocumentation::class);
         Scramble::throwOnError();
     }

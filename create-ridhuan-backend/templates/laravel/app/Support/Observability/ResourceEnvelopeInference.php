@@ -26,20 +26,30 @@ final class ResourceEnvelopeInference implements StaticMethodReturnTypeExtension
         return $name === Api::class;
     }
 
-    public function getStaticMethodReturnType(StaticMethodCallEvent $event): ?Type
-    {
+    public function getStaticMethodReturnType(
+        StaticMethodCallEvent $event,
+    ): ?Type {
         if ($event->name !== 'resource') {
             return null;
         }
         $resource = $event->getArg('resource', 0);
         $status = $event->getArg('status', 1, new LiteralIntegerType(200));
-        if (! $resource instanceof ObjectType || ! $resource->isInstanceOf(JsonResource::class)) {
-            throw new \LogicException('Resource envelope requires a native typed resource');
+        if (
+            !($resource instanceof ObjectType) ||
+            !$resource->isInstanceOf(JsonResource::class)
+        ) {
+            throw new \LogicException(
+                'Resource envelope requires a native typed resource',
+            );
         }
 
-        return new Generic(JsonResponse::class, [new KeyedArrayType([
-            new ArrayItemType_('success', new LiteralBooleanType(true)),
-            new ArrayItemType_('data', $resource),
-        ]), $status, new ArrayType]);
+        return new Generic(JsonResponse::class, [
+            new KeyedArrayType([
+                new ArrayItemType_('success', new LiteralBooleanType(true)),
+                new ArrayItemType_('data', $resource),
+            ]),
+            $status,
+            new ArrayType(),
+        ]);
     }
 }

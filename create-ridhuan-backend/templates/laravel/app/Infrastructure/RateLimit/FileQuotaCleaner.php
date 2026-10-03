@@ -14,25 +14,42 @@ final class FileQuotaCleaner
     public function clean(bool $apply, int $limit): int
     {
         $root = Settings::string('cache.stores.quota.path');
-        if (! is_dir($root)) {
+        if (!is_dir($root)) {
             return 0;
         }
         $count = 0;
         $scanned = 0;
-        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, RecursiveDirectoryIterator::SKIP_DOTS)) as $file) {
+        foreach (
+            new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator(
+                    $root,
+                    RecursiveDirectoryIterator::SKIP_DOTS,
+                ),
+            )
+            as $file
+        ) {
             if (++$scanned > 10000 || $count >= $limit) {
                 break;
             }
-            if (! $file instanceof SplFileInfo || ! $file->isFile() || $file->isLink() || ! preg_match('/^[a-f0-9]{40}$/D', $file->getFilename())) {
+            if (
+                !($file instanceof SplFileInfo) ||
+                !$file->isFile() ||
+                $file->isLink() ||
+                !preg_match('/^[a-f0-9]{40}$/D', $file->getFilename())
+            ) {
                 continue;
             }
-            $lock = storage_path('framework/cache/quota-locks/'.substr($file->getFilename(), 0, 2).'.lock');
+            $lock = storage_path(
+                'framework/cache/quota-locks/' .
+                    substr($file->getFilename(), 0, 2) .
+                    '.lock',
+            );
             $handle = fopen($lock, 'c');
             if ($handle === false) {
                 continue;
             }
             try {
-                if (! flock($handle, LOCK_EX | LOCK_NB)) {
+                if (!flock($handle, LOCK_EX | LOCK_NB)) {
                     continue;
                 }
                 $stream = fopen($file->getPathname(), 'rb');
@@ -44,7 +61,11 @@ final class FileQuotaCleaner
                 } finally {
                     fclose($stream);
                 }
-                if (! is_string($header) || ! ctype_digit($header) || (int) $header >= time()) {
+                if (
+                    !is_string($header) ||
+                    !ctype_digit($header) ||
+                    (int) $header >= time()
+                ) {
                     continue;
                 }
                 $count++;

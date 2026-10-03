@@ -25,7 +25,9 @@ def settings() -> Settings:
 
 @pytest.mark.parametrize("provider", ["mysql", "postgresql"])
 def test_provider_identifier_limits(
-    provider: Literal["mysql", "postgresql"], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    provider: Literal["mysql", "postgresql"],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Isolate provider validation from the consumer's generated provider marker.
     monkeypatch.chdir(tmp_path)
@@ -75,7 +77,9 @@ def test_registry_and_openapi() -> None:
         }
         for policy in REGISTRY.values()
     ]
-    assert document["paths"]["/api/auth/login"]["post"]["x-policy"]["rateLimit"] == "auth"
+    assert (
+        document["paths"]["/api/auth/login"]["post"]["x-policy"]["rateLimit"] == "auth"
+    )
     assert (
         document["paths"]["/api/notifications"]["post"]["x-policy"]["permission"]
         == "manage_notifications"
@@ -84,12 +88,17 @@ def test_registry_and_openapi() -> None:
 
 def test_configuration_rejects_unsafe_deployment() -> None:
     with pytest.raises(ValidationError):
-        Settings(jwt_secret=SecretStr("x" * 40), environment="production", cors_origins="")
+        Settings(
+            jwt_secret=SecretStr("x" * 40), environment="production", cors_origins=""
+        )
     with pytest.raises(ValidationError):
         Settings(jwt_secret=SecretStr("x" * 40), app_instance_count=2)
     with pytest.raises(ValueError):
         create_app(
-            Settings(jwt_secret=SecretStr("x" * 40), endpoint_policies_json='{"unknown.route":{}}')
+            Settings(
+                jwt_secret=SecretStr("x" * 40),
+                endpoint_policies_json='{"unknown.route":{}}',
+            )
         )
     with pytest.raises(ValueError):
         create_app(
@@ -103,7 +112,8 @@ def test_configuration_rejects_unsafe_deployment() -> None:
 def test_iana_zones_and_dst() -> None:
     instant = datetime(2026, 1, 1, tzinfo=UTC)
     assert [
-        in_zone(instant, zone).hour for zone in ("Asia/Jakarta", "Asia/Makassar", "Asia/Jayapura")
+        in_zone(instant, zone).hour
+        for zone in ("Asia/Jakarta", "Asia/Makassar", "Asia/Jayapura")
     ] == [7, 8, 9]
     assert (
         in_zone(instant, "America/New_York").utcoffset()
@@ -155,7 +165,9 @@ def test_sse_expiry_completes_response_and_cancels_producer() -> None:
             nonlocal producer_closed
             scope["state"] = {"token_expiry": int(time.time())}
             try:
-                await send({"type": "http.response.start", "status": 200, "headers": []})
+                await send(
+                    {"type": "http.response.start", "status": 200, "headers": []}
+                )
                 await asyncio.sleep(60)
             finally:
                 producer_closed = True

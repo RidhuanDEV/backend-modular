@@ -46,5 +46,7 @@ async def delete(id: UUID, ctx: RequestContext) -> Response:
 
 
 @router.post("/{id}/permissions", operation_id=EndpointId.ROLE_GRANTS)
-async def assign(id: UUID, dto: AssignPermissions, ctx: RequestContext) -> Success[RoleResponse]:
+async def assign(
+    id: UUID, dto: AssignPermissions, ctx: RequestContext
+) -> Success[RoleResponse]:
     return Success(data=await service.assign(ctx, id, dto.permissionIds))

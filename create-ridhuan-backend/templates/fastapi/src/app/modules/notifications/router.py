@@ -38,7 +38,9 @@ async def create(
     },
 )
 async def list_own(
-    ctx: RequestContext, response: Response, cursor: Annotated[UUID | None, Query()] = None
+    ctx: RequestContext,
+    response: Response,
+    cursor: Annotated[UUID | None, Query()] = None,
 ) -> Success[list[NotificationResponse]]:
     values, next_cursor = await service.list_own(ctx, cursor)
     if next_cursor is not None:
@@ -59,19 +61,25 @@ async def stream_access(
     # Validate access and cursor before headers. Only immutable values survive
     # the function-scoped database session; polling opens its own short sessions.
     return StreamAccess(
-        ctx.require_actor().id, ctx.token_expiry or 0, await service.cursor(ctx, last_event_id)
+        ctx.require_actor().id,
+        ctx.token_expiry or 0,
+        await service.cursor(ctx, last_event_id),
     )
 
 
 @router.get(
-    "/stream", operation_id=EndpointId.NOTIFICATION_STREAM, response_class=EventSourceResponse
+    "/stream",
+    operation_id=EndpointId.NOTIFICATION_STREAM,
+    response_class=EventSourceResponse,
 )
 async def stream(
     run: AppRuntime, access: Annotated[StreamAccess, Depends(stream_access)]
 ) -> AsyncIterator[ServerSentEvent]:
     sse_connection(1)
     try:
-        async for event in service.stream(run, access.recipient, access.expiry, access.after):
+        async for event in service.stream(
+            run, access.recipient, access.expiry, access.after
+        ):
             yield event
     finally:
         sse_connection(-1)

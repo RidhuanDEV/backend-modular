@@ -11,7 +11,8 @@ const only = process.argv.includes("--only")
   : undefined;
 const descriptors = {
   springboot: { source: "modular-springboot", identity: "com.example.backend", paths: [".gitattributes", ".dockerignore", ".env.example", ".gitignore", "AGENTS.md", "LICENSE", "README.md", "DEPENDENCIES.md", "pom.xml", "mvnw", "mvnw.cmd", ".mvn/wrapper", "Dockerfile", "compose.yaml", "compose.override.yaml.example", "src", "contracts", "docs", "scripts"] },
-  laravel: { source: "modular-laravel", identity: "modular-laravel", paths: [".gitattributes", ".dockerignore", ".env.example", ".gitignore", "AGENTS.md", "LICENSE", "README.md", "DEPENDENCIES.md", "composer.json", "composer.lock", "artisan", "app", "bootstrap/app.php", "bootstrap/providers.php", "bootstrap/cache/.gitignore", "config", "database", "routes", "public/index.php", "public/.htaccess", "resources/views", "stubs", "storage/.gitignore", "Dockerfile", "compose.yaml", "compose.override.yaml.example", "contracts", "docs", "scripts", "tests", "phpunit.xml", "phpstan.neon", "pint.json"] },
+  laravel: { source: "modular-laravel", identity: "modular-laravel", paths: [".gitattributes", ".dockerignore", ".env.example", ".gitignore", "AGENTS.md", "LICENSE", "README.md", "DEPENDENCIES.md", "composer.json", "composer.lock", "package.json", "package-lock.json", ".prettierrc.json", ".prettierignore",
+      "artisan", "app", "bootstrap/app.php", "bootstrap/providers.php", "bootstrap/cache/.gitignore", "config", "database", "routes", "public/index.php", "public/.htaccess", "resources/views", "stubs", "storage/.gitignore", "Dockerfile", "compose.yaml", "compose.override.yaml.example", "contracts", "docs", "scripts", "tests", "phpunit.xml", "phpstan.neon", "pint.json"] },
   "express-typescript": {
     source: "modular-express-typescript-starter-postgre",
     identity: "backend",
@@ -21,6 +22,7 @@ const descriptors = {
       ".env.example",
       ".gitignore",
       ".prettierignore",
+      ".prettierrc.json",
       "LICENSE",
       "Dockerfile",
       "docker-compose.yml",
@@ -52,6 +54,7 @@ const descriptors = {
       ".env.example",
       ".gitignore",
       ".prettierignore",
+      ".prettierrc.json",
       "Dockerfile",
       "LICENSE",
       "README.md",
@@ -117,6 +120,8 @@ const descriptors = {
       "templates",
       ".dockerignore",
       ".editorconfig",
+      ".csharpierrc.json",
+      ".csharpierignore",
       ".env.example",
       ".gitattributes",
       ".gitignore",

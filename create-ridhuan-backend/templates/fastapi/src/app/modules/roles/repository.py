@@ -24,5 +24,7 @@ async def permissions_within_actor(actor: User, ids: set[UUID]) -> None:
 
 async def role_within_actor(session: AsyncSession, actor: User, id: UUID) -> Role:
     role = await role_by_id(session, id)
-    await permissions_within_actor(actor, {grant.permission_id for grant in role.grants})
+    await permissions_within_actor(
+        actor, {grant.permission_id for grant in role.grants}
+    )
     return role

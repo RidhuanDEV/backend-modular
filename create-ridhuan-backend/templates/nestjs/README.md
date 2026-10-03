@@ -197,11 +197,11 @@ Configure database TLS with hostname/CA validation, trusted ingress/proxies, exa
 
 ## Code formatting
 
-Install development dependencies, then use the native project formatter:
+Prettier targets 80 columns, two spaces, and preserves explicitly multiline objects.
 
 ```sh
 npm run format
 npm run format:check
 ```
 
-The workspace formatting workflow preserves released migration history.
+Formatting changes layout only. Keep complex payloads multiline and preserve migration history. A width target is a wrapping preference, not a hard limit for strings or comments.

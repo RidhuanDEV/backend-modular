@@ -6,5 +6,9 @@ namespace App\Modules\Users\Data;
 
 final readonly class CreateUser
 {
-    public function __construct(public string $email, #[\SensitiveParameter] public string $password, public string $roleId) {}
+    public function __construct(
+        public string $email,
+        #[\SensitiveParameter] public string $password,
+        public string $roleId,
+    ) {}
 }

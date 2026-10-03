@@ -22,7 +22,9 @@ PERMISSIONS = (
 
 
 async def seed(settings: Settings) -> None:
-    password = settings.admin_password.get_secret_value() if settings.admin_password else ""
+    password = (
+        settings.admin_password.get_secret_value() if settings.admin_password else ""
+    )
     if len(password) < 12 or "CHANGE_ME" in password or "replace" in password:
         raise ValueError("ADMIN_PASSWORD requires a strong explicit value")
     encoded = await asyncio.to_thread(passwords.hash, password)
@@ -56,7 +58,9 @@ async def seed(settings: Settings) -> None:
                     await session.execute(
                         statement.on_duplicate_key_update(name=statement.inserted.name)
                     )
-                permission = await session.scalar(select(Permission).where(Permission.name == name))
+                permission = await session.scalar(
+                    select(Permission).where(Permission.name == name)
+                )
                 if permission is None:
                     raise RuntimeError("Permission seed failed")
                 if settings.db_provider == "postgresql":
@@ -70,7 +74,9 @@ async def seed(settings: Settings) -> None:
                         role_id=admin.id, permission_id=permission.id
                     )
                     await session.execute(
-                        grant.on_duplicate_key_update(permission_id=grant.inserted.permission_id)
+                        grant.on_duplicate_key_update(
+                            permission_id=grant.inserted.permission_id
+                        )
                     )
             email = settings.admin_email.strip().lower()
             if settings.db_provider == "postgresql":
@@ -88,9 +94,13 @@ async def seed(settings: Settings) -> None:
                 user = mysql_insert(User).values(
                     email=email, password_hash=encoded, role_id=admin.id
                 )
-                await session.execute(user.on_duplicate_key_update(email=user.inserted.email))
+                await session.execute(
+                    user.on_duplicate_key_update(email=user.inserted.email)
+                )
                 generation = mysql_insert(CacheGeneration).values(id=1, version=0)
-                await session.execute(generation.on_duplicate_key_update(id=generation.inserted.id))
+                await session.execute(
+                    generation.on_duplicate_key_update(id=generation.inserted.id)
+                )
             await session.commit()
     finally:
         await engine.dispose()

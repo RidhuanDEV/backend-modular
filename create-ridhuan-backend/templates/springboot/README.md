@@ -185,11 +185,11 @@ Configure database TLS with hostname/CA validation, trusted ingress/proxies, exa
 
 ## Code formatting
 
-Install development dependencies, then use the native project formatter:
+Spotless uses google-java-format with its native 100-column style. On Windows use `mvnw.cmd`.
 
 ```sh
 ./mvnw -DskipTests spotless:apply
 ./mvnw -DskipTests spotless:check
 ```
 
-The workspace formatting workflow preserves released migration history. On Windows, use `mvnw.cmd` instead of `./mvnw`.
+Formatting changes layout only. Keep complex payloads multiline and preserve migration history. A width target is a wrapping preference, not a hard limit for strings or comments.

@@ -18,5 +18,7 @@ class User(Base):
     role_id: Mapped[UUID] = mapped_column(Guid(), ForeignKey("roles.id"), index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(UTCInstant())
     created_at: Mapped[datetime] = mapped_column(UTCInstant(), default=now)
-    updated_at: Mapped[datetime] = mapped_column(UTCInstant(), default=now, onupdate=now)
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCInstant(), default=now, onupdate=now
+    )
     role: Mapped[Role] = relationship(lazy="selectin")

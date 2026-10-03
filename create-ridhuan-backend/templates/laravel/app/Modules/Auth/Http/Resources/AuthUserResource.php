@@ -21,6 +21,12 @@ final class AuthUserResource extends JsonResource
     {
         $m = $this->model;
 
-        return ['id' => $m->id, 'email' => $m->email, 'roleId' => $m->role_id, 'createdAt' => $m->created_at->toIso8601ZuluString('microsecond'), 'updatedAt' => $m->updated_at->toIso8601ZuluString('microsecond')];
+        return [
+            'id' => $m->id,
+            'email' => $m->email,
+            'roleId' => $m->role_id,
+            'createdAt' => $m->created_at->toIso8601ZuluString('microsecond'),
+            'updatedAt' => $m->updated_at->toIso8601ZuluString('microsecond'),
+        ];
     }
 }

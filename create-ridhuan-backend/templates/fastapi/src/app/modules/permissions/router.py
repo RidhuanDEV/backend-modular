@@ -6,7 +6,12 @@ from app.api.dependencies import RequestContext
 from app.api.registry import EndpointId
 from app.api.schemas import Success
 from app.modules.permissions import service
-from app.modules.permissions.schemas import Named, PermissionResponse, Rename, public_permission
+from app.modules.permissions.schemas import (
+    Named,
+    PermissionResponse,
+    Rename,
+    public_permission,
+)
 
 router = APIRouter(prefix="/api/permissions", tags=["permissions"])
 
@@ -27,7 +32,9 @@ async def create(dto: Named, ctx: RequestContext) -> Success[PermissionResponse]
 
 
 @router.patch("/{id}", operation_id=EndpointId.PERMISSION_UPDATE)
-async def update(id: UUID, dto: Rename, ctx: RequestContext) -> Success[PermissionResponse]:
+async def update(
+    id: UUID, dto: Rename, ctx: RequestContext
+) -> Success[PermissionResponse]:
     return Success(data=await service.update(ctx, id, dto.name))
 
 

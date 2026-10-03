@@ -13,13 +13,19 @@ final class UpdateUserRequest extends BackendRequest
     /** @return array<string, list<string>> */
     public function rules(): array
     {
-        return ['email' => ['sometimes', 'string', 'email', 'max:255'], 'roleId' => ['sometimes', 'uuid']];
+        return [
+            'email' => ['sometimes', 'string', 'email', 'max:255'],
+            'roleId' => ['sometimes', 'uuid'],
+        ];
     }
 
     public function dto(): UpdateUser
     {
         $v = $this->validated();
 
-        return new UpdateUser(Input::optionalString($v, 'email'), Input::optionalString($v, 'roleId'));
+        return new UpdateUser(
+            Input::optionalString($v, 'email'),
+            Input::optionalString($v, 'roleId'),
+        );
     }
 }

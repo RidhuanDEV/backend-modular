@@ -53,12 +53,21 @@ async def assign(ctx: Context, id: UUID, ids: list[UUID]) -> RoleResponse:
     before = public_role(role)
     selected = set(ids)
     await permissions_within_actor(ctx.require_actor(), selected)
-    found = set(await ctx.session.scalars(select(Permission.id).where(Permission.id.in_(selected))))
+    found = set(
+        await ctx.session.scalars(
+            select(Permission.id).where(Permission.id.in_(selected))
+        )
+    )
     if found != selected:
         raise ApiError(404, "Permission not found")
-    await ctx.session.execute(delete(RolePermission).where(RolePermission.role_id == id))
+    await ctx.session.execute(
+        delete(RolePermission).where(RolePermission.role_id == id)
+    )
     ctx.session.add_all(
-        [RolePermission(role_id=id, permission_id=permission) for permission in selected]
+        [
+            RolePermission(role_id=id, permission_id=permission)
+            for permission in selected
+        ]
     )
     await ctx.session.flush()
     # Refresh the loaded relationship after replacing grants.

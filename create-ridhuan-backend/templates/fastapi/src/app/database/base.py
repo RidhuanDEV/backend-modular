@@ -21,7 +21,9 @@ class UTCInstant(TypeDecorator[datetime]):
             return dialect.type_descriptor(DATETIME(fsp=6))
         return dialect.type_descriptor(DateTime(timezone=True))
 
-    def process_bind_param(self, value: datetime | None, dialect: Dialect) -> datetime | None:
+    def process_bind_param(
+        self, value: datetime | None, dialect: Dialect
+    ) -> datetime | None:
         if value is None:
             return None
         if value.tzinfo is None:
@@ -29,7 +31,11 @@ class UTCInstant(TypeDecorator[datetime]):
         utc = value.astimezone(UTC)
         return utc.replace(tzinfo=None) if dialect.name == "mysql" else utc
 
-    def process_result_value(self, value: datetime | None, dialect: Dialect) -> datetime | None:
+    def process_result_value(
+        self, value: datetime | None, dialect: Dialect
+    ) -> datetime | None:
         if value is None:
             return None
-        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+        return (
+            value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+        )

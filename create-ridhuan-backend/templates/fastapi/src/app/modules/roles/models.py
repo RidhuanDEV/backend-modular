@@ -15,7 +15,9 @@ class Role(Base):
     id: Mapped[UUID] = mapped_column(Guid(), primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(UTCInstant(), default=now)
-    updated_at: Mapped[datetime] = mapped_column(UTCInstant(), default=now, onupdate=now)
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCInstant(), default=now, onupdate=now
+    )
     grants: Mapped[list["RolePermission"]] = relationship(
         lazy="selectin", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -27,6 +29,9 @@ class RolePermission(Base):
         Guid(), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True
     )
     permission_id: Mapped[UUID] = mapped_column(
-        Guid(), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True, index=True
+        Guid(),
+        ForeignKey("permissions.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
     )
     permission: Mapped[Permission] = relationship(lazy="selectin")

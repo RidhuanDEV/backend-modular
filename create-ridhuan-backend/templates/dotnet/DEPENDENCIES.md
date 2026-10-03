@@ -29,3 +29,7 @@ Build-time OpenAPI additionally installs Microsoft.Extensions.ApiDescription.Ser
 ## MySQL provider
 
 Official Oracle/MySQL `MySql.EntityFrameworkCore` 10.0.9 with `MySql.Data` 26.7.0 supports EF Core 10. Installed nuspec license: `GPL-2.0-only WITH Universal-FOSS-exception-1.0`, acceptance required. Review these terms for your distribution. [Provider metadata](https://www.nuget.org/packages/MySql.EntityFrameworkCore/10.0.9). The provider has separate EF context/migrations; UUIDs use varchar(36), JSON uses MySQL JSON and UTC values use datetime(6). External databases should use `SslMode=VerifyFull` with a trusted CA. Local Compose uses `Preferred`; never use disabled certificate verification as a production fix.
+
+## Development formatting
+
+[CSharpier 1.3.0](https://www.nuget.org/packages/CSharpier/1.3.0) is pinned as a local tool in `dotnet-tools.json`. Restore with `dotnet tool restore --tool-manifest dotnet-tools.json`; configuration targets 100 columns and excludes generated files and released migrations. It formats layout without replacing Roslyn analyzers or nullable checks.

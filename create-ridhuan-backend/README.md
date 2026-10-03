@@ -398,3 +398,7 @@ npm --prefix create-ridhuan-backend run format:backends:check
 ```
 
 Use `-- --only nestjs` (or `express`, `golang`, `dotnet`, `fastapi`, `springboot`, `laravel`) to select a backend. Refresh local bundled templates with `npm --prefix create-ridhuan-backend run prepare:templates -- --allow-dirty`. Prepare release snapshots from committed source without `--allow-dirty`.
+
+### Readable source layout
+
+Prettier uses 80 columns for TypeScript and pure PHP (PHP plugin); Ruff uses 88, CSharpier uses 100, Java uses google-java-format, and Go uses gofmt. Install Laravel formatter dependencies with `npm ci --ignore-scripts` and restore CSharpier with `dotnet tool restore --tool-manifest dotnet-tools.json` in its source repository. Larger payloads should be written with one field per line. Width targets cannot guarantee wrapping every short array, string or comment.

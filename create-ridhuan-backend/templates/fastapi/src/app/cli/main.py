@@ -76,7 +76,9 @@ async def cleanup(settings: Settings, apply: bool) -> None:
                         async with sessions(engine)() as check:
                             if (
                                 await check.scalar(
-                                    select(StoredFile.id).where(StoredFile.object_key == item.key)
+                                    select(StoredFile.id).where(
+                                        StoredFile.object_key == item.key
+                                    )
                                 )
                                 is None
                             ):
@@ -107,7 +109,9 @@ def main() -> None:
         ],
     )
     parser.add_argument("name", nargs="?")
-    parser.add_argument("--revision", default="head", help="migrate up to an Alembic revision")
+    parser.add_argument(
+        "--revision", default="head", help="migrate up to an Alembic revision"
+    )
     cleanup_mode = parser.add_mutually_exclusive_group()
     cleanup_mode.add_argument("--apply", action="store_true")
     cleanup_mode.add_argument("--dry-run", action="store_true")
@@ -146,8 +150,12 @@ def main() -> None:
         )
         if not isinstance(revision, Script):
             raise RuntimeError("Expected one migration revision")
-        subprocess.run([sys.executable, "-m", "ruff", "check", revision.path, "--fix"], check=True)
-        subprocess.run([sys.executable, "-m", "ruff", "format", revision.path], check=True)
+        subprocess.run(
+            [sys.executable, "-m", "ruff", "check", revision.path, "--fix"], check=True
+        )
+        subprocess.run(
+            [sys.executable, "-m", "ruff", "format", revision.path], check=True
+        )
     elif args.command == "check-migrations":
         command.check(migration_config(settings))
     elif args.command == "seed":

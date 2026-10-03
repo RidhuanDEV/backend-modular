@@ -30,7 +30,9 @@ def generate_module(name: str) -> None:
         raise ValueError("Module already exists; no files overwritten")
     original_models = models.read_text(encoding="utf-8")
     if re.search(rf"\b{symbol}\b", original_models):
-        raise ValueError("Entity name collides with an existing model; choose another module name")
+        raise ValueError(
+            "Entity name collides with an existing model; choose another module name"
+        )
     edits = {
         registry: (
             "class EndpointId(StrEnum):",
@@ -52,10 +54,12 @@ def generate_module(name: str) -> None:
         raise ValueError("Policy registry anchor changed")
     contents[registry] = contents[registry].replace(
         policy_anchor,
-        policy_anchor + f'\n    Policy(EndpointId.{identifier}, "GET", "/api/{name}", "{name}"),',
+        policy_anchor
+        + f'\n    Policy(EndpointId.{identifier}, "GET", "/api/{name}", "{name}"),',
     )
     contents[main] = (
-        f"from app.modules.{name}.router import router as {router_alias}\n" + contents[main]
+        f"from app.modules.{name}.router import router as {router_alias}\n"
+        + contents[main]
     )
     contents[models] = original_models + (
         f"\nfrom app.modules.{name}.models import {symbol} as {symbol}\n"
@@ -130,8 +134,13 @@ async def list_module(ctx: RequestContext) -> Success[list[{symbol}Response]]:
         (target / filename).write_text(content, encoding="utf-8", newline="\n")
     for path, content in contents.items():
         path.write_text(content, encoding="utf-8", newline="\n")
-    python_paths = [str(target), *(str(path) for path in contents if path.suffix == ".py")]
-    subprocess.run([sys.executable, "-m", "ruff", "check", *python_paths, "--fix"], check=True)
+    python_paths = [
+        str(target),
+        *(str(path) for path in contents if path.suffix == ".py"),
+    ]
+    subprocess.run(
+        [sys.executable, "-m", "ruff", "check", *python_paths, "--fix"], check=True
+    )
     subprocess.run([sys.executable, "-m", "ruff", "format", *python_paths], check=True)
     print(
         f"Generated {name}: review authorization, then create/review a provider migration before serving."

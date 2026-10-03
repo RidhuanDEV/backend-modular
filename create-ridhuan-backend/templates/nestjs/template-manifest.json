@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-nestjs.git",
-    "commit": "af0187c4efed4786d7c040c67ce24386e1151fe6",
+    "commit": "6ef17c3fc54b1f20180c260d143ff8dd17c847fc",
     "dirty": false
   },
   "requirements": {
@@ -20,6 +20,7 @@
     ".env.mysql.example": "f2baf435e143ae6118ad1b273ffe7921f8366a7f61a5ebfc1db73bcf696e8e47",
     ".gitattributes": "a0a7d068fd4921bf72c55eefa51e5b5866ed0437f409a338431ae6f2adcadfa1",
     ".prettierignore": "191d579677e0c4483a52efa13b541de946143d40efee807f4f46234d38ca4138",
+    ".prettierrc.json": "750d51495eb805e246d31fba17dd929362b43ac5182b4e393b0997c206ca2331",
     "compose.mysql.yaml": "e153559adf3e858aaf2a7d7361eb009dcfb283b50bbe89e04df1adb8cc65140f",
     "compose.override.yaml.example": "e3df04f998441916f8dbc8fd11684148b5af29edf4e057d97e4bdb6f285ea64d",
     "compose.yaml": "72ee07961b234ca40da59abe760f79eacf39baddfb2ff1409446ebc061f85db0",
@@ -47,7 +48,7 @@
     "prisma/mysql/schema.prisma": "03282adad356c39b2237304b254de291d1104ed4fbe2b2c1433ae6529f4ac515",
     "prisma/schema.prisma": "3b9b077d7aef20f38fdea87b7649dc29e1f435d92c8bf0c9ff087342f33f62ce",
     "prisma.config.ts": "195529370ce8a0bceb11720a84deefe9528f817016a51df9c37031abbc96ef79",
-    "README.md": "c320652e4d62a9420273cc81bca05492d23921f51c8024e1bca18d5cd3164806",
+    "README.md": "6d74839da29a44f27af76b1497b717c215cad0e4411361d494cb99f5527fc049",
     "scripts/init-bucket.sh": "4dd62855a4d9d354f31bffea2d89e4a57b554705e189e440b1c72fea97c87d96",
     "scripts/minio.Dockerfile": "1f41a7baa0a917fb32ee82b8b4523cb144077a7a61469cb580cc4000a876013f",
     "scripts/mysql-entrypoint.sh": "7ddb1c2a7f0a8654a71b00d39dc7deb940886b880572577fce57460448d4f7ab",

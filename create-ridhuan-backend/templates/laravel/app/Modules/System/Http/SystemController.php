@@ -23,7 +23,13 @@ final class SystemController
                     Redis::connection()->ping();
                 }
             } catch (Throwable) {
-                return response()->json(['success' => false, 'message' => 'Required dependency unavailable'], 503);
+                return response()->json(
+                    [
+                        'success' => false,
+                        'message' => 'Required dependency unavailable',
+                    ],
+                    503,
+                );
             }
         }
 

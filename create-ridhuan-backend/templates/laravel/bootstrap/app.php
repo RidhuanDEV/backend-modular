@@ -22,8 +22,8 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 $application = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__.'/../routes/web.php',
-        commands: __DIR__.'/../routes/console.php',
+        web: __DIR__ . '/../routes/web.php',
+        commands: __DIR__ . '/../routes/console.php',
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->group('web', [EndpointMiddleware::class]);
@@ -33,31 +33,55 @@ $application = Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->report(function (Throwable $error): bool {
             $request = app()->bound('request') ? app('request') : null;
-            $requestId = $request instanceof Request ? $request->attributes->get('requestId') : null;
-            $traceId = $request instanceof Request ? $request->attributes->get('traceId') : null;
-            Log::error('request_failed', ['type' => $error::class, ...(is_string($requestId) ? ['requestId' => $requestId] : []), ...(is_string($traceId) ? ['traceId' => $traceId] : [])]);
+            $requestId =
+                $request instanceof Request
+                    ? $request->attributes->get('requestId')
+                    : null;
+            $traceId =
+                $request instanceof Request
+                    ? $request->attributes->get('traceId')
+                    : null;
+            Log::error('request_failed', [
+                'type' => $error::class,
+                ...is_string($requestId) ? ['requestId' => $requestId] : [],
+                ...is_string($traceId) ? ['traceId' => $traceId] : [],
+            ]);
 
             return false;
         });
-        $exceptions->shouldRenderJsonWhen(fn (Request $request, Throwable $error): bool => true);
-        $exceptions->render(function (Throwable $error, Request $request): JsonResponse {
+        $exceptions->shouldRenderJsonWhen(
+            fn(Request $request, Throwable $error): bool => true,
+        );
+        $exceptions->render(function (
+            Throwable $error,
+            Request $request,
+        ): JsonResponse {
             $status = match (true) {
                 $error instanceof ApiException => $error->status,
                 $error instanceof ValidationException => 422,
                 $error instanceof AuthorizationException => 403,
                 $error instanceof ModelNotFoundException => 404,
                 $error instanceof UniqueConstraintViolationException => 409,
-                $error instanceof HttpExceptionInterface => $error->getStatusCode(),
+                $error instanceof HttpExceptionInterface
+                    => $error->getStatusCode(),
                 default => 500,
             };
-            $payload = $error instanceof ValidationException
-                ? ErrorEnvelope::validationResponse($error->getMessage(), ErrorEnvelope::validation($error))
-                : ErrorEnvelope::make(match (true) {
-                    $status >= 500 => 'Service unavailable',
-                    $error instanceof UniqueConstraintViolationException => 'Resource already exists',
-                    $error instanceof ModelNotFoundException => 'Resource not found',
-                    default => $error->getMessage(),
-                });
+            $payload =
+                $error instanceof ValidationException
+                    ? ErrorEnvelope::validationResponse(
+                        $error->getMessage(),
+                        ErrorEnvelope::validation($error),
+                    )
+                    : ErrorEnvelope::make(
+                        match (true) {
+                            $status >= 500 => 'Service unavailable',
+                            $error instanceof UniqueConstraintViolationException
+                                => 'Resource already exists',
+                            $error instanceof ModelNotFoundException
+                                => 'Resource not found',
+                            default => $error->getMessage(),
+                        },
+                    );
             $response = response()->json($payload, $status);
             $id = $request->attributes->get('requestId');
             if (is_string($id)) {
@@ -69,14 +93,15 @@ $application = Application::configure(basePath: dirname(__DIR__))
 
             return $response;
         });
-    })->create();
+    })
+    ->create();
 
 if (PHP_OS_FAMILY === 'Windows') {
     foreach (range('A', 'Z') as $drive) {
-        $application->addAbsoluteCachePathPrefix($drive.':/');
-        $application->addAbsoluteCachePathPrefix($drive.':\\');
-        $application->addAbsoluteCachePathPrefix(strtolower($drive).':/');
-        $application->addAbsoluteCachePathPrefix(strtolower($drive).':\\');
+        $application->addAbsoluteCachePathPrefix($drive . ':/');
+        $application->addAbsoluteCachePathPrefix($drive . ':\\');
+        $application->addAbsoluteCachePathPrefix(strtolower($drive) . ':/');
+        $application->addAbsoluteCachePathPrefix(strtolower($drive) . ':\\');
     }
 }
 

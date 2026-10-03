@@ -10,11 +10,15 @@ class BlockingPool:
     """Bound running jobs and submissions, including after client cancellation."""
 
     def __init__(self, workers: int = 2, *, wait_on_cancel: bool = False) -> None:
-        self.executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="backend-work")
+        self.executor = ThreadPoolExecutor(
+            max_workers=workers, thread_name_prefix="backend-work"
+        )
         self.slots = asyncio.Semaphore(workers)
         self.wait_on_cancel = wait_on_cancel
 
-    async def run[T, **P](self, operation: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
+    async def run[T, **P](
+        self, operation: Callable[P, T], *args: P.args, **kwargs: P.kwargs
+    ) -> T:
         try:
             await asyncio.wait_for(self.slots.acquire(), timeout=3)
         except TimeoutError as error:

@@ -11,7 +11,11 @@ AuditMode = Literal["required", "optional", "none"]
 RateGroup = Literal["auth", "public", "internal"]
 CacheMode = Literal["read", "off"]
 PermissionName = Literal[
-    "manage_users", "manage_roles", "manage_permissions", "manage_uploads", "manage_notifications"
+    "manage_users",
+    "manage_roles",
+    "manage_permissions",
+    "manage_uploads",
+    "manage_notifications",
 ]
 
 
@@ -92,9 +96,20 @@ AUDIT_MUTATIONS: frozenset[EndpointId] = frozenset(
 )
 
 _policies = [
-    Policy(EndpointId.HEALTH, "GET", "/health", "system", rate="public", authenticated=False),
-    Policy(EndpointId.LIVE, "GET", "/live", "system", rate="public", authenticated=False),
-    Policy(EndpointId.READY, "GET", "/ready", "system", rate="public", authenticated=False),
+    Policy(
+        EndpointId.HEALTH,
+        "GET",
+        "/health",
+        "system",
+        rate="public",
+        authenticated=False,
+    ),
+    Policy(
+        EndpointId.LIVE, "GET", "/live", "system", rate="public", authenticated=False
+    ),
+    Policy(
+        EndpointId.READY, "GET", "/ready", "system", rate="public", authenticated=False
+    ),
     Policy(
         EndpointId.DOCS_SPEC,
         "GET",
@@ -111,7 +126,9 @@ _policies = [
         rate="public",
         authenticated=False,
     ),
-    Policy(EndpointId.DOCS_UI, "GET", "/docs", "docs", rate="public", authenticated=False),
+    Policy(
+        EndpointId.DOCS_UI, "GET", "/docs", "docs", rate="public", authenticated=False
+    ),
     Policy(
         EndpointId.REGISTER,
         "POST",
@@ -151,7 +168,9 @@ _policies = [
         authenticated=False,
     ),
     Policy(EndpointId.ME, "GET", "/api/auth/me", "auth"),
-    Policy(EndpointId.USER_LIST, "GET", "/api/users", "user", permission="manage_users"),
+    Policy(
+        EndpointId.USER_LIST, "GET", "/api/users", "user", permission="manage_users"
+    ),
     Policy(
         EndpointId.USER_GET,
         "GET",
@@ -186,7 +205,9 @@ _policies = [
         "required",
         permission="manage_users",
     ),
-    Policy(EndpointId.ROLE_LIST, "GET", "/api/roles", "roles", permission="manage_roles"),
+    Policy(
+        EndpointId.ROLE_LIST, "GET", "/api/roles", "roles", permission="manage_roles"
+    ),
     Policy(
         EndpointId.ROLE_GET,
         "GET",
@@ -301,7 +322,12 @@ _policies = [
         "notifications",
         audit="required",
     ),
-    Policy(EndpointId.NOTIFICATION_STREAM, "GET", "/api/notifications/stream", "notifications"),
+    Policy(
+        EndpointId.NOTIFICATION_STREAM,
+        "GET",
+        "/api/notifications/stream",
+        "notifications",
+    ),
 ]
 REGISTRY = MappingProxyType({policy.id: policy for policy in _policies})
 
@@ -320,7 +346,10 @@ def policies(settings: Settings) -> dict[EndpointId, Policy]:
     result = dict(REGISTRY)
     for id, override in overrides.items():
         base = result[id]
-        if override.audit in {"required", "optional"} and base.audit_capability == "none":
+        if (
+            override.audit in {"required", "optional"}
+            and base.audit_capability == "none"
+        ):
             raise ValueError(f"{id} has no audit producer")
         if override.cache == "read" and base.cache != "read":
             raise ValueError(f"{id} has no cache adapter")

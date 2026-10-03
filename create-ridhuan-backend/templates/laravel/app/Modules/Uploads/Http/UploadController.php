@@ -16,20 +16,40 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class UploadController
 {
-    public function __construct(private readonly UploadService $service, private readonly Actor $actor) {}
+    public function __construct(
+        private readonly UploadService $service,
+        private readonly Actor $actor,
+    ) {}
 
     public function create(UploadRequest $request): JsonResponse
     {
-        return Api::resource(new StoredFileResource($this->service->create($request->upload(), $this->actor->user())), 201);
+        return Api::resource(
+            new StoredFileResource(
+                $this->service->create(
+                    $request->upload(),
+                    $this->actor->user(),
+                ),
+            ),
+            201,
+        );
     }
 
-    public function get(DownloadRequest $request, string $id): JsonResponse|StreamedResponse
-    {
+    public function get(
+        DownloadRequest $request,
+        string $id,
+    ): JsonResponse|StreamedResponse {
         $file = $this->service->get($id);
-        if (! $request->download()) {
+        if (!$request->download()) {
             return Api::resource(new StoredFileResource($file));
         }
 
-        return Storage::disk($file->storage)->download($file->object_key, $file->original_name, ['Content-Type' => $file->mime_type, 'X-Content-Type-Options' => 'nosniff']);
+        return Storage::disk($file->storage)->download(
+            $file->object_key,
+            $file->original_name,
+            [
+                'Content-Type' => $file->mime_type,
+                'X-Content-Type-Options' => 'nosniff',
+            ],
+        );
     }
 }

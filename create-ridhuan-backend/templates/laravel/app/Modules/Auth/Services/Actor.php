@@ -12,7 +12,7 @@ final class Actor
     public function user(): User
     {
         $user = auth()->user();
-        if (! $user instanceof User) {
+        if (!($user instanceof User)) {
             throw new ApiException(401, 'Authentication required');
         }
 

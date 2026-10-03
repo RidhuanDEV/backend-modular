@@ -41,7 +41,9 @@ async def test_cancelled_request_retains_its_worker_until_completion() -> None:
         await pool.close()
 
 
-async def test_stream_worker_finishes_before_cancellation_closes_its_resources() -> None:
+async def test_stream_worker_finishes_before_cancellation_closes_its_resources() -> (
+    None
+):
     pool = BlockingPool(workers=1, wait_on_cancel=True)
     entered = threading.Event()
     release = threading.Event()

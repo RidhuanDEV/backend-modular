@@ -23,3 +23,7 @@ Resolved with Composer2.9.8 on official PHP8.5.11 NTS x64, 3 October2026. Offici
 JWT signing/verification uses maintained firebase/php-jwt SDK, no custom cryptography. Scramble is third party, automatic request/resource/schema inference plus bounded policy/SSE/media extensions. Laravel Hash/Storage/Mail and maintained Flysystem/AWS/Symfony adapters supply native transports. OTel packages are official project API/SDK/exporter. Larastan max/Pint/PHPUnit are development-only. Composer plugins explicitly allow php-http/discovery; stable only.
 
 Docker PHP8.5.11 FPM Bookworm index sha256:53eab56a8f43f51a92119f6c29b3448af98eec288ff17f92829354a4b4c9ca05, Composer2.9.8 index sha256:b09bccd91a78fe8a9ab4b33d707b862e8fe54fec17782e32683ad2a69c46867d, Nginx1.30.5 Alpine index sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94 were verified in published registry. Fixture helper MinIO/MySQL scripts derive from current Go template; no user environment/data copied.
+
+## Development formatting
+
+Prettier 3.8.1 and `@prettier/plugin-php` 0.25.0 are pinned in `package-lock.json`. The published plugin peer requirement is Prettier ^3.0.0. Formatting is limited to pure PHP source, as recommended by [the plugin maintainers](https://github.com/prettier/plugin-php). Node tooling is optional for runtime deployment.

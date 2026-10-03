@@ -36,7 +36,10 @@ async def context(
             claims = verify_access(header[7:], run.settings)
             actor = await user_by_id(session, claims.sub)
             expiry = claims.exp
-            request.scope["state"] = {**request.scope.get("state", {}), "token_expiry": expiry}
+            request.scope["state"] = {
+                **request.scope.get("state", {}),
+                "token_expiry": expiry,
+            }
             if actor is None:
                 raise ApiError(401, "User unavailable")
             if policy.permission and policy.permission not in {
@@ -45,7 +48,12 @@ async def context(
                 raise ApiError(403, "Forbidden")
         try:
             yield Context(
-                session, policy, actor, request.headers.get("x-request-id", ""), run.work, expiry
+                session,
+                policy,
+                actor,
+                request.headers.get("x-request-id", ""),
+                run.work,
+                expiry,
             )
         finally:
             await session.rollback()

@@ -16,25 +16,37 @@ use Symfony\Component\HttpFoundation\Response;
 
 final class AuthController
 {
-    public function __construct(private readonly AuthService $service, private readonly Actor $actor) {}
+    public function __construct(
+        private readonly AuthService $service,
+        private readonly Actor $actor,
+    ) {}
 
     public function register(RegisterRequest $request): JsonResponse
     {
-        return Api::resource(new AuthUserResource($this->service->register($request->dto())), 201);
+        return Api::resource(
+            new AuthUserResource($this->service->register($request->dto())),
+            201,
+        );
     }
 
     public function login(LoginRequest $request): JsonResponse
     {
         $v = $this->service->login($request->dto());
 
-        return Api::data(['token' => $v->token, 'refreshToken' => $v->refreshToken]);
+        return Api::data([
+            'token' => $v->token,
+            'refreshToken' => $v->refreshToken,
+        ]);
     }
 
     public function refresh(RefreshRequest $request): JsonResponse
     {
         $v = $this->service->refresh($request->token());
 
-        return Api::data(['token' => $v->token, 'refreshToken' => $v->refreshToken]);
+        return Api::data([
+            'token' => $v->token,
+            'refreshToken' => $v->refreshToken,
+        ]);
     }
 
     public function logout(RefreshRequest $request): Response

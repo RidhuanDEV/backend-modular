@@ -30,18 +30,37 @@ final class BackendSeed extends Command
         DB::transaction(function () use ($password): void {
             Role::query()->firstOrCreate(['name' => 'user']);
             $admin = Role::query()->firstOrCreate(['name' => 'admin']);
-            foreach (['manage_users', 'manage_roles', 'manage_permissions', 'manage_uploads', 'manage_notifications'] as $name) {
-                $permission = Permission::query()->firstOrCreate(['name' => $name]);
+            foreach (
+                [
+                    'manage_users',
+                    'manage_roles',
+                    'manage_permissions',
+                    'manage_uploads',
+                    'manage_notifications',
+                ]
+                as $name
+            ) {
+                $permission = Permission::query()->firstOrCreate([
+                    'name' => $name,
+                ]);
                 if ($admin->wasRecentlyCreated) {
-                    $admin->permissions()->syncWithoutDetaching([$permission->id]);
+                    $admin
+                        ->permissions()
+                        ->syncWithoutDetaching([$permission->id]);
                 }
             }
-            $email = mb_strtolower(trim(Settings::string('backend.seed.email')));
-            if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $email = mb_strtolower(
+                trim(Settings::string('backend.seed.email')),
+            );
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 throw new \InvalidArgumentException('Invalid ADMIN_EMAIL');
             }
-            if (! User::withTrashed()->where('email', $email)->exists()) {
-                User::query()->create(['email' => $email, 'password' => Hash::make($password), 'role_id' => $admin->id]);
+            if (!User::withTrashed()->where('email', $email)->exists()) {
+                User::query()->create([
+                    'email' => $email,
+                    'password' => Hash::make($password),
+                    'role_id' => $admin->id,
+                ]);
             }
         });
         $this->info('Seed completed without replacing existing credentials');

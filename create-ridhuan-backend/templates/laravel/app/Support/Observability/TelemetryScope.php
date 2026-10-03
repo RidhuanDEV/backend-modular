@@ -9,5 +9,8 @@ use OpenTelemetry\Context\ScopeInterface;
 
 final readonly class TelemetryScope
 {
-    public function __construct(public SpanInterface $span, public ScopeInterface $context) {}
+    public function __construct(
+        public SpanInterface $span,
+        public ScopeInterface $context,
+    ) {}
 }

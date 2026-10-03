@@ -208,11 +208,11 @@ MySQL credentials, including non-ASCII passwords, are covered by the provider ac
 
 ## Code formatting
 
-Install development dependencies, then use the native project formatter:
+Ruff targets 88 columns and four spaces.
 
 ```sh
 uv run --locked ruff format src tests scripts
 uv run --locked ruff format --check src tests scripts
 ```
 
-The workspace formatting workflow preserves released migration history.
+Formatting changes layout only. Keep complex payloads multiline and preserve migration history. A width target is a wrapping preference, not a hard limit for strings or comments.

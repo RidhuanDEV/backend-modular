@@ -36,31 +36,68 @@ public interface IBackendStore
     Task RollbackAsync(CancellationToken ct);
     Task SaveAsync(CancellationToken ct);
 }
+
 public interface IPasswordService
 {
     string Hash(User user, string password);
     bool Verify(User user, string password);
 }
-public interface ITokenService { string Issue(User user); }
-public interface IAuditFailureReporter { void Report(Exception exception, string endpointId); }
+
+public interface ITokenService
+{
+    string Issue(User user);
+}
+
+public interface IAuditFailureReporter
+{
+    void Report(Exception exception, string endpointId);
+}
+
 public sealed record StoredObject(string Storage, string Key);
+
 public interface IObjectStorage
 {
     Task<StoredObject> PutAsync(Stream stream, string mime, CancellationToken ct);
     Task RemoveAsync(StoredObject storedObject, CancellationToken ct);
 }
-public interface ICacheInvalidation { Task InvalidateAsync(CancellationToken ct); }
+
+public interface ICacheInvalidation
+{
+    Task InvalidateAsync(CancellationToken ct);
+}
+
 public interface INotificationStore
 {
     Task<long?> CursorAsync(Guid recipientId, Guid? cursor, CancellationToken ct);
-    Task<IReadOnlyList<Notification>> PageAsync(Guid recipientId, long? before, CancellationToken ct);
-    Task<IReadOnlyList<Notification>?> StreamBatchAsync(Guid recipientId, long? after, CancellationToken ct, bool unreadOnly = false);
-    Task<Notification> CreateAsync(Guid recipientId, string title, string body, bool sendEmail, OperationContext context, CancellationToken ct);
-    Task<IReadOnlyList<Notification>> ListAsync(Guid recipientId, bool unreadOnly, CancellationToken ct);
+    Task<IReadOnlyList<Notification>> PageAsync(
+        Guid recipientId,
+        long? before,
+        CancellationToken ct
+    );
+    Task<IReadOnlyList<Notification>?> StreamBatchAsync(
+        Guid recipientId,
+        long? after,
+        CancellationToken ct,
+        bool unreadOnly = false
+    );
+    Task<Notification> CreateAsync(
+        Guid recipientId,
+        string title,
+        string body,
+        bool sendEmail,
+        OperationContext context,
+        CancellationToken ct
+    );
+    Task<IReadOnlyList<Notification>> ListAsync(
+        Guid recipientId,
+        bool unreadOnly,
+        CancellationToken ct
+    );
     Task<Notification> MarkReadAsync(Guid id, OperationContext context, CancellationToken ct);
     Task<Notification> SetEmailStatusAsync(Guid id, string status, CancellationToken ct);
     Task<string?> RecipientEmailAsync(Guid id, CancellationToken ct);
 }
+
 public interface INotificationMailSender
 {
     bool Enabled { get; }

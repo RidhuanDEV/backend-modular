@@ -46,4 +46,6 @@ async def record(
             session.add(log)
             await session.flush()
     except Exception:
-        logger.warning("Optional audit persistence failed", extra={"endpoint_id": policy.id.value})
+        logger.warning(
+            "Optional audit persistence failed", extra={"endpoint_id": policy.id.value}
+        )

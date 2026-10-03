@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     environment: Literal["development", "test", "production"] = "development"
     port: int = Field(default=8000, ge=1, le=65535)
     db_provider: DatabaseProvider = "postgresql"
-    database_url: SecretStr = SecretStr("postgresql://backend:backend@localhost:5432/backend")
+    database_url: SecretStr = SecretStr(
+        "postgresql://backend:backend@localhost:5432/backend"
+    )
     database_tls: Literal["disable", "verify-full"] = "disable"
     database_ca_file: Path | None = None
     jwt_secret: SecretStr = SecretStr("")
@@ -75,24 +77,41 @@ class Settings(BaseSettings):
 
     @property
     def origins(self) -> list[str]:
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        return [
+            origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
+        ]
 
     @model_validator(mode="after")
     def validate_deployment(self) -> Self:
-        username = unquote(urlsplit(self.database_url.get_secret_value()).username or "")
+        username = unquote(
+            urlsplit(self.database_url.get_secret_value()).username or ""
+        )
         maximum = 32 if self.db_provider == "mysql" else 63
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", username) or len(username) > maximum:
+        if (
+            not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", username)
+            or len(username) > maximum
+        ):
             raise ValueError(
                 f"{self.db_provider} username requires ASCII and at most {maximum} characters"
             )
-        database = unquote(urlsplit(self.database_url.get_secret_value()).path.lstrip("/"))
+        database = unquote(
+            urlsplit(self.database_url.get_secret_value()).path.lstrip("/")
+        )
         db_maximum = 64 if self.db_provider == "mysql" else 63
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", database) or len(database) > db_maximum:
+        if (
+            not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", database)
+            or len(database) > db_maximum
+        ):
             raise ValueError(
                 f"{self.db_provider} database requires an ASCII identifier and at most {db_maximum} characters"
             )
-        if self.cleanup_audit_enabled and "cleanup_audit_days" not in self.model_fields_set:
-            raise ValueError("CLEANUP_AUDIT_DAYS must be explicit when audit deletion is enabled")
+        if (
+            self.cleanup_audit_enabled
+            and "cleanup_audit_days" not in self.model_fields_set
+        ):
+            raise ValueError(
+                "CLEANUP_AUDIT_DAYS must be explicit when audit deletion is enabled"
+            )
         if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", self.otel_service_name):
             raise ValueError("Invalid OTEL_SERVICE_NAME")
         telemetry_url = urlsplit(self.otel_exporter_otlp_endpoint)
@@ -105,28 +124,39 @@ class Settings(BaseSettings):
         ):
             raise ValueError("Invalid OTEL_EXPORTER_OTLP_ENDPOINT")
         if self.worker_renew_seconds * 2 >= self.worker_lease_seconds:
-            raise ValueError("WORKER_RENEW_SECONDS must be less than half the lease duration")
+            raise ValueError(
+                "WORKER_RENEW_SECONDS must be less than half the lease duration"
+            )
         if len(self.jwt_secret.get_secret_value().encode()) < 32:
             raise ValueError("JWT_SECRET requires at least 32 bytes")
         scheme = urlsplit(self.database_url.get_secret_value()).scheme
         if scheme not in (
-            {"postgresql", "postgres"} if self.db_provider == "postgresql" else {"mysql"}
+            {"postgresql", "postgres"}
+            if self.db_provider == "postgresql"
+            else {"mysql"}
         ):
             raise ValueError("DATABASE_URL does not match DB_PROVIDER")
         if self.database_ca_file is not None and (
             self.database_tls != "verify-full" or not self.database_ca_file.is_file()
         ):
-            raise ValueError("DATABASE_CA_FILE requires verify-full and a readable CA file")
+            raise ValueError(
+                "DATABASE_CA_FILE requires verify-full and a readable CA file"
+            )
         marker = Path("backend-template.json")
         if marker.exists():
-            value = GeneratedProject.model_validate_json(marker.read_text(encoding="utf-8"))
+            value = GeneratedProject.model_validate_json(
+                marker.read_text(encoding="utf-8")
+            )
             if value.databaseProvider != self.db_provider:
                 raise ValueError("DB_PROVIDER does not match the generated project")
         if self.environment == "production" and (
             not self.origins or "cors_origins" not in self.model_fields_set
         ):
             raise ValueError("Production requires CORS_ORIGINS")
-        if self.environment == "production" and "CHANGE_ME" in self.jwt_secret.get_secret_value():
+        if (
+            self.environment == "production"
+            and "CHANGE_ME" in self.jwt_secret.get_secret_value()
+        ):
             raise ValueError("Production requires a generated JWT_SECRET")
         for origin in self.origins:
             parsed = urlsplit(origin)
@@ -152,7 +182,8 @@ class Settings(BaseSettings):
         ):
             raise ValueError("S3 storage requires credentials")
         if not self.redis_namespace or any(
-            char not in "abcdefghijklmnopqrstuvwxyz0123456789_-" for char in self.redis_namespace
+            char not in "abcdefghijklmnopqrstuvwxyz0123456789_-"
+            for char in self.redis_namespace
         ):
             raise ValueError("Invalid REDIS_NAMESPACE")
         if not set(self.upload_allowed_mime.split(",")) <= {

@@ -16,11 +16,23 @@ use Symfony\Component\HttpFoundation\Response;
 
 final class PermissionController
 {
-    public function __construct(private readonly PermissionService $service, private readonly Actor $actor) {}
+    public function __construct(
+        private readonly PermissionService $service,
+        private readonly Actor $actor,
+    ) {}
 
     public function list(): JsonResponse
     {
-        return Api::data($this->service->list()->map(fn (Permission $m): array => (new PermissionResource($m))->toArray(request()))->all());
+        return Api::data(
+            $this->service
+                ->list()
+                ->map(
+                    fn(Permission $m): array => new PermissionResource(
+                        $m,
+                    )->toArray(request()),
+                )
+                ->all(),
+        );
     }
 
     public function get(string $id): JsonResponse
@@ -30,12 +42,29 @@ final class PermissionController
 
     public function create(CreateNameRequest $request): JsonResponse
     {
-        return Api::resource(new PermissionResource($this->service->create($request->nameValue() ?? throw new \LogicException('Required name'), $this->actor->user())), 201);
+        return Api::resource(
+            new PermissionResource(
+                $this->service->create(
+                    $request->nameValue() ??
+                        throw new \LogicException('Required name'),
+                    $this->actor->user(),
+                ),
+            ),
+            201,
+        );
     }
 
     public function update(UpdateNameRequest $request, string $id): JsonResponse
     {
-        return Api::resource(new PermissionResource($this->service->update($id, $request->nameValue(), $this->actor->user())));
+        return Api::resource(
+            new PermissionResource(
+                $this->service->update(
+                    $id,
+                    $request->nameValue(),
+                    $this->actor->user(),
+                ),
+            ),
+        );
     }
 
     public function delete(string $id): Response

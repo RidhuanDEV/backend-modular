@@ -31,12 +31,18 @@ final class Role extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['created_at' => 'immutable_datetime', 'updated_at' => 'immutable_datetime'];
+        return [
+            'created_at' => 'immutable_datetime',
+            'updated_at' => 'immutable_datetime',
+        ];
     }
 
     /** @return BelongsToMany<Permission, $this> */
     public function permissions(): BelongsToMany
     {
-        return $this->belongsToMany(Permission::class, 'role_permissions')->withTimestamps();
+        return $this->belongsToMany(
+            Permission::class,
+            'role_permissions',
+        )->withTimestamps();
     }
 }

@@ -21,6 +21,12 @@ final class StoredFileResource extends JsonResource
     {
         $m = $this->model;
 
-        return ['id' => $m->id, 'originalName' => $m->original_name, 'mimeType' => $m->mime_type, 'size' => $m->size, 'createdAt' => $m->created_at->toIso8601ZuluString('microsecond')];
+        return [
+            'id' => $m->id,
+            'originalName' => $m->original_name,
+            'mimeType' => $m->mime_type,
+            'size' => $m->size,
+            'createdAt' => $m->created_at->toIso8601ZuluString('microsecond'),
+        ];
     }
 }

@@ -36,25 +36,73 @@ final class Telemetry
     public function start(string $operation): ?TelemetryScope
     {
         if ($operation === '') {
-            throw new \InvalidArgumentException('Telemetry operation is required');
+            throw new \InvalidArgumentException(
+                'Telemetry operation is required',
+            );
         }
-        if (! Settings::boolean('backend.otel.enabled')) {
+        if (!Settings::boolean('backend.otel.enabled')) {
             return null;
         }
         try {
             if ($this->traces === null) {
-                $endpoint = rtrim(Settings::string('backend.otel.endpoint'), '/');
-                $factory = new OtlpHttpTransportFactory;
-                $resource = ResourceInfo::create(Attributes::create(['service.name' => Settings::string('backend.otel.service')]));
-                $processor = new BatchSpanProcessor(new SpanExporter($factory->create($endpoint.'/v1/traces', 'application/x-protobuf', timeout: 0.3, maxRetries: 0)), Clock::getDefault(), maxQueueSize: 128, exportTimeoutMillis: 500, maxExportBatchSize: 128, autoFlush: false);
-                $this->traces = new TracerProvider($processor, resource: $resource);
-                $this->metrics = MeterProvider::builder()->setResource($resource)->addReader(new ExportingReader(new MetricExporter($factory->create($endpoint.'/v1/metrics', 'application/x-protobuf', timeout: 0.3, maxRetries: 0))))->build();
+                $endpoint = rtrim(
+                    Settings::string('backend.otel.endpoint'),
+                    '/',
+                );
+                $factory = new OtlpHttpTransportFactory();
+                $resource = ResourceInfo::create(
+                    Attributes::create([
+                        'service.name' => Settings::string(
+                            'backend.otel.service',
+                        ),
+                    ]),
+                );
+                $processor = new BatchSpanProcessor(
+                    new SpanExporter(
+                        $factory->create(
+                            $endpoint . '/v1/traces',
+                            'application/x-protobuf',
+                            timeout: 0.3,
+                            maxRetries: 0,
+                        ),
+                    ),
+                    Clock::getDefault(),
+                    maxQueueSize: 128,
+                    exportTimeoutMillis: 500,
+                    maxExportBatchSize: 128,
+                    autoFlush: false,
+                );
+                $this->traces = new TracerProvider(
+                    $processor,
+                    resource: $resource,
+                );
+                $this->metrics = MeterProvider::builder()
+                    ->setResource($resource)
+                    ->addReader(
+                        new ExportingReader(
+                            new MetricExporter(
+                                $factory->create(
+                                    $endpoint . '/v1/metrics',
+                                    'application/x-protobuf',
+                                    timeout: 0.3,
+                                    maxRetries: 0,
+                                ),
+                            ),
+                        ),
+                    )
+                    ->build();
                 $meter = $this->metrics->getMeter('backend');
                 $this->requests = $meter->createCounter('backend.operations');
-                $this->duration = $meter->createHistogram('backend.duration', 's');
+                $this->duration = $meter->createHistogram(
+                    'backend.duration',
+                    's',
+                );
                 $this->events = $meter->createCounter('backend.events');
             }
-            $span = $this->traces->getTracer('backend')->spanBuilder($operation)->startSpan();
+            $span = $this->traces
+                ->getTracer('backend')
+                ->spanBuilder($operation)
+                ->startSpan();
 
             return new TelemetryScope($span, $span->activate());
         } catch (Throwable $error) {
@@ -64,8 +112,13 @@ final class Telemetry
         }
     }
 
-    public function finish(?TelemetryScope $scope, string $operation, int $status, float $seconds, bool $flush = true): void
-    {
+    public function finish(
+        ?TelemetryScope $scope,
+        string $operation,
+        int $status,
+        float $seconds,
+        bool $flush = true,
+    ): void {
         if ($scope === null) {
             return;
         }
@@ -86,8 +139,11 @@ final class Telemetry
         }
     }
 
-    public function measure(string $operation, float $seconds, int $status = 200): void
-    {
+    public function measure(
+        string $operation,
+        float $seconds,
+        int $status = 200,
+    ): void {
         $scope = $this->start($operation);
         $this->finish($scope, $operation, $status, $seconds, false);
     }

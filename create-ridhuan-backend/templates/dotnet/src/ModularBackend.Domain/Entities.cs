@@ -7,6 +7,7 @@ public abstract class Entity
     public DateTimeOffset UpdatedAt { get; set; }
     public uint Version { get; set; }
 }
+
 public sealed class User : Entity
 {
     public required string Email { get; set; }
@@ -15,6 +16,7 @@ public sealed class User : Entity
     public Role Role { get; set; } = null!;
     public DateTimeOffset? DeletedAt { get; set; }
 }
+
 public sealed class RefreshToken
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -27,6 +29,7 @@ public sealed class RefreshToken
     public DateTimeOffset? RevokedAt { get; set; }
     public string? ReplacedByTokenHash { get; set; }
 }
+
 public sealed class RefreshFamily
 {
     public Guid Id { get; set; }
@@ -35,11 +38,13 @@ public sealed class RefreshFamily
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
 }
+
 public sealed class NotificationCounter
 {
     public Guid RecipientId { get; set; }
     public long Sequence { get; set; }
 }
+
 public sealed class EmailJob
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -55,15 +60,18 @@ public sealed class EmailJob
     public DateTimeOffset? CompletedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
+
 public sealed class Role : Entity
 {
     public required string Name { get; set; }
     public List<RolePermission> Permissions { get; set; } = [];
 }
+
 public sealed class Permission : Entity
 {
     public required string Name { get; set; }
 }
+
 public sealed class RolePermission
 {
     public Guid RoleId { get; set; }
@@ -71,6 +79,7 @@ public sealed class RolePermission
     public Role Role { get; set; } = null!;
     public Permission Permission { get; set; } = null!;
 }
+
 public sealed class ActivityLog
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -86,6 +95,7 @@ public sealed class ActivityLog
     public string? After { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
+
 public sealed class StoredFile
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -97,6 +107,7 @@ public sealed class StoredFile
     public Guid? UploaderId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
+
 public sealed class Notification
 {
     public long Sequence { get; set; }

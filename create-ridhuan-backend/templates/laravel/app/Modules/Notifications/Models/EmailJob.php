@@ -36,6 +36,13 @@ final class EmailJob extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['created_at' => 'immutable_datetime', 'updated_at' => 'immutable_datetime', 'attempts' => 'integer', 'available_at' => 'immutable_datetime', 'lease_until' => 'immutable_datetime', 'completed_at' => 'immutable_datetime'];
+        return [
+            'created_at' => 'immutable_datetime',
+            'updated_at' => 'immutable_datetime',
+            'attempts' => 'integer',
+            'available_at' => 'immutable_datetime',
+            'lease_until' => 'immutable_datetime',
+            'completed_at' => 'immutable_datetime',
+        ];
     }
 }

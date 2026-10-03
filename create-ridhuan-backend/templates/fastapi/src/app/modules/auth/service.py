@@ -7,7 +7,13 @@ from app.api.schemas import DTO
 from app.core.clock import now
 from app.core.context import Context
 from app.core.errors import ApiError
-from app.core.security import access_token, passwords, refresh_token, token_hash, verify_password
+from app.core.security import (
+    access_token,
+    passwords,
+    refresh_token,
+    token_hash,
+    verify_password,
+)
 from app.core.settings import Settings
 from app.modules.auth.models import RefreshFamily, RefreshToken
 from app.modules.auth.schemas import AuthUser, Login, Register, Tokens
@@ -52,12 +58,16 @@ async def register(ctx: Context, dto: Register) -> AuthUser:
 
 async def login(ctx: Context, dto: Login, settings: Settings) -> Tokens:
     user = await user_by_email(ctx.session, str(dto.email))
-    valid = await ctx.work.run(verify_password, dto.password, user.password_hash if user else None)
+    valid = await ctx.work.run(
+        verify_password, dto.password, user.password_hash if user else None
+    )
     if user is None or user.deleted_at is not None or not valid:
         raise ApiError(401, "Invalid email or password")
     raw = refresh_token()
     instant = now()
-    family = RefreshFamily(id=uuid4(), user_id=user.id, expires_at=instant + timedelta(days=30))
+    family = RefreshFamily(
+        id=uuid4(), user_id=user.id, expires_at=instant + timedelta(days=30)
+    )
     ctx.session.add(family)
     await ctx.session.flush()
     ctx.session.add(
@@ -69,7 +79,10 @@ async def login(ctx: Context, dto: Login, settings: Settings) -> Tokens:
         )
     )
     await ctx.commit(
-        user.id, after=LoginSnapshot(email=user.email), invalidate_cache=False, actor=user.id
+        user.id,
+        after=LoginSnapshot(email=user.email),
+        invalidate_cache=False,
+        actor=user.id,
     )
     return Tokens(token=access_token(user.id, settings), refreshToken=raw)
 
@@ -81,7 +94,9 @@ async def refresh(ctx: Context, raw: str, settings: Settings) -> Tokens:
     if token is None:
         raise ApiError(401, "Invalid or expired refresh token")
     family = await ctx.session.scalar(
-        select(RefreshFamily).where(RefreshFamily.id == token.family_id).with_for_update()
+        select(RefreshFamily)
+        .where(RefreshFamily.id == token.family_id)
+        .with_for_update()
     )
     session = await ctx.session.scalar(
         select(RefreshToken)
@@ -93,7 +108,9 @@ async def refresh(ctx: Context, raw: str, settings: Settings) -> Tokens:
         raise ApiError(401, "Invalid or expired refresh token")
     instant = now()
     user = await user_by_id(ctx.session, session.user_id)
-    before = SessionSnapshot(expiresAt=family.expires_at, revoked=family.revoked_at is not None)
+    before = SessionSnapshot(
+        expiresAt=family.expires_at, revoked=family.revoked_at is not None
+    )
     if (
         family.revoked_at is not None
         or family.expires_at <= instant
@@ -104,7 +121,10 @@ async def refresh(ctx: Context, raw: str, settings: Settings) -> Tokens:
         family.revoked_at = family.revoked_at or instant
         await ctx.session.execute(
             update(RefreshToken)
-            .where(RefreshToken.family_id == session.family_id, RefreshToken.revoked_at.is_(None))
+            .where(
+                RefreshToken.family_id == session.family_id,
+                RefreshToken.revoked_at.is_(None),
+            )
             .values(revoked_at=instant)
         )
         await ctx.commit(
@@ -144,7 +164,9 @@ async def logout(ctx: Context, raw: str) -> None:
     )
     if session:
         family = await ctx.session.scalar(
-            select(RefreshFamily).where(RefreshFamily.id == session.family_id).with_for_update()
+            select(RefreshFamily)
+            .where(RefreshFamily.id == session.family_id)
+            .with_for_update()
         )
         if family is None or family.revoked_at is not None:
             return
@@ -152,7 +174,10 @@ async def logout(ctx: Context, raw: str) -> None:
         family.revoked_at = now()
         await ctx.session.execute(
             update(RefreshToken)
-            .where(RefreshToken.family_id == session.family_id, RefreshToken.revoked_at.is_(None))
+            .where(
+                RefreshToken.family_id == session.family_id,
+                RefreshToken.revoked_at.is_(None),
+            )
             .values(revoked_at=now())
         )
         await ctx.commit(

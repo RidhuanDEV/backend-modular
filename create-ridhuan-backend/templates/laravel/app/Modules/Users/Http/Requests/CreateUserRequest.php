@@ -13,13 +13,21 @@ final class CreateUserRequest extends BackendRequest
     /** @return array<string, list<string>> */
     public function rules(): array
     {
-        return ['email' => ['required', 'string', 'email', 'max:255'], 'password' => ['required', 'string', 'min:6'], 'roleId' => ['required', 'uuid']];
+        return [
+            'email' => ['required', 'string', 'email', 'max:255'],
+            'password' => ['required', 'string', 'min:6'],
+            'roleId' => ['required', 'uuid'],
+        ];
     }
 
     public function dto(): CreateUser
     {
         $v = $this->validated();
 
-        return new CreateUser(Input::string($v, 'email'), Input::string($v, 'password'), Input::string($v, 'roleId'));
+        return new CreateUser(
+            Input::string($v, 'email'),
+            Input::string($v, 'password'),
+            Input::string($v, 'roleId'),
+        );
     }
 }

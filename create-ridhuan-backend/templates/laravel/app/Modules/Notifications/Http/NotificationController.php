@@ -23,27 +23,52 @@ use Throwable;
 
 final class NotificationController
 {
-    public function __construct(private readonly NotificationService $service, private readonly Actor $actor, private readonly StreamSlots $slots) {}
+    public function __construct(
+        private readonly NotificationService $service,
+        private readonly Actor $actor,
+        private readonly StreamSlots $slots,
+    ) {}
 
     public function create(CreateNotificationRequest $request): JsonResponse
     {
-        return Api::resource(new NotificationResource($this->service->create($request->dto(), $this->actor->user())), 201);
+        return Api::resource(
+            new NotificationResource(
+                $this->service->create($request->dto(), $this->actor->user()),
+            ),
+            201,
+        );
     }
 
     public function read(string $id): JsonResponse
     {
-        return Api::resource(new NotificationResource($this->service->read($id, $this->actor->user())));
+        return Api::resource(
+            new NotificationResource(
+                $this->service->read($id, $this->actor->user()),
+            ),
+        );
     }
 
     public function list(Request $request): JsonResponse
     {
         $cursor = $request->query('cursor');
-        if ($cursor !== null && ! is_string($cursor)) {
+        if ($cursor !== null && !is_string($cursor)) {
             throw new ApiException(400, 'Invalid cursor');
         }
         $actor = $this->actor->user();
-        $items = $this->service->page($actor, $this->service->cursor($actor, $cursor));
-        $response = Api::data($items->take(50)->map(fn (Notification $n): array => (new NotificationResource($n))->toArray(request()))->all());
+        $items = $this->service->page(
+            $actor,
+            $this->service->cursor($actor, $cursor),
+        );
+        $response = Api::data(
+            $items
+                ->take(50)
+                ->map(
+                    fn(Notification $n): array => new NotificationResource(
+                        $n,
+                    )->toArray(request()),
+                )
+                ->all(),
+        );
         if ($items->count() > 50) {
             $last = $items->get(49);
             if ($last === null) {
@@ -61,71 +86,113 @@ final class NotificationController
         $cursor = $request->header('Last-Event-ID');
         $after = $this->service->cursor($actor, $cursor);
         $expiry = $request->attributes->get('accessExpiry');
-        if (! is_int($expiry)) {
+        if (!is_int($expiry)) {
             throw new ApiException(401, 'Missing access expiry');
         }
         // Validation and admission happen before response headers.
         $handle = $this->slots->acquire();
-        $deadline = min(time() + Settings::integer('backend.sse.seconds', 1, 840), $expiry);
+        $deadline = min(
+            time() + Settings::integer('backend.sse.seconds', 1, 840),
+            $expiry,
+        );
         $requestId = $request->attributes->get('requestId');
-        if (! is_string($requestId)) {
+        if (!is_string($requestId)) {
             flock($handle, LOCK_UN);
             fclose($handle);
             throw new \LogicException('Missing request context');
         }
 
-        return response()->stream(function () use ($actor, $after, $cursor, $handle, $deadline, $requestId): void {
-            $telemetry = app(Telemetry::class);
-            $scope = $telemetry->start('sse.connection');
-            Log::shareContext(['requestId' => $requestId, 'operation' => 'notification.stream', 'traceId' => $scope?->span->getContext()->getTraceId()]);
-            $started = microtime(true);
-            $status = 200;
-            $telemetry->event('sse.opened');
-            ignore_user_abort(true);
-            set_time_limit(0);
-            $last = $after;
-            $heartbeat = time();
-            try {
-                while (time() < $deadline && ! connection_aborted()) {
-                    $batch = $this->service->batch($actor, $last, $cursor === null);
-                    DB::disconnect();
-                    if ($batch === null) {
-                        break;
-                    }
-                    foreach ($batch as $notification) {
-                        $telemetry->event('sse.notification');
-                        echo 'id: '.$notification->id."\nevent: notification\ndata: ".json_encode((new NotificationResource($notification))->toArray(request()), JSON_THROW_ON_ERROR)."\n\n";
-                        $last = $notification->sequence;
-                        if (ob_get_level() > 0) {
-                            ob_flush();
-                        } flush();
-                        if (connection_aborted() || time() >= $deadline) {
-                            break 2;
+        return response()->stream(
+            function () use (
+                $actor,
+                $after,
+                $cursor,
+                $handle,
+                $deadline,
+                $requestId,
+            ): void {
+                $telemetry = app(Telemetry::class);
+                $scope = $telemetry->start('sse.connection');
+                Log::shareContext([
+                    'requestId' => $requestId,
+                    'operation' => 'notification.stream',
+                    'traceId' => $scope?->span->getContext()->getTraceId(),
+                ]);
+                $started = microtime(true);
+                $status = 200;
+                $telemetry->event('sse.opened');
+                ignore_user_abort(true);
+                set_time_limit(0);
+                $last = $after;
+                $heartbeat = time();
+                try {
+                    while (time() < $deadline && !connection_aborted()) {
+                        $batch = $this->service->batch(
+                            $actor,
+                            $last,
+                            $cursor === null,
+                        );
+                        DB::disconnect();
+                        if ($batch === null) {
+                            break;
                         }
+                        foreach ($batch as $notification) {
+                            $telemetry->event('sse.notification');
+                            echo 'id: ' .
+                                $notification->id .
+                                "\nevent: notification\ndata: " .
+                                json_encode(
+                                    new NotificationResource(
+                                        $notification,
+                                    )->toArray(request()),
+                                    JSON_THROW_ON_ERROR,
+                                ) .
+                                "\n\n";
+                            $last = $notification->sequence;
+                            if (ob_get_level() > 0) {
+                                ob_flush();
+                            }
+                            flush();
+                            if (connection_aborted() || time() >= $deadline) {
+                                break 2;
+                            }
+                        }
+                        if ($batch->count() === 50) {
+                            continue;
+                        }
+                        if (time() - $heartbeat >= 15) {
+                            echo ": heartbeat\n\n";
+                            $heartbeat = time();
+                            if (ob_get_level() > 0) {
+                                ob_flush();
+                            }
+                            flush();
+                        }
+                        sleep(Settings::integer('backend.sse.poll', 1, 15));
                     }
-                    if ($batch->count() === 50) {
-                        continue;
-                    }
-                    if (time() - $heartbeat >= 15) {
-                        echo ": heartbeat\n\n";
-                        $heartbeat = time();
-                        if (ob_get_level() > 0) {
-                            ob_flush();
-                        } flush();
-                    }
-                    sleep(Settings::integer('backend.sse.poll', 1, 15));
+                } catch (Throwable $error) {
+                    $status = 503;
+                    Log::warning('sse_closed', ['type' => $error::class]);
+                } finally {
+                    $telemetry->event('sse.closed');
+                    $telemetry->finish(
+                        $scope,
+                        'sse.connection',
+                        $status,
+                        microtime(true) - $started,
+                    );
+                    Log::flushSharedContext();
+                    DB::disconnect();
+                    flock($handle, LOCK_UN);
+                    fclose($handle);
                 }
-            } catch (Throwable $error) {
-                $status = 503;
-                Log::warning('sse_closed', ['type' => $error::class]);
-            } finally {
-                $telemetry->event('sse.closed');
-                $telemetry->finish($scope, 'sse.connection', $status, microtime(true) - $started);
-                Log::flushSharedContext();
-                DB::disconnect();
-                flock($handle, LOCK_UN);
-                fclose($handle);
-            }
-        }, 200, ['Content-Type' => 'text/event-stream', 'Cache-Control' => 'no-cache', 'X-Accel-Buffering' => 'no']);
+            },
+            200,
+            [
+                'Content-Type' => 'text/event-stream',
+                'Cache-Control' => 'no-cache',
+                'X-Accel-Buffering' => 'no',
+            ],
+        );
     }
 }

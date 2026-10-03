@@ -30,8 +30,14 @@ class Limiter:
         self.lock = asyncio.Lock()
         self.quotas: dict[RateGroup, tuple[int, int]] = {
             "auth": (settings.rate_limit_auth_max, settings.rate_limit_auth_window_ms),
-            "public": (settings.rate_limit_public_max, settings.rate_limit_public_window_ms),
-            "internal": (settings.rate_limit_internal_max, settings.rate_limit_internal_window_ms),
+            "public": (
+                settings.rate_limit_public_max,
+                settings.rate_limit_public_window_ms,
+            ),
+            "internal": (
+                settings.rate_limit_internal_max,
+                settings.rate_limit_internal_window_ms,
+            ),
         }
 
     async def check(self, policy: Policy, ip: str) -> None:
@@ -47,7 +53,8 @@ class Limiter:
                 if policy.rate == "auth":
                     raise ApiError(503, "Rate limiter unavailable") from error
                 logger.warning(
-                    "Rate limiter Redis unavailable", extra={"endpoint_id": policy.id.value}
+                    "Rate limiter Redis unavailable",
+                    extra={"endpoint_id": policy.id.value},
                 )
                 return
         else:

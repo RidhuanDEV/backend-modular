@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
 
@@ -20,5 +19,4 @@
     <ProjectReference Include="..\..\src\ModularBackend.Api\ModularBackend.Api.csproj" />
     <Compile Include="../Shared/TestHost.cs" Link="TestHost.cs" />
   </ItemGroup>
-
 </Project>

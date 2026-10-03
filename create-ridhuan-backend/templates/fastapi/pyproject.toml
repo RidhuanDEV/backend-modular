@@ -41,7 +41,10 @@ packages = ["src/app"]
 
 [tool.ruff]
 target-version = "py313"
-line-length = 100
+line-length = 88
+
+[tool.ruff.format]
+exclude = ["migrations/**"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC"]

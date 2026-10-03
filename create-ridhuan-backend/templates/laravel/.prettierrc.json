@@ -1,0 +1,11 @@
+{
+  "plugins": [
+    "@prettier/plugin-php"
+  ],
+  "phpVersion": "8.5",
+  "printWidth": 80,
+  "tabWidth": 4,
+  "singleQuote": true,
+  "trailingCommaPHP": true,
+  "endOfLine": "lf"
+}

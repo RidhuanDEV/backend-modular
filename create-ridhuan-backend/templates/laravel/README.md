@@ -160,7 +160,8 @@ The generator is a scaffold, not your business contract. Review fields, response
 ```sh
 composer build
 composer analyse
-php vendor/bin/pint --test
+npm ci --ignore-scripts
+npm run format:check
 php vendor/bin/phpunit
 ```
 
@@ -193,11 +194,12 @@ Configure database TLS with hostname/CA validation, trusted ingress/proxies, exa
 
 ## Code formatting
 
-Install development dependencies, then use the native project formatter:
+Prettier with the PHP plugin targets 80 columns and four spaces for pure PHP source. Node.js is required only for this development formatter. Views, migrations, vendor and runtime storage are excluded. Prettier owns layout; optional `composer format:laravel` applies Laravel Pint conventions and can change that layout. CI checks Prettier.
 
 ```sh
-composer format
-composer format:check
+npm ci --ignore-scripts
+npm run format
+npm run format:check
 ```
 
-The workspace formatting workflow preserves released migration history.
+Formatting changes layout only. Keep complex payloads multiline and preserve migration history. A width target is a wrapping preference, not a hard limit for strings or comments.

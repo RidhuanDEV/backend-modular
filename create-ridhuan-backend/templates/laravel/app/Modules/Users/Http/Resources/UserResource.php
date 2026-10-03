@@ -23,7 +23,25 @@ final class UserResource extends JsonResource
         $m = $this->model;
         $role = $m->role ?? throw new \LogicException('User role is required');
 
-        return ['id' => $m->id, 'email' => $m->email, 'roleId' => $m->role_id, 'createdAt' => $m->created_at->toIso8601ZuluString('microsecond'), 'updatedAt' => $m->updated_at->toIso8601ZuluString('microsecond'), 'role' => ['id' => $role->id, 'name' => $role->name, 'permissions' => $role->permissions->map(fn (Permission $p): array => ['id' => $p->id, 'name' => $p->name])->all()]];
+        return [
+            'id' => $m->id,
+            'email' => $m->email,
+            'roleId' => $m->role_id,
+            'createdAt' => $m->created_at->toIso8601ZuluString('microsecond'),
+            'updatedAt' => $m->updated_at->toIso8601ZuluString('microsecond'),
+            'role' => [
+                'id' => $role->id,
+                'name' => $role->name,
+                'permissions' => $role->permissions
+                    ->map(
+                        fn(Permission $p): array => [
+                            'id' => $p->id,
+                            'name' => $p->name,
+                        ],
+                    )
+                    ->all(),
+            ],
+        ];
     }
 
     /**
@@ -34,6 +52,8 @@ final class UserResource extends JsonResource
     {
         $values = $this->toArray(request());
 
-        return $fields === null ? $values : array_intersect_key($values, array_flip($fields));
+        return $fields === null
+            ? $values
+            : array_intersect_key($values, array_flip($fields));
     }
 }

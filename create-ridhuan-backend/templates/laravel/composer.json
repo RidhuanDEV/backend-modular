@@ -55,8 +55,9 @@
         ],
         "analyse": "@php vendor/bin/phpstan analyse --memory-limit=1G",
         "test": "@php vendor/bin/phpunit",
-        "format": "@php vendor/bin/pint",
-        "format:check": "@php vendor/bin/pint --test"
+        "format": "npm run format",
+        "format:check": "npm run format:check",
+        "format:laravel": "@php vendor/bin/pint"
     },
     "extra": {
         "laravel": {

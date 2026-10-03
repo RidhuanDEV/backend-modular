@@ -44,7 +44,9 @@ final class NotificationsWork extends Command
         $shutdownAt = null;
         $renew = Settings::integer('backend.worker.renew', 1, 120);
         if ($renew * 2 >= Settings::integer('backend.worker.lease', 10, 600)) {
-            throw new \InvalidArgumentException('Worker lease must exceed two renewal periods');
+            throw new \InvalidArgumentException(
+                'Worker lease must exceed two renewal periods',
+            );
         }
         try {
             while (true) {
@@ -60,7 +62,7 @@ final class NotificationsWork extends Command
                         $child->process->checkTimeout();
                         if ($child->process->isRunning()) {
                             if (microtime(true) >= $child->renewAt) {
-                                if (! $outbox->renew($child->lease)) {
+                                if (!$outbox->renew($child->lease)) {
                                     $telemetry->event('outbox.lease.lost');
                                     $child->process->stop(1);
 
@@ -74,30 +76,67 @@ final class NotificationsWork extends Command
                             continue;
                         }
                         $output = $child->process->getOutput();
-                        $data = strlen($output) <= 256 ? json_decode($output, true) : null;
-                        $delivered = $child->process->isSuccessful() && is_array($data) && ($data['delivered'] ?? null) === true;
+                        $data =
+                            strlen($output) <= 256
+                                ? json_decode($output, true)
+                                : null;
+                        $delivered =
+                            $child->process->isSuccessful() &&
+                            is_array($data) &&
+                            ($data['delivered'] ?? null) === true;
                         $scope = $telemetry->start('outbox.complete');
-                        $completed = $outbox->complete($child->lease, $delivered);
-                        $telemetry->event($completed ? ($delivered ? 'outbox.sent' : 'outbox.delivery_failed') : 'outbox.fenced');
-                        $telemetry->finish($scope, 'outbox.complete', ! $completed ? 409 : ($delivered ? 200 : 500), 0.0);
+                        $completed = $outbox->complete(
+                            $child->lease,
+                            $delivered,
+                        );
+                        $telemetry->event(
+                            $completed
+                                ? ($delivered
+                                    ? 'outbox.sent'
+                                    : 'outbox.delivery_failed')
+                                : 'outbox.fenced',
+                        );
+                        $telemetry->finish(
+                            $scope,
+                            'outbox.complete',
+                            !$completed ? 409 : ($delivered ? 200 : 500),
+                            0.0,
+                        );
                     } catch (Throwable $error) {
                         $child->process->stop(1);
-                        Log::warning('outbox_child_failed', ['type' => $error::class]);
+                        Log::warning('outbox_child_failed', [
+                            'type' => $error::class,
+                        ]);
                         // Do not complete an unconfirmed lease; expiration permits bounded recovery.
                     } finally {
                         Log::flushSharedContext();
                     }
                 }
                 $children = $running;
-                if (! $this->stopping && Settings::boolean('backend.smtp')) {
-                    while (count($children) < Settings::integer('backend.worker.concurrency', 1, 16)) {
+                if (!$this->stopping && Settings::boolean('backend.smtp')) {
+                    while (
+                        count($children) <
+                        Settings::integer('backend.worker.concurrency', 1, 16)
+                    ) {
                         $lease = $outbox->claim();
                         if ($lease === null) {
                             break;
                         }
                         $telemetry->event('outbox.attempts');
-                        $process = new Process([PHP_BINARY, base_path('artisan'), 'notifications:deliver', $lease->jobId, $lease->leaseId, '--no-ansi'], base_path());
-                        $process->setTimeout(Settings::integer('backend.worker.timeout', 1, 600));
+                        $process = new Process(
+                            [
+                                PHP_BINARY,
+                                base_path('artisan'),
+                                'notifications:deliver',
+                                $lease->jobId,
+                                $lease->leaseId,
+                                '--no-ansi',
+                            ],
+                            base_path(),
+                        );
+                        $process->setTimeout(
+                            Settings::integer('backend.worker.timeout', 1, 600),
+                        );
                         $process->start();
                         $child = new DeliveryChild($lease, $process);
                         $child->renewAt = microtime(true) + $renew;
@@ -107,7 +146,12 @@ final class NotificationsWork extends Command
                 if ($this->option('once') === true && $children === []) {
                     break;
                 }
-                if ($this->stopping && ($children === [] || ($shutdownAt !== null && microtime(true) >= $shutdownAt))) {
+                if (
+                    $this->stopping &&
+                    ($children === [] ||
+                        ($shutdownAt !== null &&
+                            microtime(true) >= $shutdownAt))
+                ) {
                     break;
                 }
                 DB::disconnect();

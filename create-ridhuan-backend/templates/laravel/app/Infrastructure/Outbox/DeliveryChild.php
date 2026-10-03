@@ -10,8 +10,10 @@ final class DeliveryChild
 {
     public float $renewAt;
 
-    public function __construct(public readonly Lease $lease, public readonly Process $process)
-    {
+    public function __construct(
+        public readonly Lease $lease,
+        public readonly Process $process,
+    ) {
         $this->renewAt = microtime(true);
     }
 }

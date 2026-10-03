@@ -22,6 +22,18 @@ final class RoleResource extends JsonResource
     {
         $m = $this->model;
 
-        return ['id' => $m->id, 'name' => $m->name, 'createdAt' => $m->created_at->toIso8601ZuluString('microsecond'), 'updatedAt' => $m->updated_at->toIso8601ZuluString('microsecond'), 'permissions' => $m->permissions->map(fn (Permission $p): array => ['permission' => ['id' => $p->id, 'name' => $p->name]])->all()];
+        return [
+            'id' => $m->id,
+            'name' => $m->name,
+            'createdAt' => $m->created_at->toIso8601ZuluString('microsecond'),
+            'updatedAt' => $m->updated_at->toIso8601ZuluString('microsecond'),
+            'permissions' => $m->permissions
+                ->map(
+                    fn(Permission $p): array => [
+                        'permission' => ['id' => $p->id, 'name' => $p->name],
+                    ],
+                )
+                ->all(),
+        ];
     }
 }

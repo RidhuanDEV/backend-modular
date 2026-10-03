@@ -1,0 +1,7 @@
+vendor/
+node_modules/
+.env*
+bootstrap/cache/
+storage/
+database/migrations/
+resources/views/

@@ -198,11 +198,12 @@ Configure database TLS with hostname/CA validation, trusted ingress/proxies, exa
 
 ## Code formatting
 
-Install development dependencies, then use the native project formatter:
+CSharpier targets 100 columns and four spaces, reflowing long initializers and calls. Generated files and both released EF migration histories are excluded.
 
 ```sh
-dotnet format whitespace ModularBackend.slnx --exclude src/ModularBackend.Infrastructure/Persistence/Migrations src/ModularBackend.Infrastructure/Persistence/MySqlMigrations
-dotnet format whitespace ModularBackend.slnx --verify-no-changes --exclude src/ModularBackend.Infrastructure/Persistence/Migrations src/ModularBackend.Infrastructure/Persistence/MySqlMigrations
+dotnet tool restore --tool-manifest dotnet-tools.json
+dotnet tool run csharpier format src tests tools
+dotnet tool run csharpier check src tests tools
 ```
 
-The workspace formatting workflow preserves released migration history.
+Formatting changes layout only. Keep complex payloads multiline and preserve migration history. A width target is a wrapping preference, not a hard limit for strings or comments.

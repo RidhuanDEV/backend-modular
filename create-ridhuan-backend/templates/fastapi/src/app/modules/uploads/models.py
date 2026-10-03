@@ -15,7 +15,8 @@ class StoredFile(Base):
     storage: Mapped[str] = mapped_column(String(16))
     status: Mapped[str] = mapped_column(String(16), default="READY")
     object_key: Mapped[str] = mapped_column(
-        String(255, collation="utf8mb4_bin").with_variant(String(255), "postgresql"), unique=True
+        String(255, collation="utf8mb4_bin").with_variant(String(255), "postgresql"),
+        unique=True,
     )
     original_name: Mapped[str] = mapped_column(String(255))
     mime_type: Mapped[str] = mapped_column(String(128))

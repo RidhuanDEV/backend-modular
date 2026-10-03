@@ -6,5 +6,8 @@ namespace App\Modules\Users\Data;
 
 final readonly class UpdateUser
 {
-    public function __construct(public ?string $email, public ?string $roleId) {}
+    public function __construct(
+        public ?string $email,
+        public ?string $roleId,
+    ) {}
 }

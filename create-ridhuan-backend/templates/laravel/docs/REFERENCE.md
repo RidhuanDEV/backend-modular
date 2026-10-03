@@ -69,7 +69,8 @@ OTEL_ENABLED defaults false with no connections. Official API/SDK/exporter uses 
 ```sh
 composer build
 composer analyse
-php vendor/bin/pint --test
+npm ci --ignore-scripts
+npm run format:check
 php vendor/bin/phpunit
 node scripts/verify.mjs --stage native
 node scripts/verify.mjs --stage integration

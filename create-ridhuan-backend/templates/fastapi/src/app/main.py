@@ -80,7 +80,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=settings.origins,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID", "Last-Event-ID"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "X-Request-ID",
+            "Last-Event-ID",
+        ],
         expose_headers=["X-Request-ID", "X-Next-Cursor"],
     )
     feature_routers = (auth, users, roles, permissions, uploads, notifications, probes)
@@ -89,11 +94,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(ApiError)
     async def api_error(request: Request, error: ApiError) -> JSONResponse:
-        return JSONResponse({"success": False, "message": error.message}, status_code=error.status)
+        return JSONResponse(
+            {"success": False, "message": error.message}, status_code=error.status
+        )
 
     @app.exception_handler(RequestValidationError)
-    async def validation_error(request: Request, error: RequestValidationError) -> JSONResponse:
-        return JSONResponse({"success": False, "message": "Invalid request"}, status_code=400)
+    async def validation_error(
+        request: Request, error: RequestValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            {"success": False, "message": "Invalid request"}, status_code=400
+        )
 
     @app.exception_handler(DBAPIError)
     async def database_error(request: Request, error: DBAPIError) -> JSONResponse:
@@ -101,14 +112,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return JSONResponse(
             {
                 "success": False,
-                "message": "Resource conflict" if status == 409 else "Database unavailable",
+                "message": "Resource conflict"
+                if status == 409
+                else "Database unavailable",
             },
             status_code=status,
         )
 
-    @app.get("/docs", operation_id=EndpointId.DOCS_UI, response_class=HTMLResponse, tags=["docs"])
+    @app.get(
+        "/docs",
+        operation_id=EndpointId.DOCS_UI,
+        response_class=HTMLResponse,
+        tags=["docs"],
+    )
     async def docs() -> HTMLResponse:
-        return get_swagger_ui_html(openapi_url="/docs/openapi.json", title="API documentation")
+        return get_swagger_ui_html(
+            openapi_url="/docs/openapi.json", title="API documentation"
+        )
 
     @app.get("/docs/openapi.json", operation_id=EndpointId.DOCS_SPEC, tags=["docs"])
     async def spec() -> dict[str, JsonValue]:
@@ -116,9 +136,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.openapi()
         )
 
-    @app.get("/docs/specs/{module}.json", operation_id=EndpointId.DOCS_MODULE, tags=["docs"])
+    @app.get(
+        "/docs/specs/{module}.json", operation_id=EndpointId.DOCS_MODULE, tags=["docs"]
+    )
     async def module_spec(module: str, runtime: AppRuntime) -> dict[str, JsonValue]:
-        ids = {policy.id.value for policy in runtime.policies.values() if policy.module == module}
+        ids = {
+            policy.id.value
+            for policy in runtime.policies.values()
+            if policy.module == module
+        }
         if not ids:
             raise ApiError(404, "Unknown module")
         document = await spec()
@@ -165,7 +191,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if policy.authenticated:
             route.openapi_extra["security"] = [{"BearerAuth": []}]
     document = app.openapi()
-    document.setdefault("components", {}).setdefault("securitySchemes", {})["BearerAuth"] = {
+    document.setdefault("components", {}).setdefault("securitySchemes", {})[
+        "BearerAuth"
+    ] = {
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",

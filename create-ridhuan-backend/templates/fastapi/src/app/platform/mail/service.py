@@ -5,7 +5,9 @@ import aiosmtplib
 from app.core.settings import Settings
 
 
-async def send_notification(settings: Settings, recipient: str, title: str, body: str) -> None:
+async def send_notification(
+    settings: Settings, recipient: str, title: str, body: str
+) -> None:
     if not settings.smtp_enabled:
         raise RuntimeError("SMTP is disabled")
     message = EmailMessage()

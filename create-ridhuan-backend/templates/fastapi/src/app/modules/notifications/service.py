@@ -24,7 +24,9 @@ from app.platform.jobs.models import EmailJob, NotificationCounter
 logger = logging.getLogger(__name__)
 
 
-async def create(ctx: Context, dto: CreateNotification, run: Runtime) -> NotificationResponse:
+async def create(
+    ctx: Context, dto: CreateNotification, run: Runtime
+) -> NotificationResponse:
     # Serialize first-counter creation by locking the recipient before the counter.
     recipient = await user_by_id(ctx.session, dto.recipientId, lock=True)
     if recipient is None:
@@ -53,7 +55,10 @@ async def create(ctx: Context, dto: CreateNotification, run: Runtime) -> Notific
     if dto.sendEmail and run.settings.smtp_enabled:
         ctx.session.add(
             EmailJob(
-                notification_id=row.id, recipient=recipient.email, title=dto.title, body=dto.body
+                notification_id=row.id,
+                recipient=recipient.email,
+                title=dto.title,
+                body=dto.body,
             )
         )
     response = public_notification(row)
@@ -65,10 +70,14 @@ async def list_own(
     ctx: Context, after: UUID | None = None
 ) -> tuple[list[NotificationResponse], str | None]:
     position = await cursor(ctx, after)
-    statement = select(Notification).where(Notification.recipient_id == ctx.require_actor().id)
+    statement = select(Notification).where(
+        Notification.recipient_id == ctx.require_actor().id
+    )
     if position is not None:
         statement = statement.where(Notification.sequence < position)
-    rows = await ctx.session.scalars(statement.order_by(Notification.sequence.desc()).limit(51))
+    rows = await ctx.session.scalars(
+        statement.order_by(Notification.sequence.desc()).limit(51)
+    )
     values = list(rows)
     return [public_notification(row) for row in values[:50]], str(values[49].id) if len(
         values
@@ -78,7 +87,9 @@ async def list_own(
 async def mark_read(ctx: Context, id: UUID) -> NotificationResponse:
     row = await ctx.session.scalar(
         select(Notification)
-        .where(Notification.id == id, Notification.recipient_id == ctx.require_actor().id)
+        .where(
+            Notification.id == id, Notification.recipient_id == ctx.require_actor().id
+        )
         .with_for_update()
     )
     if row is None:
@@ -95,7 +106,8 @@ async def cursor(ctx: Context, last_id: UUID | None) -> int | None:
         return None
     row = await ctx.session.scalar(
         select(Notification).where(
-            Notification.id == last_id, Notification.recipient_id == ctx.require_actor().id
+            Notification.id == last_id,
+            Notification.recipient_id == ctx.require_actor().id,
         )
     )
     if row is None:
@@ -106,7 +118,9 @@ async def cursor(ctx: Context, last_id: UUID | None) -> int | None:
 async def stream(
     run: Runtime, recipient: UUID, expiry: int, after: int | None
 ) -> AsyncIterator[ServerSentEvent]:
-    deadline = min(time.monotonic() + 14 * 60, time.monotonic() + max(0, expiry - time.time()))
+    deadline = min(
+        time.monotonic() + 14 * 60, time.monotonic() + max(0, expiry - time.time())
+    )
     last_heartbeat = 0.0
     unread_only = after is None
     while time.monotonic() < deadline:
@@ -114,13 +128,17 @@ async def stream(
             async with run.sessions() as session:
                 if await user_by_id(session, recipient) is None:
                     return
-                statement = select(Notification).where(Notification.recipient_id == recipient)
+                statement = select(Notification).where(
+                    Notification.recipient_id == recipient
+                )
                 if after is not None:
                     statement = statement.where(Notification.sequence > after)
                 if unread_only:
                     statement = statement.where(Notification.read_at.is_(None))
                 rows = list(
-                    await session.scalars(statement.order_by(Notification.sequence).limit(50))
+                    await session.scalars(
+                        statement.order_by(Notification.sequence).limit(50)
+                    )
                 )
                 responses = [public_notification(row) for row in rows]
                 sequences = [row.sequence for row in rows]

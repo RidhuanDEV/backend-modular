@@ -21,6 +21,11 @@ final class PermissionResource extends JsonResource
     {
         $m = $this->model;
 
-        return ['id' => $m->id, 'name' => $m->name, 'createdAt' => $m->created_at->toIso8601ZuluString('microsecond'), 'updatedAt' => $m->updated_at->toIso8601ZuluString('microsecond')];
+        return [
+            'id' => $m->id,
+            'name' => $m->name,
+            'createdAt' => $m->created_at->toIso8601ZuluString('microsecond'),
+            'updatedAt' => $m->updated_at->toIso8601ZuluString('microsecond'),
+        ];
     }
 }

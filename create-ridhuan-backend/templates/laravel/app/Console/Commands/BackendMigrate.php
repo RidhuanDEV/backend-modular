@@ -17,6 +17,8 @@ final class BackendMigrate extends Command
     {
         Settings::validate();
 
-        return $this->call('migrate', ['--force' => $this->option('force') === true]);
+        return $this->call('migrate', [
+            '--force' => $this->option('force') === true,
+        ]);
     }
 }

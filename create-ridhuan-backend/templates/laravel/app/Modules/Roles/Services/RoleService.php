@@ -15,7 +15,10 @@ use Illuminate\Support\Facades\DB;
 
 final class RoleService
 {
-    public function __construct(private readonly AccessPolicy $policy, private readonly Audit $audit) {}
+    public function __construct(
+        private readonly AccessPolicy $policy,
+        private readonly Audit $audit,
+    ) {}
 
     /** @return Collection<int, Role> */
     public function list(): Collection
@@ -25,7 +28,8 @@ final class RoleService
 
     public function get(string $id): Role
     {
-        return Role::query()->with('permissions')->find($id) ?? throw new ApiException(404, 'Role not found');
+        return Role::query()->with('permissions')->find($id) ??
+            throw new ApiException(404, 'Role not found');
     }
 
     public function create(string $name, User $actor): Role
@@ -35,7 +39,13 @@ final class RoleService
                 throw new ApiException(409, 'Role exists');
             }
             $role = Role::query()->create(['name' => $name]);
-            $this->audit->write('CREATE', 'role', $role->id, $actor->id, after: ['name' => $name]);
+            $this->audit->write(
+                'CREATE',
+                'role',
+                $role->id,
+                $actor->id,
+                after: ['name' => $name],
+            );
 
             return $role->load('permissions');
         });
@@ -44,17 +54,26 @@ final class RoleService
     public function update(string $id, ?string $name, User $actor): Role
     {
         DB::transaction(function () use ($id, $name, $actor): void {
-            $role = Role::query()->whereKey($id)->lockForUpdate()->first() ?? throw new ApiException(404, 'Role not found');
+            $role =
+                Role::query()->whereKey($id)->lockForUpdate()->first() ??
+                throw new ApiException(404, 'Role not found');
             $this->policy->roleWithin($actor, $id);
             $before = ['name' => $role->name];
             if ($name !== null) {
-                if (Role::query()->where('name', $name)->where('id', '!=', $id)->exists()) {
+                if (
+                    Role::query()
+                        ->where('name', $name)
+                        ->where('id', '!=', $id)
+                        ->exists()
+                ) {
                     throw new ApiException(409, 'Role exists');
                 }
                 $role->name = $name;
                 $role->save();
             }
-            $this->audit->write('UPDATE', 'role', $id, $actor->id, $before, ['name' => $role->name]);
+            $this->audit->write('UPDATE', 'role', $id, $actor->id, $before, [
+                'name' => $role->name,
+            ]);
         });
 
         return $this->get($id);
@@ -63,13 +82,17 @@ final class RoleService
     public function delete(string $id, User $actor): void
     {
         DB::transaction(function () use ($id, $actor): void {
-            $role = Role::query()->whereKey($id)->lockForUpdate()->first() ?? throw new ApiException(404, 'Role not found');
+            $role =
+                Role::query()->whereKey($id)->lockForUpdate()->first() ??
+                throw new ApiException(404, 'Role not found');
             $this->policy->roleWithin($actor, $id);
             if (User::withTrashed()->where('role_id', $id)->exists()) {
                 throw new ApiException(409, 'Role still assigned');
             }
             $role->delete();
-            $this->audit->write('DELETE', 'role', $id, $actor->id, ['name' => $role->name]);
+            $this->audit->write('DELETE', 'role', $id, $actor->id, [
+                'name' => $role->name,
+            ]);
         });
     }
 
@@ -77,14 +100,25 @@ final class RoleService
     public function assign(string $id, array $ids, User $actor): Role
     {
         DB::transaction(function () use ($id, $ids, $actor): void {
-            $role = Role::query()->whereKey($id)->lockForUpdate()->first() ?? throw new ApiException(404, 'Role not found');
+            $role =
+                Role::query()->whereKey($id)->lockForUpdate()->first() ??
+                throw new ApiException(404, 'Role not found');
             $this->policy->roleWithin($actor, $id);
             $this->policy->within($actor, $ids);
-            if (Permission::query()->whereIn('id', $ids)->count() !== count($ids)) {
+            if (
+                Permission::query()->whereIn('id', $ids)->count() !==
+                count($ids)
+            ) {
                 throw new ApiException(404, 'Permission not found');
             }
             $role->permissions()->sync($ids);
-            $this->audit->write('ASSIGN_PERMISSIONS', 'role', $id, $actor->id, after: ['permissionIds' => $ids]);
+            $this->audit->write(
+                'ASSIGN_PERMISSIONS',
+                'role',
+                $id,
+                $actor->id,
+                after: ['permissionIds' => $ids],
+            );
         });
 
         return $this->get($id);

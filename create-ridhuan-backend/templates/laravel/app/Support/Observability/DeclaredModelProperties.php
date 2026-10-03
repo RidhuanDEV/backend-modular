@@ -20,21 +20,32 @@ final class DeclaredModelProperties implements PropertyTypeExtension
 {
     public function shouldHandle(ObjectType $type): bool
     {
-        return str_starts_with($type->name, 'App\\') && $type->isInstanceOf(Model::class);
+        return str_starts_with($type->name, 'App\\') &&
+            $type->isInstanceOf(Model::class);
     }
 
     public function getPropertyType(PropertyFetchEvent $event): Type
     {
         $definition = $event->getDefinition();
-        if (! $definition instanceof ClassDefinition) {
+        if (!($definition instanceof ClassDefinition)) {
             throw new \LogicException('Model class definition is required');
         }
         $property = $definition->getData()->getPropertyDefinition($event->name);
-        if ($property === null && in_array($event->name, ['relations', 'attributes', 'casts', 'original', 'changes'], true)) {
-            return new ArrayType(new MixedType, new StringType);
+        if (
+            $property === null &&
+            in_array(
+                $event->name,
+                ['relations', 'attributes', 'casts', 'original', 'changes'],
+                true,
+            )
+        ) {
+            return new ArrayType(new MixedType(), new StringType());
         }
-        if (! $property instanceof ClassPropertyDefinition) {
-            throw new \LogicException('Public model property must declare its source contract: '.$event->name);
+        if (!($property instanceof ClassPropertyDefinition)) {
+            throw new \LogicException(
+                'Public model property must declare its source contract: ' .
+                    $event->name,
+            );
         }
 
         return $property->type;

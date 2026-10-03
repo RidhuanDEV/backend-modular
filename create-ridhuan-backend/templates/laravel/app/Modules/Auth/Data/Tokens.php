@@ -6,5 +6,8 @@ namespace App\Modules\Auth\Data;
 
 final readonly class Tokens
 {
-    public function __construct(public string $token, public string $refreshToken) {}
+    public function __construct(
+        public string $token,
+        public string $refreshToken,
+    ) {}
 }

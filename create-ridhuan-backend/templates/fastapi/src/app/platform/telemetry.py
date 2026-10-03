@@ -20,7 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.settings import Settings
 
-_operation: ContextVar[str] = ContextVar("telemetry_operation", default="operations.worker")
+_operation: ContextVar[str] = ContextVar(
+    "telemetry_operation", default="operations.worker"
+)
 _traces: TracerProvider | None = None
 _metrics: MeterProvider | None = None
 P = ParamSpec("P")
@@ -36,7 +38,9 @@ def setup(settings: Settings) -> None:
     endpoint = settings.otel_exporter_otlp_endpoint.rstrip("/")
     _traces = TracerProvider(resource=resource)
     _traces.add_span_processor(
-        BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint + "/v1/traces", timeout=2))
+        BatchSpanProcessor(
+            OTLPSpanExporter(endpoint=endpoint + "/v1/traces", timeout=2)
+        )
     )
     _metrics = MeterProvider(
         resource=resource,
@@ -79,7 +83,9 @@ def request_span(operation_id: str, headers: dict[str, str]) -> Generator[Span]:
 async def operation(kind: Kind) -> AsyncGenerator[Span]:
     operation_id = _operation.get()
     if operation_id == "operations.worker" and kind in ("email", "cleanup"):
-        operation_id = "notification.create" if kind == "email" else "operations.cleanup"
+        operation_id = (
+            "notification.create" if kind == "email" else "operations.cleanup"
+        )
     token = _operation.set(operation_id)
     with trace.get_tracer("backend.operations").start_as_current_span(
         kind,
@@ -96,7 +102,9 @@ async def operation(kind: Kind) -> AsyncGenerator[Span]:
             _operation.reset(token)
 
 
-def instrument(kind: Kind) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
+def instrument(
+    kind: Kind,
+) -> Callable[[Callable[P, Awaitable[T]]], Callable[P, Awaitable[T]]]:
     def decorate(function: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]:
         @wraps(function)
         async def wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
@@ -118,15 +126,15 @@ def record_http(operation_id: str, status: int, elapsed: float) -> None:
 
 
 def sse_connection(change: int) -> None:
-    metrics.get_meter("backend.operations").create_up_down_counter("backend.sse.connections").add(
-        change, {"operationId": "notification.stream"}
-    )
+    metrics.get_meter("backend.operations").create_up_down_counter(
+        "backend.sse.connections"
+    ).add(change, {"operationId": "notification.stream"})
 
 
 def email_attempt(outcome: str) -> None:
-    metrics.get_meter("backend.operations").create_counter("backend.email.attempts").add(
-        1, {"operationId": "notification.create", "outcome": outcome}
-    )
+    metrics.get_meter("backend.operations").create_counter(
+        "backend.email.attempts"
+    ).add(1, {"operationId": "notification.create", "outcome": outcome})
 
 
 def outbox_state(count: int, age_seconds: float) -> None:
@@ -144,7 +152,10 @@ def cleanup_items(kind: str, count: int, apply: bool) -> None:
 def trace_fields() -> dict[str, str]:
     value = trace.get_current_span().get_span_context()
     return (
-        {"trace_id": format(value.trace_id, "032x"), "span_id": format(value.span_id, "016x")}
+        {
+            "trace_id": format(value.trace_id, "032x"),
+            "span_id": format(value.span_id, "016x"),
+        }
         if value.is_valid
         else {}
     )

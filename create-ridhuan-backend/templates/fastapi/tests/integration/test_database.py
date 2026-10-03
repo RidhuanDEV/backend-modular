@@ -61,18 +61,26 @@ def test_database_http_auth_rbac_audit_notifications() -> None:
             assert claims.exp - claims.iat == 900
             admin = {"Authorization": f"Bearer {tokens.token}"}
             assert (await client.get("/ready")).status_code == 200
-            projected = await client.get("/api/users?fields=id,email&limit=1", headers=admin)
+            projected = await client.get(
+                "/api/users?fields=id,email&limit=1", headers=admin
+            )
             assert projected.status_code == 200, projected.text
             assert len(projected.json()["data"]) == 1
             assert set(projected.json()["data"][0]) == {"id", "email"}
             assert (
                 await client.get("/api/users?fields=password", headers=admin)
             ).status_code == 400
-            role_id = (await client.get("/api/auth/me", headers=admin)).json()["data"]["roleId"]
-            unchanged = await client.patch(f"/api/roles/{role_id}", headers=admin, json={})
+            role_id = (await client.get("/api/auth/me", headers=admin)).json()["data"][
+                "roleId"
+            ]
+            unchanged = await client.patch(
+                f"/api/roles/{role_id}", headers=admin, json={}
+            )
             assert unchanged.status_code == 200, unchanged.text
             assert (
-                await client.patch(f"/api/roles/{role_id}", headers=admin, json={"name": None})
+                await client.patch(
+                    f"/api/roles/{role_id}", headers=admin, json={"name": None}
+                )
             ).status_code == 400
             response = await client.post(
                 "/api/auth/register",
@@ -116,18 +124,23 @@ def test_database_http_auth_rbac_audit_notifications() -> None:
             assert (
                 await client.patch(f"/api/notifications/{item.id}/read", headers=admin)
             ).status_code == 404
-            assert (await client.patch(f"/api/notifications/{item.id}/read", headers=own)).json()[
-                "data"
-            ]["readAt"] is not None
+            assert (
+                await client.patch(f"/api/notifications/{item.id}/read", headers=own)
+            ).json()["data"]["readAt"] is not None
             # Concurrent rotation: replay invalidates the entire family, including the winner.
             rotated = await asyncio.gather(
                 *[
-                    client.post("/api/auth/refresh", json={"refreshToken": recipient.refreshToken})
+                    client.post(
+                        "/api/auth/refresh",
+                        json={"refreshToken": recipient.refreshToken},
+                    )
                     for _ in range(2)
                 ]
             )
             assert sorted(response.status_code for response in rotated) == [200, 401]
-            winner = next(response for response in rotated if response.status_code == 200)
+            winner = next(
+                response for response in rotated if response.status_code == 200
+            )
             next_tokens = Tokens.model_validate(winner.json()["data"])
             assert (
                 await client.post(
@@ -156,13 +169,19 @@ def test_database_http_auth_rbac_audit_notifications() -> None:
             finally:
                 await engine.dispose()
             # Safe soft delete revokes access even when JWT is unexpired.
-            assert (await client.delete(f"/api/users/{user.id}", headers=admin)).status_code == 204
+            assert (
+                await client.delete(f"/api/users/{user.id}", headers=admin)
+            ).status_code == 204
             assert (await client.get("/api/auth/me", headers=own)).status_code == 401
             assert (
-                await client.post("/api/auth/logout", json={"refreshToken": tokens.refreshToken})
+                await client.post(
+                    "/api/auth/logout", json={"refreshToken": tokens.refreshToken}
+                )
             ).status_code == 204
             assert (
-                await client.post("/api/auth/refresh", json={"refreshToken": tokens.refreshToken})
+                await client.post(
+                    "/api/auth/refresh", json={"refreshToken": tokens.refreshToken}
+                )
             ).status_code == 401
 
     run(check())
@@ -195,7 +214,11 @@ def test_required_audit_rolls_back_and_optional_audit_commits(
                 )
             for audit, expected in (("required", 503), ("optional", 201)):
                 settings = config.model_copy(
-                    update={"endpoint_policies_json": json.dumps({"role.create": {"audit": audit}})}
+                    update={
+                        "endpoint_policies_json": json.dumps(
+                            {"role.create": {"audit": audit}}
+                        )
+                    }
                 )
                 app = create_app(settings)
                 logging.getLogger().addHandler(caplog.handler)
@@ -203,12 +226,16 @@ def test_required_audit_rolls_back_and_optional_audit_commits(
                 async with (
                     app.router.lifespan_context(app),
                     httpx.AsyncClient(
-                        transport=httpx.ASGITransport(app=app), base_url="http://fixture"
+                        transport=httpx.ASGITransport(app=app),
+                        base_url="http://fixture",
                     ) as client,
                 ):
                     login = await client.post(
                         "/api/auth/login",
-                        json={"email": config.admin_email, "password": "Fixture-password-20261001"},
+                        json={
+                            "email": config.admin_email,
+                            "password": "Fixture-password-20261001",
+                        },
                     )
                     assert login.status_code == 200, login.text
                     tokens = Tokens.model_validate(login.json()["data"])
@@ -238,7 +265,8 @@ def test_required_audit_rolls_back_and_optional_audit_commits(
                     )
                     assert count == (1 if audit == "optional" else 0)
             assert any(
-                record.message == "Optional audit persistence failed" for record in caplog.records
+                record.message == "Optional audit persistence failed"
+                for record in caplog.records
             )
         finally:
             async with engine.begin() as connection:

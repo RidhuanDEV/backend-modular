@@ -42,7 +42,8 @@ async def cleanup_rows(
                 select(EmailJob)
                 .where(
                     EmailJob.status.in_(("SENT", "FAILED")),
-                    EmailJob.completed_at < instant - timedelta(days=settings.cleanup_outbox_days),
+                    EmailJob.completed_at
+                    < instant - timedelta(days=settings.cleanup_outbox_days),
                 )
                 .order_by(EmailJob.id)
                 .limit(settings.cleanup_batch_size)

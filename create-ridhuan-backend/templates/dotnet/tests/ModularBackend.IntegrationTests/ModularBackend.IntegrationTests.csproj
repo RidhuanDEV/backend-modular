@@ -1,1 +1,19 @@
-<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="MSTest"/><PackageReference Include="Microsoft.AspNetCore.Mvc.Testing"/><ProjectReference Include="../../src/ModularBackend.Api/ModularBackend.Api.csproj"/><Compile Include="../Shared/TestHost.cs" Link="TestHost.cs"/><ProjectReference Include="../../tools/ModularBackend.UploadCleanup/ModularBackend.UploadCleanup.csproj" ReferenceOutputAssembly="false"/><ProjectReference Include="../../tools/ModularBackend.Seeder/ModularBackend.Seeder.csproj" ReferenceOutputAssembly="false"/></ItemGroup><ItemGroup><Using Include="Microsoft.VisualStudio.TestTools.UnitTesting"/></ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="MSTest" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <ProjectReference Include="../../src/ModularBackend.Api/ModularBackend.Api.csproj" />
+    <Compile Include="../Shared/TestHost.cs" Link="TestHost.cs" />
+    <ProjectReference
+      Include="../../tools/ModularBackend.UploadCleanup/ModularBackend.UploadCleanup.csproj"
+      ReferenceOutputAssembly="false"
+    />
+    <ProjectReference
+      Include="../../tools/ModularBackend.Seeder/ModularBackend.Seeder.csproj"
+      ReferenceOutputAssembly="false"
+    />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+</Project>

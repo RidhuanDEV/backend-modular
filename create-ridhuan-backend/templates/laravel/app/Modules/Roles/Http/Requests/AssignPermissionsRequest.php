@@ -12,7 +12,10 @@ final class AssignPermissionsRequest extends BackendRequest
     /** @return array<string, list<string>> */
     public function rules(): array
     {
-        return ['permissionIds' => ['required', 'array', 'min:1'], 'permissionIds.*' => ['required', 'uuid', 'distinct']];
+        return [
+            'permissionIds' => ['required', 'array', 'min:1'],
+            'permissionIds.*' => ['required', 'uuid', 'distinct'],
+        ];
     }
 
     /** @return list<string> */

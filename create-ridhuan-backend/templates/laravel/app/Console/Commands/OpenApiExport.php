@@ -17,10 +17,16 @@ final class OpenApiExport extends Command
     {
         $option = $this->option('output');
         $path = is_string($option) ? $option : storage_path('app/openapi.json');
-        if (! is_dir(dirname($path))) {
+        if (!is_dir(dirname($path))) {
             mkdir(dirname($path), 0700, true);
         }
-        file_put_contents($path, json_encode($api->generate(), JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)."\n");
+        file_put_contents(
+            $path,
+            json_encode(
+                $api->generate(),
+                JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR,
+            ) . "\n",
+        );
         $this->info('OpenAPI artifact generated');
 
         return self::SUCCESS;

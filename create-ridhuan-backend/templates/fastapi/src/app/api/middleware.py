@@ -77,7 +77,11 @@ class PolicyMiddleware:
         started = time.monotonic()
         headers = list(scope.get("headers", []))
         supplied = next(
-            (value.decode("latin-1") for key, value in headers if key.lower() == b"x-request-id"),
+            (
+                value.decode("latin-1")
+                for key, value in headers
+                if key.lower() == b"x-request-id"
+            ),
             "",
         )
         try:
@@ -98,7 +102,9 @@ class PolicyMiddleware:
         try:
             if policy and policy.module != "system":
                 client = scope.get("client")
-                await self.runtime.limiter.check(policy, client[0] if client else "unknown")
+                await self.runtime.limiter.check(
+                    policy, client[0] if client else "unknown"
+                )
         except ApiError as error:
             logger.info(
                 "HTTP response",
@@ -124,10 +130,18 @@ class PolicyMiddleware:
             nonlocal response_started, response_complete
             if message["type"] == "http.response.start":
                 response_started = True
-                if policy and policy.id.value == "notification.stream" and message["status"] == 200:
+                if (
+                    policy
+                    and policy.id.value == "notification.stream"
+                    and message["status"] == 200
+                ):
                     expiry: object = scope.get("state", {}).get("token_expiry")
-                    remaining = max(0, expiry - time.time()) if isinstance(expiry, int) else 0
-                    lifetime.reschedule(asyncio.get_running_loop().time() + min(14 * 60, remaining))
+                    remaining = (
+                        max(0, expiry - time.time()) if isinstance(expiry, int) else 0
+                    )
+                    lifetime.reschedule(
+                        asyncio.get_running_loop().time() + min(14 * 60, remaining)
+                    )
                 logger.info(
                     "HTTP response",
                     extra={
@@ -143,7 +157,9 @@ class PolicyMiddleware:
                     (b"x-content-type-options", b"nosniff"),
                 ]
             await send(message)
-            if message["type"] == "http.response.body" and not message.get("more_body", False):
+            if message["type"] == "http.response.body" and not message.get(
+                "more_body", False
+            ):
                 response_complete = True
 
         received = 0
@@ -173,4 +189,6 @@ class PolicyMiddleware:
                 # Complete the HTTP response after the cancelled generator unwinds.
                 # Keep this bounded too: an unread socket must not retain a task.
                 async with asyncio.timeout(1):
-                    await send({"type": "http.response.body", "body": b"", "more_body": False})
+                    await send(
+                        {"type": "http.response.body", "body": b"", "more_body": False}
+                    )

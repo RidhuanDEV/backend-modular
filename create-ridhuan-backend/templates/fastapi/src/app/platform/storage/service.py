@@ -46,7 +46,11 @@ class Storage:
                     connect_timeout=3,
                     read_timeout=10,
                     retries={"max_attempts": 2},
-                    s3={"addressing_style": "path" if settings.s3_force_path_style else "auto"},
+                    s3={
+                        "addressing_style": "path"
+                        if settings.s3_force_path_style
+                        else "auto"
+                    },
                 ),
             )
 

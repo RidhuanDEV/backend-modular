@@ -31,10 +31,19 @@ final class NotificationDeliver extends Command
         $scope = $telemetry->start('email.deliver');
         $started = microtime(true);
         try {
-            if (! Str::isUuid($jobId) || ! Str::isUuid($leaseId) || ! Settings::boolean('backend.smtp')) {
+            if (
+                !Str::isUuid($jobId) ||
+                !Str::isUuid($leaseId) ||
+                !Settings::boolean('backend.smtp')
+            ) {
                 throw new \RuntimeException('Invalid child context');
             }
-            $job = EmailJob::query()->whereKey($jobId)->where('lease_id', $leaseId)->where('status', 'PENDING')->where('lease_until', '>', now('UTC'))->first();
+            $job = EmailJob::query()
+                ->whereKey($jobId)
+                ->where('lease_id', $leaseId)
+                ->where('status', 'PENDING')
+                ->where('lease_until', '>', now('UTC'))
+                ->first();
             if ($job === null) {
                 throw new \RuntimeException('Lost lease');
             }
@@ -43,10 +52,18 @@ final class NotificationDeliver extends Command
                 $message->to($job->recipient)->subject($job->title);
             });
             $delivered = true;
-        } catch (Throwable) { /* Bounded IPC reports outcome; SMTP details stay private. */
+        } catch (Throwable) {
+            /* Bounded IPC reports outcome; SMTP details stay private. */
         }
-        $telemetry->finish($scope, 'email.deliver', $delivered ? 200 : 500, microtime(true) - $started);
-        $this->output->write(json_encode(['delivered' => $delivered], JSON_THROW_ON_ERROR));
+        $telemetry->finish(
+            $scope,
+            'email.deliver',
+            $delivered ? 200 : 500,
+            microtime(true) - $started,
+        );
+        $this->output->write(
+            json_encode(['delivered' => $delivered], JSON_THROW_ON_ERROR),
+        );
 
         return self::SUCCESS;
     }

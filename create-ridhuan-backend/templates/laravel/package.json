@@ -1,0 +1,12 @@
+{
+  "name": "modular-laravel-formatting",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write \"app/**/*.php\" \"bootstrap/*.php\" \"config/**/*.php\" \"routes/**/*.php\" \"tests/**/*.php\"",
+    "format:check": "prettier --check \"app/**/*.php\" \"bootstrap/*.php\" \"config/**/*.php\" \"routes/**/*.php\" \"tests/**/*.php\""
+  },
+  "devDependencies": {
+    "prettier": "3.8.1",
+    "@prettier/plugin-php": "0.25.0"
+  }
+}

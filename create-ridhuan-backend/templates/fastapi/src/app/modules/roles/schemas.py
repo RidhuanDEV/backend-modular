@@ -56,7 +56,11 @@ def public_role(role: Role) -> RoleResponse:
     return RoleResponse(
         **role_base(role).model_dump(),
         permissions=[
-            Grant(permission=PermissionBrief(id=grant.permission.id, name=grant.permission.name))
+            Grant(
+                permission=PermissionBrief(
+                    id=grant.permission.id, name=grant.permission.name
+                )
+            )
             for grant in role.grants
         ],
     )

@@ -13,13 +13,19 @@ final class RegisterRequest extends BackendRequest
     /** @return array<string, list<string>> */
     public function rules(): array
     {
-        return ['email' => ['required', 'string', 'email', 'max:255'], 'password' => ['required', 'string', 'min:6']];
+        return [
+            'email' => ['required', 'string', 'email', 'max:255'],
+            'password' => ['required', 'string', 'min:6'],
+        ];
     }
 
     public function dto(): Credentials
     {
         $v = $this->validated();
 
-        return new Credentials(Input::string($v, 'email'), Input::string($v, 'password'));
+        return new Credentials(
+            Input::string($v, 'email'),
+            Input::string($v, 'password'),
+        );
     }
 }
