@@ -29,6 +29,15 @@ export async function copyTemplate(source: string, answers: ProjectAnswers): Pro
     await writeFile(join(answers.targetDirectory, compose), await readFile(join(source, variant)));
     await writeFile(join(answers.targetDirectory, ".env.example"), await readFile(join(source, ".env.mysql.example")));
   }
+  // MinIO's option parser otherwise treats a dash-prefixed credential as a flag.
+  // Normalize generated deployment files after provider selection; snapshots stay intact.
+  for (const file of ["scripts/init-bucket.sh", templateRegistry[answers.templateId].composeFile, "compose.mysql.yaml"]) {
+    if (!(file in manifest.files)) continue;
+    const path = join(answers.targetDirectory, file);
+    const text = await readFile(path, "utf8");
+    const normalized = text.replaceAll(/\bmc alias set (?!--)/g, "mc alias set -- ");
+    if (normalized !== text) await writeFile(path, normalized);
+  }
   await writeFile(join(answers.targetDirectory, "backend-template.json"), JSON.stringify({ schemaVersion: 1, template: answers.templateId, databaseProvider: answers.databaseProvider, source: manifest.source }, null, 2) + "\n", { flag: "wx" });
   return manifest;
 }

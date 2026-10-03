@@ -31,6 +31,7 @@ const name = id === "dotnet" ? "Acceptance.Api" : "acceptance-api",
 const base =
   id === "express-typescript" ? "docker-compose.yml" : "compose.yaml";
 const originalDb = process.env.RIDHUAN_DB_PASSWORD;
+const originalS3 = process.env.RIDHUAN_S3_SECRET_KEY;
 const inheritedFixtureEnv = new Map();
 const dbPassword = "fixture #$HOME apostrophe' quote\" back\\'slash-日本;end\\";
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -160,6 +161,8 @@ try {
     scratch,
   );
   process.env.RIDHUAN_DB_PASSWORD = dbPassword;
+  // Deterministically exercise the mc flag-parsing regression in every provider.
+  process.env.RIDHUAN_S3_SECRET_KEY = "-fixture-s3-secret-with-leading-dash";
   run(
     process.execPath,
     [
@@ -1397,6 +1400,8 @@ CMD ["node", "smtp.mjs"]
 } finally {
   if (originalDb === undefined) delete process.env.RIDHUAN_DB_PASSWORD;
   else process.env.RIDHUAN_DB_PASSWORD = originalDb;
+  if (originalS3 === undefined) delete process.env.RIDHUAN_S3_SECRET_KEY;
+  else process.env.RIDHUAN_S3_SECRET_KEY = originalS3;
   if (started) {
     const result = command(
       "docker",

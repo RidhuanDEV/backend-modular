@@ -333,6 +333,17 @@ try {
       ),
       "utf8",
     );
+    if (id !== "dotnet") {
+      const initializer = id === "springboot"
+        ? compose
+        : await readFile(join(project, "scripts/init-bucket.sh"), "utf8");
+      assert.match(initializer, /mc alias set -- (?:dev|local) http:\/\/minio:9000/,
+        `${id}/${database}: credentials must follow the MinIO option terminator`);
+      assert.doesNotMatch(initializer, /mc alias set (?!--)/);
+      if (process.env.RIDHUAN_S3_SECRET_KEY)
+        assert(env.includes(`S3_SECRET_ACCESS_KEY=${serializeEnvValue(process.env.RIDHUAN_S3_SECRET_KEY)}`),
+          `${id}/${database}: supplied S3 credential must be preserved`);
+    }
     assert.match(
       compose,
       new RegExp(`^  ${database === "mysql" ? "mysql" : "postgres"}:`, "m"),

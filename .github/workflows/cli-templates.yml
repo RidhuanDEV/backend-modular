@@ -34,7 +34,7 @@ on:
       verification:
         description: Verification stage to run before full release validation
         type: choice
-        options: [full, macos-smoke, spring-compose, laravel-compose]
+        options: [full, macos-smoke, spring-compose, laravel-compose, nestjs-compose]
         default: full
       publish:
         description: Publish the tested artifact (requires npm trusted publisher)
@@ -216,7 +216,7 @@ jobs:
       # Each matrix job has its own runner; cap concurrency without sharing RAM.
       max-parallel: 3
       matrix:
-        template: ${{ fromJSON(inputs.verification == 'spring-compose' && '["springboot"]' || inputs.verification == 'laravel-compose' && '["laravel"]' || '["express-typescript","nestjs","golang","dotnet","fastapi","springboot","laravel"]') }}
+        template: ${{ fromJSON(inputs.verification == 'spring-compose' && '["springboot"]' || inputs.verification == 'laravel-compose' && '["laravel"]' || inputs.verification == 'nestjs-compose' && '["nestjs"]' || '["express-typescript","nestjs","golang","dotnet","fastapi","springboot","laravel"]') }}
         database: [postgresql, mysql]
     steps:
       - uses: actions/checkout@v4
