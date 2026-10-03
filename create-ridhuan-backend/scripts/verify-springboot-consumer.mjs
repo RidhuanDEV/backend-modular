@@ -40,6 +40,10 @@ try{
  }
  console.log("Spring tarball/native generator "+database+": "+(results.every(r=>r.exitCode===0)?"PASS":"FAIL"));
 }finally{
+ for(const result of results.filter(item=>item.exitCode!==0)) {
+  console.error("Failed Spring consumer task: "+result.id+"; exit="+result.exitCode+"; "+(result.error??""));
+  console.error((await readFile(result.log,"utf8")).slice(-20000));
+ }
  const log=join(tmpdir(),"springboot-consumer-results-"+database+"-"+Date.now()+".json");await writeFile(log,JSON.stringify(results,null,2));console.log("Consumer diagnostics: "+log);
  assert(resolve(scratch).startsWith(resolve(tmpdir())+sep));await rm(scratch,{recursive:true,force:true});
 }

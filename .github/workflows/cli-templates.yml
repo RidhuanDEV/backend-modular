@@ -31,6 +31,11 @@ on:
       - modular-laravel
   workflow_dispatch:
     inputs:
+      verification:
+        description: Verification stage to run before full release validation
+        type: choice
+        options: [full, macos-smoke]
+        default: full
       publish:
         description: Publish the tested artifact (requires npm trusted publisher)
         type: boolean
@@ -68,6 +73,7 @@ jobs:
           path: create-ridhuan-backend/*.tgz
           if-no-files-found: error
   consumer:
+    if: github.event_name != 'workflow_dispatch' || inputs.verification != 'macos-smoke'
     needs: package
     strategy:
       fail-fast: false
@@ -169,27 +175,30 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Spring Boot macOS smoke
-        run: |
-          export CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)"
-          node scripts/verify-consumer.mjs springboot postgresql
-          node scripts/verify-consumer.mjs springboot mysql
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.5'
           extensions: ctype,curl,dom,fileinfo,mbstring,openssl,pdo,pdo_mysql,pdo_pgsql,tokenizer,xml
           tools: composer:2.9.8
-      - name: Laravel macOS smoke
+      - name: Record native diagnostic paths
+        run: |
+          node --input-type=module -e 'import {appendFileSync} from "node:fs"; import {tmpdir} from "node:os"; appendFileSync(process.env.GITHUB_ENV,"MACOS_DIAGNOSTICS_ROOT="+tmpdir()+"\n"); console.log({platform:process.platform,arch:process.arch,tmpdir:tmpdir()});'
+          java -XshowSettings:properties -version
+      - name: Collect all six macOS native consumers
         run: |
           export CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)"
-          node scripts/verify-consumer.mjs laravel postgresql
-          node scripts/verify-consumer.mjs laravel mysql
-      - name: FastAPI native install and generator smoke
-        run: |
-          export CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)"
-          node scripts/verify-consumer.mjs fastapi postgresql
-          node scripts/verify-consumer.mjs fastapi mysql
+          node scripts/run-macos-consumer-stage.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-consumer-diagnostics
+          path: |
+            ${{ env.MACOS_DIAGNOSTICS_ROOT }}/macos-consumer-stage-*/**
+            ${{ env.MACOS_DIAGNOSTICS_ROOT }}/spring-consumer-logs-*/**
+            ${{ env.MACOS_DIAGNOSTICS_ROOT }}/springboot-consumer-results-*.json
+            ${{ env.MACOS_DIAGNOSTICS_ROOT }}/laravel-consumer-logs-*/**
   compose:
+    if: github.event_name != 'workflow_dispatch' || inputs.verification != 'macos-smoke'
     needs: package
     runs-on: ubuntu-latest
     timeout-minutes: 60
