@@ -40,6 +40,10 @@ on:
         description: Publish the tested artifact (requires npm trusted publisher)
         type: boolean
         default: false
+      spring_scenarios:
+        description: Reviewed affected Spring scenarios (comma-separated; empty uses the six portability cases)
+        type: string
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -236,11 +240,12 @@ jobs:
         run: |
           export CLI_TARBALL="$(find artifact -name '*.tgz' -print -quit)"
           if [ "$TEST_GATE_SCOPE" = spring-compose ]; then
-            export SPRING_SCENARIOS=sse-slow-client-write-timeout-and-slot-recovery,outbox-snapshot-delivery-fencing,two-workers-renewal-snapshot-and-accepted-retry,worker-real-lease-renewal-and-compose-graceful-shutdown,shared-redis-quota-across-two-replicas,smtp-starttls-implicit-tls-hostname-verification
+            export SPRING_SCENARIOS="${SPRING_TEST_SCENARIOS:-sse-slow-client-write-timeout-and-slot-recovery,outbox-snapshot-delivery-fencing,two-workers-renewal-snapshot-and-accepted-retry,worker-real-lease-renewal-and-compose-graceful-shutdown,shared-redis-quota-across-two-replicas,smtp-starttls-implicit-tls-hostname-verification}"
           fi
           node scripts/verify-compose.mjs '${{ matrix.template }}' '${{ matrix.database }}'
         env:
           TEST_GATE_SCOPE: ${{ inputs.verification }}
+          SPRING_TEST_SCENARIOS: ${{ inputs.spring_scenarios }}
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
           TMPDIR: ${{ runner.temp }}

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { randomUUID, createHash, createHmac } from "node:crypto";
 import { createServer } from "node:net";
+import { request as httpRequest } from "node:http";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { command } from "../dist/process.js";
@@ -328,8 +329,21 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
     const secondsUntilBoundary=3600-Math.floor(Date.now()/1000)%3600;
     if(secondsUntilBoundary<=16)await wait(secondsUntilBoundary*1000+100);
     compose("exec","-T","redis","redis-cli","FLUSHDB");
-    const attempts=await Promise.all(Array.from({length:12},(_,n)=>fetch("http://127.0.0.1:"+(n%2?secondPort:apiPort)+"/api/auth/login",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({email:"unknown@example.com",password:"fixture-password"}),signal:AbortSignal.timeout(15000)})));
-    assert(attempts.every(r=>[401,429].includes(r.status)));assert.equal(attempts.filter(r=>r.status===401).length,5);
+    // Isolate each concurrent attempt from idle sockets held across synchronous Compose startup.
+    // No retry: every transport failure still fails the scenario and all 12 responses are required.
+    const collected=await Promise.allSettled(Array.from({length:12},(_,n)=>new Promise((resolve,reject)=>{
+     const endpoint="http://127.0.0.1:"+(n%2?secondPort:apiPort)+"/api/auth/login";
+     const fail=error=>reject(new Error("Quota HTTP request failed: "+endpoint,{cause:error}));
+     const request=httpRequest(endpoint,{method:"POST",agent:false,headers:{"content-type":"application/json"},signal:AbortSignal.timeout(15000)},response=>{
+      response.once("error",fail);response.resume();response.once("end",()=>resolve(response.statusCode));
+     });
+     request.once("error",fail);request.end(JSON.stringify({email:"unknown@example.com",password:"fixture-password"}));
+    })));
+    await writeFile(join(logs,"quota-http-attempts.json"),JSON.stringify(collected.map((result,index)=>({index,replica:index%2===1,status:result.status==="fulfilled"?result.value:undefined,error:result.status==="rejected"?result.reason.message:undefined,cause:result.status==="rejected"?result.reason.cause?.code:undefined})),null,2));
+    const failures=collected.filter(result=>result.status==="rejected");
+    if(failures.length)throw new AggregateError(failures.map(result=>result.reason),"Quota transport failures: "+failures.length,{cause:failures[0].reason});
+    const attempts=collected.map(result=>result.value);
+    assert.equal(attempts.length,12);assert(attempts.every(status=>[401,429].includes(status)));assert.equal(attempts.filter(status=>status===401).length,5);assert.equal(attempts.filter(status=>status===429).length,7);
    }catch(error){
     if(mode==="compose"){
      const state=run("docker",["compose","--project-name",owner,"-f","compose.yaml","-f","fixture.yaml","-f","optional.yaml","ps","-a","--format","json"],project,true);await writeFile(join(logs,"quota-replica-before-cleanup-state.json"),state.stdout??"");
