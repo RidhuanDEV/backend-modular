@@ -45,7 +45,7 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
  function run(name,args,cwd=project,allowed=false){const r=command(name,args,cwd,false,env);if(!allowed)assert.equal(r.status,0,(r.error?.message??"")+(r.stdout??"")+(r.stderr??""));return r;}
  const compose=(...args)=>run("docker",["compose","--project-name",owner,"-f","compose.yaml","-f","fixture.yaml","-f","optional.yaml",...args]);
  async function scenario(id,task){if(selected&&!selected.includes(id))return;try{await task();results.push({id,status:"PASS"});console.log("PASS "+id);}catch(error){results.push({id,status:"FAIL",error:error instanceof Error?error.message:String(error),stack:error instanceof Error?error.stack:undefined,cause:error instanceof Error&&error.cause instanceof Error?{message:error.cause.message,code:typeof error.cause.code==="string"?error.cause.code:undefined,stack:error.cause.stack}:undefined});console.error("FAIL "+id+": "+results.at(-1).error);if(results.at(-1).cause)console.error(JSON.stringify(results.at(-1).cause));
-   if(mode==="compose"){const state=run("docker",["compose","--project-name",owner,"-f","compose.yaml","-f","fixture.yaml","-f","optional.yaml","ps","-a","--format","json"],project,true);await writeFile(join(logs,id+"-compose-state.json"),state.stdout??"");const captured=run("docker",["compose","--project-name",owner,"-f","compose.yaml","-f","fixture.yaml","-f","optional.yaml","logs","--no-color","--tail","100","app","worker"],project,true);await writeFile(join(logs,id+"-compose.log"),(captured.stdout??"")+(captured.stderr??""));}
+   if(mode==="compose"){const state=run("docker",["compose","--project-name",owner,"-f","compose.yaml","-f","fixture.yaml","-f","optional.yaml","ps","-a","--format","json"],project,true);await writeFile(join(logs,id+"-compose-state.json"),state.stdout??"");const captured=run("docker",["compose","--project-name",owner,"-f","compose.yaml","-f","fixture.yaml","-f","optional.yaml","logs","--no-color","--tail","100","app","worker","minio","minio-init"],project,true);await writeFile(join(logs,id+"-compose.log"),(captured.stdout??"")+(captured.stderr??""));}
   }}
  async function request(path,{body,method="GET",token,status=200,headers={}}={}){
   const response=await fetch("http://127.0.0.1:"+apiPort+path,{method,headers:{...(body?{"content-type":"application/json"}:{}),...(token?{authorization:"Bearer "+token}:{}),...headers},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(20000)});
@@ -66,7 +66,7 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
    const listed=compose("run","--rm","--no-deps","--entrypoint","/bin/sh","app","-c","find /app/uploads -maxdepth 1 -type f -printf '%f\\n'");
    return listed.stdout.split(/\r?\n/).filter(f=>/^[a-f0-9-]{36}$/.test(f)).length;
   }
-  const listed=compose("--profile","s3","run","--rm","--no-deps","--entrypoint","/bin/sh","minio-init","-c",'mc alias set local http://minio:9000 "$S3_ACCESS_KEY_ID" "$S3_SECRET_ACCESS_KEY" >/dev/null && mc ls --recursive --json "local/$S3_BUCKET"');
+  const listed=compose("--profile","s3","run","--rm","--no-deps","--entrypoint","/bin/sh","minio-init","-c",'mc alias set -- local http://minio:9000 "$S3_ACCESS_KEY_ID" "$S3_SECRET_ACCESS_KEY" >/dev/null && mc ls --recursive --json "local/$S3_BUCKET"');
   return listed.stdout.split(/\r?\n/).filter(v=>v.startsWith("{")).map(v=>JSON.parse(v)).filter(v=>v.type==="file").length;
  }
  async function compensation(storage){
@@ -356,12 +356,15 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
    }
   });
   await scenario("s3-upload-download-and-compensation",async()=>{
-   compose("--profile","s3","up","--no-build","-d","--wait","minio-init");
+   // up --wait only establishes running/healthy, not successful bucket creation.
+   compose("--profile","s3","up","--no-build","-d","--wait","minio");
+   // Foreground run must finish successfully before the first S3 request.
+   compose("--profile","s3","run","--rm","--no-deps","--pull","never","minio-init");
    await reconfigure({UPLOAD_STORAGE:"s3",S3_PREFIX:owner,S3_ENDPOINT:mode==="compose"?"http://minio:9000":"http://127.0.0.1:"+s3Port});
    const form=new FormData(),content="%PDF-1.4\ns3 owned fixture";form.append("file",new Blob([content],{type:"application/pdf"}),"s3.pdf");
    const response=await fetch("http://127.0.0.1:"+apiPort+"/api/upload",{method:"POST",headers:{authorization:"Bearer "+token},body:form,signal:AbortSignal.timeout(30000)});assert.equal(response.status,201);const id=(await response.json()).data.id;
    const downloaded=await fetch("http://127.0.0.1:"+apiPort+"/api/upload/"+id,{headers:{authorization:"Bearer "+token,accept:"application/octet-stream"},signal:AbortSignal.timeout(10000)});assert.equal(await downloaded.text(),content);
-   const listed=compose("--profile","s3","run","--rm","--no-deps","--entrypoint","/bin/sh","minio-init","-c",'mc alias set local http://minio:9000 "$S3_ACCESS_KEY_ID" "$S3_SECRET_ACCESS_KEY" >/dev/null && mc ls --recursive --json "local/$S3_BUCKET"');
+   const listed=compose("--profile","s3","run","--rm","--no-deps","--entrypoint","/bin/sh","minio-init","-c",'mc alias set -- local http://minio:9000 "$S3_ACCESS_KEY_ID" "$S3_SECRET_ACCESS_KEY" >/dev/null && mc ls --recursive --json "local/$S3_BUCKET"');
    const objects=listed.stdout.split(/\r?\n/).filter(v=>v.startsWith("{")).map(v=>JSON.parse(v)).filter(v=>v.type==="file");
    assert(objects.some(object=>object.key===owner+"/"+id),"Actual S3 object must use the deployment namespace");
    await compensation("s3");
