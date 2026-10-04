@@ -1,6 +1,6 @@
 {
   "name": "create-ridhuan-backend",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "CLI for Express, NestJS, Go, ASP.NET Core, FastAPI, Spring Boot and Laravel with PostgreSQL or MySQL",
   "type": "module",
   "bin": {
