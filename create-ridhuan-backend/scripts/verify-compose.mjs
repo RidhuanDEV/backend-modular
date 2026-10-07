@@ -249,6 +249,9 @@ try {
           : "3000",
   );
   assert(config.services.redis && config.services[fixtureStorage]);
+  assert.match(config.name, /^acceptance-api-[a-f0-9]{8}$/);
+  // Record ownership before image builds so timeout cleanup can find this fixture.
+  console.log(`COMPOSE_FIXTURE_OWNER=${config.name}`);
   // Actual database startup verifies Compose quoting and URI/Npgsql credentials, including punctuation and Unicode.
   started = true;
   // Prove a failed release migration blocks the API before applying any schema.
