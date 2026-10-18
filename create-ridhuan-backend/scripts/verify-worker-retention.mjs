@@ -35,6 +35,8 @@ export async function verifyWorkerRetention({
   const connection = isMySQL
     ? await mysql.createConnection({ ...config, timezone: "Z" })
     : new pg.Client(config);
+  // Compose stops the database during cleanup; never let that mask the real failure.
+  connection.on("error", (error) => console.error("Fixture database connection closed:", error.code ?? error.message));
   if (!isMySQL) await connection.connect();
   const q = (name) => (isMySQL ? "`" + name + "`" : '"' + name + '"');
   const f = (name) =>
@@ -601,8 +603,11 @@ export async function verifyWorkerRetention({
       `${id}/${database}: two workers, immutable email snapshot, retry schedule/max5/recovery, abandoned lease/max-attempt recovery, dry-run/idempotent retention and active hashes/audit/pending/notification protection passed`,
     );
   } finally {
-    await mode("normal");
-    await connection.end();
-    compose("up", "-d", "--no-deps", "--scale", "worker=1", "worker");
+    try {
+      await mode("normal");
+    } finally {
+      await connection.end().catch(() => {});
+      compose("up", "-d", "--no-deps", "--scale", "worker=1", "worker");
+    }
   }
 }

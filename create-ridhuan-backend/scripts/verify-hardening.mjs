@@ -30,6 +30,8 @@ export async function verifyHardening({
   const connect = async () => {
     if (isMySQL) return mysql.createConnection({ ...options, timezone: "Z" });
     const connection = new pg.Client(options);
+    // Compose stops the database during cleanup; never let that mask the real failure.
+    connection.on("error", (error) => console.error("Fixture database connection closed:", error.code ?? error.message));
     await connection.connect();
     return connection;
   };

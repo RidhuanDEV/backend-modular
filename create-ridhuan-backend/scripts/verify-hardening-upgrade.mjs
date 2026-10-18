@@ -32,6 +32,7 @@ export async function verifyHardeningUpgrade({
         multipleStatements: true,
       });
     const client = new pg.Client({ ...config, database: databaseName });
+    client.on("error", (error) => console.error("Fixture database connection closed:", error.code ?? error.message));
     await client.connect();
     return client;
   };

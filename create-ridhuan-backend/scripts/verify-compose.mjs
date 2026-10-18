@@ -440,6 +440,7 @@ try {
       password: dbPassword,
       database: "postgres",
     });
+    admin.on("error", (error) => console.error("Fixture database connection closed:", error.code ?? error.message));
     await admin.connect();
     const upgradeName = "consumer_upgrade_" + randomUUID().replaceAll("-", "");
     let upgrade;
@@ -452,6 +453,7 @@ try {
         password: dbPassword,
         database: upgradeName,
       });
+      upgrade.on("error", (error) => console.error("Fixture database connection closed:", error.code ?? error.message));
       await upgrade.connect();
       const initial =
         id === "nestjs" ? "20260929000000_init" : "20260524120000_init";
