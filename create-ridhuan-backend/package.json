@@ -55,6 +55,7 @@
     "prepack": "npm run prepare:templates && npm run build",
     "test": "node ./scripts/verify-cli.mjs",
     "test:consumer": "node scripts/verify-consumer.mjs",
+    "compare:published": "node scripts/compare-published.mjs",
     "test:compose": "node scripts/verify-compose.mjs",
     "test:hardening:plan": "node scripts/run-hardening-suite.mjs",
     "test:hardening": "node scripts/run-hardening-suite.mjs --run",
