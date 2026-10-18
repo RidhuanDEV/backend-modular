@@ -19,7 +19,9 @@ import {
   mkdir,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { existsSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { spawnSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "..");
@@ -59,12 +61,40 @@ const skippedDirectories = new Set([
 const secretFile = (path) =>
   /(^|\/)\.env(\.[a-z]+)?$/.test(path) && !path.endsWith(".example");
 
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+// npm runs as `node npm-cli.js` so no shell is needed on Windows (no npm.cmd quoting).
+function npmCli() {
+  const candidates = [
+    process.env.npm_execpath,
+    join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
+    join(
+      dirname(process.execPath),
+      "..",
+      "lib",
+      "node_modules",
+      "npm",
+      "bin",
+      "npm-cli.js",
+    ),
+  ];
+  const found = candidates.find(
+    (file) => file && /npm-cli\.js$/.test(file) && existsSync(file),
+  );
+  if (!found)
+    throw new Error(
+      "npm-cli.js not found; run this script with Node.js that bundles npm",
+    );
+  return found;
+}
+const npm = "npm";
 function run(executable, args, cwd) {
-  const result = spawnSync(executable, args, {
+  const [file, list] =
+    executable === npm
+      ? [process.execPath, [npmCli(), ...args]]
+      : [executable, args];
+  const result = spawnSync(file, list, {
     cwd,
     encoding: "utf8",
-    shell: process.platform === "win32" && executable === npm,
+    shell: false,
     windowsHide: true,
     timeout: 20 * 60 * 1000,
   });
@@ -156,12 +186,55 @@ async function install(tarball, directory) {
   );
 }
 
+// Extracts an npm tarball in-process, so the result does not depend on which `tar` is on
+// PATH (GNU tar in Git Bash reads "C:\..." as a remote host). Handles ustar and PAX path
+// headers, which npm uses for long paths; only regular files are written.
 async function extract(tarball, directory) {
-  await mkdir(directory, { recursive: true });
-  run("tar", ["-xzf", tarball, "-C", directory]);
+  const data = gunzipSync(await readFile(tarball));
+  const field = (block, start, length) =>
+    block
+      .subarray(start, start + length)
+      .toString("utf8")
+      .replace(/\0.*$/s, "");
+  let offset = 0;
+  let paxPath;
+  while (offset + 512 <= data.length) {
+    const header = data.subarray(offset, offset + 512);
+    if (header.every((byte) => byte === 0)) break;
+    const size = parseInt(field(header, 124, 12).trim() || "0", 8);
+    const type = String.fromCharCode(header[156] || 48);
+    const body = data.subarray(offset + 512, offset + 512 + size);
+    offset += 512 + Math.ceil(size / 512) * 512;
+    if (type === "x") {
+      const match = body.toString("utf8").match(/^\d+ path=(.*)$/m);
+      paxPath = match?.[1];
+      continue;
+    }
+    const prefix = field(header, 345, 155);
+    const name =
+      paxPath ?? (prefix ? `${prefix}/` : "") + field(header, 0, 100);
+    paxPath = undefined;
+    if (type !== "0") continue;
+    const target = resolve(directory, name);
+    if (!target.startsWith(resolve(directory) + sep))
+      throw new Error(`Unsafe path in tarball: ${name}`);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, body);
+  }
   return join(directory, "package");
 }
 
+// Fail fast with a clear message when the version is not on the registry yet.
+const published = JSON.parse(
+  run(npm, ["view", "create-ridhuan-backend", "versions", "--json"], root),
+);
+if (![published].flat().includes(version)) {
+  console.error(
+    `create-ridhuan-backend@${version} is not published yet (registry has: ${[published].flat().slice(-5).join(", ")}).` +
+      " Publish it first, or pass --version <published version>.",
+  );
+  process.exit(2);
+}
 const scratch = await mkdtemp(join(tmpdir(), "ridhuan-compare-"));
 const report = { version, scratch, package: undefined, generation: [] };
 let failed = false;
