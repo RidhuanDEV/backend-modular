@@ -108,6 +108,8 @@ Email disimpan apa adanya. Unique index di PostgreSQL case-sensitive (MySQL tida
 ### [MEDIUM] 5. FastAPI, Laravel, Spring: refresh session bisa diperpanjang tanpa batas
 
 > **Koreksi:** ini bukan perbedaan antar-template. **Ketujuh template** (termasuk .NET, Go, Express dan NestJS) memakai sliding 30 hari tanpa batas absolut. .NET `BackendService.cs:228` juga menghitung ulang `now.AddDays(30)` di setiap rotasi; klaim "90 hari seperti di .NET" di bawah salah. Perilaku sliding ini juga **kontrak yang didokumentasikan** (`modular-fastapi/docs/HARDENING-UPGRADE.md:9` dan `:44`). Risikonya tetap valid, tetapi ini keputusan kebijakan untuk semua template sekaligus, bukan bug di tiga template.
+>
+> **Keputusan:** ketujuh template memakai kebijakan yang sama dan bisa diatur lewat env: idle `REFRESH_TOKEN_IDLE_DAYS` (default 30) dan umur absolut `REFRESH_TOKEN_ABSOLUTE_DAYS` (default 90, harus >= idle). Expiry family ditetapkan saat login dan tidak pernah diperpanjang; token hasil rotasi berlaku `min(now + idle, family.expires_at)`. .NET memakai `RefreshToken__IdleDays` / `RefreshToken__AbsoluteDays` sesuai konvensi konfigurasinya.
 **Lokasi:**
 - `modular-fastapi/src/app/modules/auth/service.py:141`
 - `modular-laravel/app/Modules/Auth/Services/AuthService.php:209-212`
