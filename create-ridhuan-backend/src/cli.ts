@@ -223,7 +223,7 @@ export async function runCli(): Promise<void> {
     args.dbUser ??
     (await textPrompt(
       `${databaseLabel} username`,
-      databaseProvider === "mysql" ? "backend" : "postgres",
+      "backend",
       automatic,
     ));
   const dbPassword = await secret(
@@ -387,7 +387,9 @@ export async function runCli(): Promise<void> {
     `> Generated project **${projectName}**: start with [GETTING-STARTED.md](GETTING-STARTED.md). API http://localhost:${appPort}.\n\n${await readFile(readmePath, "utf8")}`,
   );
   // Ignore materialization and secret creation precede Git, including when installation fails.
-  command("git", ["init"], targetDirectory);
+  const repository = command("git", ["init"], targetDirectory);
+  if (repository.error || repository.status !== 0)
+    process.stdout.write("Warning: git init failed; run git init in the project yourself.\n");
   if (!args.noInstall) installDependencies(answers);
   process.stdout.write(
     `\nCreated ${projectName}. Next steps:\n${nextSteps(answers, args.noInstall).join("\n")}\n`,

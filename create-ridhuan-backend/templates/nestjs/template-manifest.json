@@ -18,7 +18,7 @@
     ".dockerignore": "18bb917aa079099999d47fbdac3d0eaa25889f09889fecc6a399d78a9ff6feb9",
     ".env.example": "6b6824cdf888f4e8cc9898aa3e4d2b27458c680ef6a1de931ba33fdd342a85fe",
     ".env.mysql.example": "f2baf435e143ae6118ad1b273ffe7921f8366a7f61a5ebfc1db73bcf696e8e47",
-    ".gitattributes": "a0a7d068fd4921bf72c55eefa51e5b5866ed0437f409a338431ae6f2adcadfa1",
+    "gitattributes.template": "a0a7d068fd4921bf72c55eefa51e5b5866ed0437f409a338431ae6f2adcadfa1",
     ".prettierignore": "191d579677e0c4483a52efa13b541de946143d40efee807f4f46234d38ca4138",
     ".prettierrc.json": "750d51495eb805e246d31fba17dd929362b43ac5182b4e393b0997c206ca2331",
     "compose.mysql.yaml": "e153559adf3e858aaf2a7d7361eb009dcfb283b50bbe89e04df1adb8cc65140f",

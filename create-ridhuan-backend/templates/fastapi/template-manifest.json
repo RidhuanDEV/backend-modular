@@ -19,7 +19,7 @@
     ".dockerignore": "50c1e5606ca11eb50d299ed23d6537de343b26b807d329fa29e8584c1487b49b",
     ".env.example": "2eb08d13b3ff6e85fde89eefa0acd0e8cd964efafedcaa1f2dbc920edf1558c5",
     ".env.mysql.example": "6a5ad30e064371b745f9a9ddc1f9929ca021f146ec137c46cae64e6770b26913",
-    ".gitattributes": "93699a1108fd9da226b06f84ee12e317f4ea4d2f18a8fd05260443fd1bf2faef",
+    "gitattributes.template": "93699a1108fd9da226b06f84ee12e317f4ea4d2f18a8fd05260443fd1bf2faef",
     ".python-version": "cab2a6ef71f91553b8974b642a96ec579e64be71518251f7f2501dffc228ec55",
     "AGENTS.md": "69e945b77fd5b3f1f4364726865e3f5d02778ecc7132c2ec7430ce128b8a6814",
     "alembic.ini": "50d7dd4772609d4eb324fa6965b39619b0fceae4e9921ee7d4e910dfb654ade6",

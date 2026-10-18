@@ -229,7 +229,8 @@ for (const [id, descriptor] of Object.entries(descriptors)) {
     for (const file of matching) if (!unsafe.test(file)) selected.add(file);
   }
   for (const file of [...selected].sort()) {
-    const output = file === ".gitignore" ? "gitignore.template" : file.endsWith("/.gitignore") ? file.slice(0,-10)+"gitignore.template" : file;
+    // A live nested .gitattributes would re-encode snapshot files on checkout and break their LF checksums.
+    const output = file.replace(/(^|\/)\.(gitignore|gitattributes)$/, "$1$2.template");
     await mkdir(join(target, output, ".."), { recursive: true });
     const bytes = await readFile(join(source, file));
     let normalized = bytes;

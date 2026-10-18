@@ -117,7 +117,7 @@ export function gettingStarted(
     `## Docker Compose\n\nDocker Engine and Compose v2 are required; host Node/Go/.NET/Python/Java/PHP build tools are optional. Redis/S3 development profiles follow COMPOSE_PROFILES.\n\n\`\`\`sh\n${docker}\n\`\`\`\n\n` +
     `For a host API with container dependencies, run docker compose up -d ${answers.databaseProvider === "mysql" ? "mysql" : "postgres"}${answers.enableRedis ? " redis" : ""}${localS3 ? (descriptor.storageHost.startsWith("minio") ? " minio-init" : " s3mock") : ""}. Host connection settings are separate from container URLs.\n\n` +
     `Migrations run once before new replicas; seed stays explicit. Compose includes a separate worker; SMTP disabled makes it a no-op. SMTP delivery is at least once: a crash after acceptance may deliver the same email again.\n\n` +
-    `Cleanup is a separate scheduled command, dry-run by default. Read docs/HARDENING-UPGRADE.md for cleanup commands, retention, sliding refresh sessions, SSE cursors, worker lease/retry configuration and optional telemetry. No cleanup runs during HTTP startup.\n\n` +
+    `Cleanup is a separate scheduled command, dry-run by default. Read docs/HARDENING-UPGRADE.md for cleanup commands, retention, refresh session idle/absolute lifetimes, SSE cursors, worker lease/retry configuration and optional telemetry. No cleanup runs during HTTP startup.\n\n` +
     `Local/S3 upload, Redis rate limiting/cache and SMTP configuration follow README.md and .env.example. /live checks HTTP; /ready checks required dependencies.\n`
   );
 }

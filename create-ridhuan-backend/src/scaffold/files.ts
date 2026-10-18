@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { cp, readFile, writeFile, readdir, unlink } from "node:fs/promises";
-import { join, resolve, relative, isAbsolute } from "node:path";
+import { basename, dirname, join, resolve, relative, isAbsolute } from "node:path";
 import { objectRecord, readManifest } from "../templates.js";
 import type { ProjectAnswers, TemplateManifest } from "../types.js";
 import { templateRegistry } from "../templates.js";
@@ -20,9 +20,14 @@ export async function copyTemplate(source: string, answers: ProjectAnswers): Pro
   if (!manifest.databaseProviders.includes(answers.databaseProvider)) throw new Error("Database provider is not supported by this snapshot");
   await verifySnapshot(source, manifest);
   await cp(source, answers.targetDirectory, { recursive: true, errorOnExist: true, force: false });
-  const ignorePath = join(answers.targetDirectory, "gitignore.template");
-  await writeFile(join(answers.targetDirectory, ".gitignore"), await readFile(ignorePath), { flag: "wx" });
-  await unlink(ignorePath);
+  // Git metadata ships renamed so it cannot alter the CLI's own checkout; restore every level, not only the root.
+  for (const path of Object.keys(manifest.files)) {
+    const name = basename(path);
+    if (name !== "gitignore.template" && name !== "gitattributes.template") continue;
+    const shipped = join(answers.targetDirectory, path);
+    await writeFile(join(dirname(shipped), name === "gitignore.template" ? ".gitignore" : ".gitattributes"), await readFile(shipped), { flag: "wx" });
+    await unlink(shipped);
+  }
   if (answers.databaseProvider === "mysql") {
     const compose = templateRegistry[answers.templateId].composeFile;
     const variant = compose === "docker-compose.yml" ? "docker-compose.mysql.yml" : "compose.mysql.yaml";

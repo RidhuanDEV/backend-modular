@@ -21,7 +21,7 @@
     ".editorconfig": "cccca5cd454ed7533eaa944985c79a551bf3a099aede97b724f70c78aabb4c65",
     ".env.example": "0f51172d38c19c61c37637cee527fc2219147bf6d9d3c4613cd3f112fc4df8bb",
     ".env.mysql.example": "981966b3a20ffc9e963b5d5f85b56899bd247293c2324362f42c72d1317f9ade",
-    ".gitattributes": "5409fa7fe850672747f2265024a6f481e6840a6e5ba62a0e7afc47f7e0c179ff",
+    "gitattributes.template": "5409fa7fe850672747f2265024a6f481e6840a6e5ba62a0e7afc47f7e0c179ff",
     ".template.config/backend-template.json": "8bab9620de0632280e328edebd2a4fa788665526529fea40b2fdb5c7deddd269",
     ".template.config/template.json": "99be5e833334e4b8b75866f0c04062ffc8d019c855e7b24346e14503a9eb53b0",
     "CHANGELOG.md": "0d00c3cc6ee81c7d20d7aa7f4ec716f2863cebf6b852ebd0a9d01c70d70d75dd",

@@ -19,7 +19,7 @@
     ".dockerignore": "6d92eda6086c8cb7e37b1449289dfb0a1fee9ec37db8f1aa91ac64e2466d7d07",
     ".env.example": "304a995cd9e44bbb562bb0d1838bd3e948e31a0a675133e96c16e6f313bb914e",
     ".env.mysql.example": "94ba5c646ebe54c4b925f143187fb704d29dc817edbba9a11a15a3ac9ed03069",
-    ".gitattributes": "61ed2c4effbbe5060e2a745e9e8416080aa5cc7bc0e3eda2cd1bc7feefc994ff",
+    "gitattributes.template": "61ed2c4effbbe5060e2a745e9e8416080aa5cc7bc0e3eda2cd1bc7feefc994ff",
     ".mvn/wrapper/maven-wrapper.properties": "9e702bcd7e68ba1cace0a3382a7082e6e1e1b321688a7a3fbf4d5ae7eb0af533",
     "AGENTS.md": "3283a9fe24fca012e38adbef07153325dbc78f31abb8f810ea3279d02e35efbf",
     "compose.mysql.yaml": "711a13cfac525de349771c426ab1dc15b54ad4bd2239a685ae8b731f0542b5ec",

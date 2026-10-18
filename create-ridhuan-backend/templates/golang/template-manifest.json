@@ -18,7 +18,7 @@
     ".dockerignore": "b741c6add9eedafca019d9a59df8b47fe83c9eaaa9357da876ccecd8371a2d67",
     ".env.example": "0c130a44f3170ce78ccd030a6d27bcb3f765b0532dc11ea5778d71c8fd201ef3",
     ".env.mysql.example": "f243aeb164427e5d357f1609d95c7402d1414cb6392a41bf9779d924cab1f8dd",
-    ".gitattributes": "a0a7d068fd4921bf72c55eefa51e5b5866ed0437f409a338431ae6f2adcadfa1",
+    "gitattributes.template": "a0a7d068fd4921bf72c55eefa51e5b5866ed0437f409a338431ae6f2adcadfa1",
     "CHANGELOG.md": "8f9e83e077deed14b0a947167f175d671b16522308a13d024413bd856e400863",
     "cmd/api/main.go": "d9017d340b0c74c3bb2549905d8abd46ee8b15244605d19b9b2d1addf5745677",
     "cmd/api/main_test.go": "c483f6a223c3b96a4468401d75222c1011faf9704a21a168d75075e1c8bc54a8",

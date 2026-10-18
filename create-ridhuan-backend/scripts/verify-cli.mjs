@@ -366,7 +366,20 @@ try {
     assert.equal(run("git", ["check-ignore", ".env"], project).trim(), ".env");
     assert(!run("git", ["add", "--dry-run", "."], project).includes("'.env'"));
     const files = await readdir(project);
-    assert(!files.includes("gitignore.template"));
+    const shipped = (await readdir(project, { recursive: true })).filter(
+      (file) =>
+        !/^(?:node_modules|vendor)[\\/]/.test(file) &&
+        /(?:^|[\\/])git(?:ignore|attributes)\.template$/.test(file),
+    );
+    assert.deepEqual(shipped, [], "Shipped git metadata was not restored");
+    assert(files.includes(".gitattributes"));
+    if (id === "laravel")
+      for (const directory of ["storage", "bootstrap/cache", "database"])
+        assert(
+          run("git", ["ls-files", "--others", "--exclude-standard", "--", `${directory}/.gitignore`], project).trim() ===
+            `${directory}/.gitignore`,
+          `${directory}/.gitignore must be committable so a clone keeps the directory`,
+        );
     assert(!files.includes("node_modules"));
     const guide = await readFile(join(project, "GETTING-STARTED.md"), "utf8");
     assert.match(guide, /migrat/i);
