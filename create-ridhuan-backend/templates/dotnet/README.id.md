@@ -89,7 +89,7 @@ Port default host/manual: **5080**. Container memakai **8080**.
 | /live | Liveness HTTP tanpa mengandalkan database |
 | /ready | Kesiapan dependency yang wajib |
 
-Login/refresh memberikan data.accessToken dan data.refreshToken. Gunakan Authorization: Bearer untuk request terlindungi. Refresh memiliki sliding expiry; koordinasikan satu request refresh agar token lama tidak dipakai ulang.
+Login/refresh memberikan data.accessToken dan data.refreshToken. Gunakan Authorization: Bearer untuk request terlindungi. Refresh punya idle timeout (`RefreshToken__IdleDays`, default 30 hari) dan umur absolut (`RefreshToken__AbsoluteDays`, default 90 hari); koordinasikan satu request refresh agar token lama tidak dipakai ulang.
 
 ## Struktur project
 

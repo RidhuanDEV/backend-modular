@@ -23,6 +23,15 @@ public sealed class JwtOptions
     public string Audience { get; set; } = "modular-net-clients";
 }
 
+public sealed class RefreshTokenOptions
+{
+    [Range(1, 3650)]
+    public int IdleDays { get; set; } = 30;
+
+    [Range(1, 3650)]
+    public int AbsoluteDays { get; set; } = 90;
+}
+
 public sealed class CacheOptions
 {
     public bool Enabled { get; set; }

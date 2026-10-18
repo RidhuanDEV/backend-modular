@@ -67,6 +67,15 @@ builder
     )
     .ValidateOnStart();
 builder
+    .Services.AddOptions<RefreshTokenOptions>()
+    .BindConfiguration("RefreshToken")
+    .ValidateDataAnnotations()
+    .Validate(
+        o => o.AbsoluteDays >= o.IdleDays,
+        "RefreshToken:AbsoluteDays must be at least RefreshToken:IdleDays"
+    )
+    .ValidateOnStart();
+builder
     .Services.AddOptions<CacheOptions>()
     .BindConfiguration("Cache")
     .ValidateDataAnnotations()
@@ -232,6 +241,11 @@ else
                 .AddInterceptors(new DatabaseTelemetryInterceptor())
     );
 builder.Services.AddScoped<IBackendStore, BackendStore>();
+builder.Services.AddSingleton(services =>
+{
+    var o = services.GetRequiredService<IOptions<RefreshTokenOptions>>().Value;
+    return new RefreshSessionPolicy(o.IdleDays, o.AbsoluteDays);
+});
 builder.Services.AddScoped<BackendService>();
 builder.Services.AddScoped<UploadService>();
 builder.Services.AddScoped<INotificationStore, NotificationStore>();

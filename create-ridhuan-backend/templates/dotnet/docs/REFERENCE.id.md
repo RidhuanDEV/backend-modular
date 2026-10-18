@@ -162,7 +162,7 @@ Integration test memerlukan PostgreSQL dan membuat database sementara yang dapat
 
 ## Keamanan dan batasan
 
-- Access token berlaku 15 menit. `POST /api/auth/login` dan `POST /api/auth/refresh` memberikan refresh token yang dirotasi setiap pemakaian; kirim `{ "refreshToken": "..." }` untuk memperbarui token. Perlakukan refresh token sebagai kredensial dan simpan dengan aman. Server hanya menyimpan hash; setiap rotasi yang berhasil memperpanjang sesi 30 hari tanpa batas absolut. Pemakaian ulang mencabut keluarga aktif. Respons user auth hanya berisi `id`, `email`, dan `roleId`.
+- Access token berlaku 15 menit. `POST /api/auth/login` dan `POST /api/auth/refresh` memberikan refresh token yang dirotasi setiap pemakaian; kirim `{ "refreshToken": "..." }` untuk memperbarui token. Perlakukan refresh token sebagai kredensial dan simpan dengan aman. Server hanya menyimpan hash; setiap rotasi memberi token baru yang berlaku `RefreshToken__IdleDays` (default 30 hari), tetapi tidak pernah melewati umur absolut keluarga `RefreshToken__AbsoluteDays` (default 90 hari sejak login). Pemakaian ulang mencabut keluarga aktif. Respons user auth hanya berisi `id`, `email`, dan `roleId`.
 - Upload dan metadata file dilindungi izin khusus `manage_uploads`.
 - `GET /api/upload/{id}` memberi metadata file yang dilindungi, bukan bytes. Alur download/presigned URL belum tersedia.
 - Profil S3 di Compose dan CI menggunakan [Adobe S3Mock](https://github.com/adobe/S3Mock), fixture pengujian dengan dukungan sebagian API S3 dan bukan untuk production. Gunakan layanan S3 kompatibel yang dikelola/dipelihara untuk deployment.

@@ -11,7 +11,8 @@ public sealed class BackendService(
     ITokenService tokens,
     TimeProvider clock,
     IAuditFailureReporter auditFailures,
-    ICacheInvalidation invalidation
+    ICacheInvalidation invalidation,
+    RefreshSessionPolicy sessions
 )
 {
     private static UserResult Map(User u) =>
@@ -218,14 +219,17 @@ public sealed class BackendService(
     private AuthTokensResult IssuePair(User user, string refreshToken) =>
         new(tokens.Issue(user), refreshToken, "Bearer", 900);
 
+    // Login passes no family expiry and starts the absolute lifetime; rotation reuses the family's.
     private (RefreshToken Entity, string Plaintext) CreateRefreshToken(
         Guid userId,
-        Guid? familyId = null
+        Guid? familyId = null,
+        DateTimeOffset? familyExpiresAt = null
     )
     {
         var now = clock.GetUtcNow();
         var raw = NewRefreshToken();
-        var familyExpiry = now.AddDays(30);
+        var familyExpiry = familyExpiresAt ?? now.AddDays(sessions.AbsoluteDays);
+        var idleExpiry = now.AddDays(sessions.IdleDays);
         return (
             new RefreshToken
             {
@@ -233,7 +237,7 @@ public sealed class BackendService(
                 FamilyId = familyId ?? Guid.NewGuid(),
                 UserId = userId,
                 CreatedAt = now,
-                ExpiresAt = familyExpiry,
+                ExpiresAt = idleExpiry < familyExpiry ? idleExpiry : familyExpiry,
                 FamilyExpiresAt = familyExpiry,
             },
             raw
@@ -262,7 +266,7 @@ public sealed class BackendService(
                     Id = refresh.FamilyId,
                     UserId = user.Id,
                     CreatedAt = refresh.CreatedAt,
-                    ExpiresAt = refresh.ExpiresAt,
+                    ExpiresAt = refresh.FamilyExpiresAt,
                 }
             );
             store.AddRefreshToken(refresh);
@@ -349,9 +353,8 @@ public sealed class BackendService(
             }
             else
             {
-                var (replacement, raw) = CreateRefreshToken(user.Id, family.Id);
+                var (replacement, raw) = CreateRefreshToken(user.Id, family.Id, family.ExpiresAt);
                 plaintext = raw;
-                family.ExpiresAt = replacement.ExpiresAt;
                 current.RevokedAt = now;
                 current.ReplacedByTokenHash = replacement.TokenHash;
                 store.AddRefreshToken(replacement);
