@@ -7,33 +7,43 @@ export function nextSteps(
   const descriptor = templateRegistry[answers.templateId];
   const steps = [`cd "${answers.projectName}"`];
   if (answers.mode === "docker") {
-    if (answers.templateId === "springboot") steps.push("docker compose build app", "docker compose up -d --wait");
+    if (answers.templateId === "springboot")
+      steps.push("docker compose build app", "docker compose up -d --wait");
     else steps.push("docker compose up --build -d --wait");
     steps.push(
-      (answers.templateId === "springboot" || answers.templateId === "laravel")
+      answers.templateId === "springboot" || answers.templateId === "laravel"
         ? "docker compose --profile seed run --rm seeder"
         : answers.templateId === "dotnet"
-        ? "docker compose --profile seed run --rm seeder"
-        : answers.templateId === "golang"
-          ? "docker compose run --rm --entrypoint seed app"
-          : answers.templateId === "nestjs"
-            ? "docker compose exec app npm run seed"
-            : answers.templateId === "fastapi"
-              ? "docker compose exec app backend seed"
-              : "docker compose exec app npm run seed:prod",
+          ? "docker compose --profile seed run --rm seeder"
+          : answers.templateId === "golang"
+            ? "docker compose run --rm --entrypoint seed app"
+            : answers.templateId === "nestjs"
+              ? "docker compose exec app npm run seed"
+              : answers.templateId === "fastapi"
+                ? "docker compose exec app backend seed"
+                : "docker compose exec app npm run seed:prod",
     );
   } else {
     if (noInstall)
       steps.push(
-        `${descriptor.install.command === "mvnw" ? process.platform === "win32" ? ".\\mvnw.cmd" : "./mvnw" : descriptor.install.command} ${descriptor.install.args.map(argument => answers.templateId === "springboot" && argument.startsWith("-D") ? '"' + argument + '"' : argument).join(" ")}${answers.templateId === "fastapi" ? ` --extra ${answers.databaseProvider}` : ""}`,
+        `${descriptor.install.command === "mvnw" ? (process.platform === "win32" ? ".\\mvnw.cmd" : "./mvnw") : descriptor.install.command} ${descriptor.install.args.map((argument) => (answers.templateId === "springboot" && argument.startsWith("-D") ? '"' + argument + '"' : argument)).join(" ")}${answers.templateId === "fastapi" ? ` --extra ${answers.databaseProvider}` : ""}`,
       );
     steps.push(
       `# Provide ${answers.databaseProvider} ${answers.dbHost}:${answers.dbPort} and create database ${answers.dbName} first.`,
     );
     if (answers.templateId === "springboot") {
-      steps.push(`${process.platform === "win32" ? ".\\mvnw.cmd" : "./mvnw"} -B "-Dmaven.test.skip=true" package`, "java -jar target/app.jar --app.mode=migrate", "java -jar target/app.jar --app.mode=seed", "java -jar target/app.jar --app.mode=http");
+      steps.push(
+        `${process.platform === "win32" ? ".\\mvnw.cmd" : "./mvnw"} -B "-Dmaven.test.skip=true" package`,
+        "java -jar target/app.jar --app.mode=migrate",
+        "java -jar target/app.jar --app.mode=seed",
+        "java -jar target/app.jar --app.mode=http",
+      );
     } else if (answers.templateId === "laravel") {
-      steps.push("php artisan backend:migrate --force", "php artisan backend:seed", "php artisan serve --host=127.0.0.1 --port=" + answers.appPort);
+      steps.push(
+        "php artisan backend:migrate --force",
+        "php artisan backend:seed",
+        "php artisan serve --host=127.0.0.1 --port=" + answers.appPort,
+      );
     } else if (answers.templateId === "dotnet") {
       const loader =
         process.platform === "win32"
@@ -72,12 +82,24 @@ export function nextSteps(
     `# API: http://localhost:${answers.appPort}; readiness: /ready; API docs: /docs`,
     "# Fresh bootstrap credentials are in .env; never commit this file.",
   );
+  // These Compose stacks run the API in production mode, where /docs is off by default.
+  if (
+    answers.mode === "docker" &&
+    ["express-typescript", "nestjs", "dotnet", "fastapi"].includes(
+      answers.templateId,
+    )
+  )
+    steps.push(
+      `# Compose runs in production mode: /docs stays off unless ${answers.templateId === "dotnet" ? "Docs__Enabled" : "DOCS_ENABLED"}=true is set in .env.`,
+    );
   if (answers.mode === "manual") {
     steps.push(
       "# In a separate terminal, run the SMTP outbox worker (SMTP disabled => no-op):",
     );
-    if (answers.templateId === "springboot") steps.push("java -jar target/app.jar --app.mode=email-worker");
-    else if (answers.templateId === "laravel") steps.push("php artisan notifications:work");
+    if (answers.templateId === "springboot")
+      steps.push("java -jar target/app.jar --app.mode=email-worker");
+    else if (answers.templateId === "laravel")
+      steps.push("php artisan notifications:work");
     else if (answers.templateId === "dotnet")
       steps.push(
         `${process.platform === "win32" ? "pwsh -File scripts/run.ps1" : "python3 scripts/run.py"} run --project tools/${answers.namespace}.Worker`,

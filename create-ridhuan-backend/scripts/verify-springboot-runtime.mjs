@@ -184,7 +184,8 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
    await request("/api/users",{method:"POST",token:limited,body:{email:"escalate@example.com",password:"fixture-password",roleId:adminRole},status:403});
    await request("/api/roles/"+role.id+"/permissions",{method:"POST",token:limited,body:{permissionIds:[permission("manage_uploads")]},status:403});
    const custom=(await request("/api/permissions",{method:"POST",token,body:{name:"fixture_"+randomUUID().replaceAll("-","")},status:201})).data;
-   await query("INSERT INTO role_permissions(role_id,permission_id) VALUES('"+adminRole+"','"+custom.id+"')");
+   // Pure RBAC: the server grants a new permission to every role holding manage_permissions.
+   assert.equal(Number((await query("SELECT COUNT(*) AS n FROM role_permissions WHERE role_id='"+adminRole+"' AND permission_id='"+custom.id+"'"))[0].n),1,"New permission was not granted to the admin role");
    await request("/api/permissions/"+custom.id,{token});await request("/api/permissions/"+custom.id,{method:"PATCH",token,body:{name:"renamed_"+randomUUID().replaceAll("-","")}});
    await request("/api/permissions/"+custom.id,{method:"DELETE",token,status:204});
    await request("/api/users/"+manager.id,{method:"DELETE",token,status:204});await request("/api/users/"+manager.id,{token,status:404});await request("/api/auth/me",{token:limited,status:401});

@@ -194,6 +194,8 @@ try {
   );
   if (originalDb === undefined) delete process.env.RIDHUAN_DB_PASSWORD;
   else process.env.RIDHUAN_DB_PASSWORD = originalDb;
+  // Compose runs the API in production mode, where /docs is off unless explicitly enabled;
+  // the fixture enables it because the acceptance checks read the OpenAPI document.
   const generatedEnv = await readFile(join(project, ".env"), "utf8");
   for (const line of generatedEnv.split(/\r?\n/))
     if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(line)) {
@@ -204,7 +206,7 @@ try {
   const fixtureStorage = id === "dotnet" ? "s3mock" : "minio";
   await writeFile(
     join(project, ".tmp-consumer-ports.yaml"),
-    `services:\n  app:\n    environment:\n      ${id === "dotnet" ? "Rate__Auth__Max" : "RATE_LIMIT_AUTH_MAX"}: "10000"\n      ${id === "dotnet" ? "Rate__Internal__Max" : "RATE_LIMIT_INTERNAL_MAX"}: "10000"\n      ENDPOINT_POLICIES_JSON: '{"auth.refresh":{"audit":"required"},"auth.logout":{"audit":"required"}}'\n  redis:\n    ports: !override ["127.0.0.1:${redisPort}:6379"]\n  ${fixtureStorage}:\n    ports: !override ["127.0.0.1:${storagePort}:${id === "dotnet" ? 9090 : 9000}"${id === "dotnet" ? "" : `, "127.0.0.1:${consolePort}:9001"`}]\n`,
+    `services:\n  app:\n    environment:\n      ${id === "dotnet" ? "Rate__Auth__Max" : "RATE_LIMIT_AUTH_MAX"}: "10000"\n      ${id === "dotnet" ? "Rate__Internal__Max" : "RATE_LIMIT_INTERNAL_MAX"}: "10000"\n      ENDPOINT_POLICIES_JSON: '{"auth.refresh":{"audit":"required"},"auth.logout":{"audit":"required"}}'\n      ${id === "dotnet" ? "Docs__Enabled" : "DOCS_ENABLED"}: "true"\n  redis:\n    ports: !override ["127.0.0.1:${redisPort}:6379"]\n  ${fixtureStorage}:\n    ports: !override ["127.0.0.1:${storagePort}:${id === "dotnet" ? 9090 : 9000}"${id === "dotnet" ? "" : `, "127.0.0.1:${consolePort}:9001"`}]\n`,
   );
   const initialOverride = await readFile(
     join(project, ".tmp-consumer-ports.yaml"),

@@ -42,6 +42,7 @@ const descriptors = {
       "scripts/init-bucket.sh",
       "scripts/mysql-entrypoint.sh",
       "scripts/mysql-init-user.sh",
+      "scripts/postgres-init-app-role.sh",
       "scripts/otel-collector.yaml",
     ],
   },
@@ -246,6 +247,15 @@ for (const [id, descriptor] of Object.entries(descriptors)) {
       }
     }
     await writeFile(join(target, output), normalized);
+  }
+  // Compose bind-mounts missing host files as empty directories, which breaks container
+  // startup at runtime; fail here instead when a referenced script is not in the snapshot.
+  for (const file of selected) {
+    if (!/(^|\/)(docker-)?compose[^/]*\.ya?ml$/.test(file)) continue;
+    const text = await readFile(join(source, file), "utf8");
+    for (const [, reference] of text.matchAll(/\.\/(scripts\/[A-Za-z0-9._-]+)/g))
+      if (!selected.has(reference))
+        throw new Error(`${id}: ${file} mounts ${reference}, which is not in the snapshot`);
   }
   let requirements;
   let identity = descriptor.identity;
