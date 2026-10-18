@@ -7,6 +7,7 @@ import { createServer } from 'node:net';
 import { command } from '../dist/process.js';
 import { phpCommand } from '../dist/runtime/php.js';
 import { collectProcessCase } from './hardening-process.mjs';
+import { verifyParity } from './verify-parity.mjs';
 const project = resolve(process.argv[2] ?? ''), provider = process.argv[3];
 assert(['postgresql', 'mysql'].includes(provider), 'Supply project path and provider');
 await readFile(join(project, 'artisan'));
@@ -48,6 +49,7 @@ try {
  for (const path of ['/health', '/live', '/ready']) assert.equal((await (await api(path)).json()).data.status, 'ok');
  const login = await (await api('/api/auth/login', 'POST', { email: 'admin@example.com', password: 'FixtureOnly!123' })).json(), token = login.data.token;
  assert(token && login.data.refreshToken); await api('/api/auth/me', 'GET', undefined, token);
+ await verifyParity({ id: 'laravel', baseURL: base, credentials: { email: 'admin@example.com', password: 'FixtureOnly!123' } });
  await api('/api/auth/register', 'POST', { email: 'bad', password: 'short' }, undefined, 422);
  const member = await (await api('/api/auth/register', 'POST', { email: 'manual@example.com', password: 'FixtureOnly!123' }, undefined, 201)).json(); assert(!('password' in member.data));
  const memberLogin = await (await api('/api/auth/login', 'POST', { email: 'manual@example.com', password: 'FixtureOnly!123' })).json();

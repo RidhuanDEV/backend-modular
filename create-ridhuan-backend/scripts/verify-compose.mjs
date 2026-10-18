@@ -8,6 +8,7 @@ import { command } from "../dist/process.js";
 import pg from "pg";
 import { verifyProviderUpgrade } from "./verify-upgrade.mjs";
 import { verifyHardening } from "./verify-hardening.mjs";
+import { verifyParity } from "./verify-parity.mjs";
 import { verifyHardeningUpgrade } from "./verify-hardening-upgrade.mjs";
 import { verifyWorkerRetention } from "./verify-worker-retention.mjs";
 import { randomUUID, X509Certificate } from "node:crypto";
@@ -620,6 +621,7 @@ try {
       ? { rootPassword: envValue(env, "MYSQL_ROOT_PASSWORD") }
       : {}),
   });
+  await verifyParity({ id, baseURL, credentials });
   const login = await request("/api/auth/login", {
     method: "POST",
     body: credentials,

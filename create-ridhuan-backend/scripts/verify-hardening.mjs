@@ -144,24 +144,42 @@ export async function verifyHardening({
     assert(!("password" in me));
     assert(!("passwordHash" in me));
     const original = await tokenRow(first.refreshToken);
-    // An old creation date (and .NET's previous cap) must not cap the next rotation.
-    const old = new Date(Date.now() - 120 * 86400000);
+    // Login fixes the family's absolute expiry (default 90 days); each token
+    // lives the idle window (default 30 days), and rotation never moves the family.
+    const day = 86400000;
+    const loggedIn = Date.now();
+    assert(
+      Math.abs(
+        new Date((await familyRow(original.family)).expiry).getTime() -
+          (loggedIn + 90 * day),
+      ) < 60000,
+      "Absolute family lifetime must be login +90 days",
+    );
+    assert(
+      Math.abs(new Date(original.expiry).getTime() - (loggedIn + 30 * day)) <
+        60000,
+      "Refresh token idle lifetime must be +30 days",
+    );
+    const cap = new Date(Math.floor((Date.now() + day) / 1000) * 1000);
     await query(
-      `UPDATE ${table("families")} SET ${field("createdAt")}=? WHERE ${field("id")}=?`,
-      [old, original.family],
+      `UPDATE ${table("families")} SET ${field("expiresAt")}=? WHERE ${field("id")}=?`,
+      [cap, original.family],
     );
     if (dotnet)
       await query(
         `UPDATE ${table("tokens")} SET ${field("familyExpiresAt")}=? WHERE ${field("familyId")}=?`,
-        [new Date(Date.now() - 86400000), original.family],
+        [cap, original.family],
       );
-    const before = Date.now();
     const rotated = (await refresh(first.refreshToken)).data;
-    const family = await familyRow(original.family);
-    assert(
-      Math.abs(new Date(family.expiry).getTime() - (before + 30 * 86400000)) <
-        15000,
-      "Sliding expiry must be server now +30 days",
+    assert.equal(
+      new Date((await familyRow(original.family)).expiry).getTime(),
+      cap.getTime(),
+      "Rotation must not extend the family expiry",
+    );
+    assert.equal(
+      new Date((await tokenRow(rotated.refreshToken)).expiry).getTime(),
+      cap.getTime(),
+      "Rotated token must be capped at the family expiry",
     );
     assert((await tokenRow(first.refreshToken)).revoked);
     await logout(first.refreshToken);
@@ -658,7 +676,7 @@ export async function verifyHardening({
         "Sensitive value in audit snapshot",
       );
     console.log(
-      `${id}/${database}: sliding session, expired/replayed hashes, consumed logout, family-lock concurrency, required-audit rollback, 120/51 SSE backlog, cursor isolation, pagination and SMTP-disabled outbox passed`,
+      `${id}/${database}: idle/absolute session cap, expired/replayed hashes, consumed logout, family-lock concurrency, required-audit rollback, 120/51 SSE backlog, cursor isolation, pagination and SMTP-disabled outbox passed`,
     );
   } finally {
     await connection.end();

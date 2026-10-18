@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {verifyParity} from "./verify-parity.mjs";
 import { mkdtemp, readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
@@ -20,7 +21,7 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
  const selected=process.env.SPRING_SCENARIOS?.split(",");
  const scenarioInventory=[
   ...(mode==="manual"?["generated-invoice-real-provider-migration-permission-crud"]:[]),
-  "registry-openapi-dto-rbac","auth-sliding-replay-logout-concurrency","audit-required-rollback-optional-savepoint",
+  "registry-openapi-dto-rbac","auth-sliding-replay-logout-concurrency","cross-template-parity","audit-required-rollback-optional-savepoint",
   "sse-120-backlog-cursors-concurrency-ownership","crud-and-rbac-privilege-boundaries","sse-expiry-inactive-admission-and-cancel",
   "sse-slow-client-write-timeout-and-slot-recovery","local-upload-stream-content","outbox-snapshot-delivery-fencing",
   "two-workers-renewal-snapshot-and-accepted-retry","worker-real-lease-renewal-and-compose-graceful-shutdown",
@@ -147,6 +148,7 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
    const concurrent=(await login()).data;const responses=await Promise.all([1,2].map(()=>fetch("http://127.0.0.1:"+apiPort+"/api/auth/refresh",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({refreshToken:concurrent.refreshToken}),signal:AbortSignal.timeout(10000)})));assert.deepEqual(responses.map(r=>r.status).sort(),[200,401]);const winner=await responses.find(r=>r.status===200).json();await request("/api/auth/refresh",{method:"POST",body:{refreshToken:winner.data.refreshToken},status:401});
    const before=(await login()).data,after=(await request("/api/auth/refresh",{method:"POST",body:{refreshToken:before.refreshToken}})).data;await request("/api/auth/logout",{method:"POST",body:{refreshToken:before.refreshToken},status:204});await request("/api/auth/refresh",{method:"POST",body:{refreshToken:after.refreshToken},status:401});await request("/api/auth/logout",{method:"POST",body:{refreshToken:"unknown"},status:204});
   });
+  await scenario("cross-template-parity",()=>verifyParity({id:"springboot",baseURL:"http://127.0.0.1:"+apiPort,credentials}));
   await scenario("audit-required-rollback-optional-savepoint",async()=>{
    const roles=(await request("/api/roles",{token})).data,role=roles.find(r=>r.name==="USER").id;
    if(provider==="mysql")await query("CREATE TRIGGER fixture_audit BEFORE INSERT ON activity_logs FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='fixture'");
@@ -424,5 +426,7 @@ export async function verifySpringbootRuntime(provider,mode="manual"){
   // Keep only diagnostics, never secret env or template payload.
   await rm(project,{recursive:true,force:true});await rm(join(fixture,"node_modules"),{recursive:true,force:true});
  }
+ // Surface each failure in the job log; artifacts are not always retrievable.
+ for(const failed of results.filter(r=>r.status!=="PASS"))console.error("FAILED "+failed.id+": "+String(failed.error??"").slice(0,4000));
  if(results.some(r=>r.status!=="PASS"))throw new Error("Spring runtime stage FAILED: "+results.filter(r=>r.status!=="PASS").map(r=>r.id).join(","));
 }

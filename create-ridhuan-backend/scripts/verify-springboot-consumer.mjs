@@ -35,7 +35,7 @@ try{
  requirePass(run("format-generated","mvnw",["-B","spotless:apply"]));run("format-check","mvnw",["-B","spotless:check"]);
  if(process.env.CLI_RUNTIME_TEST==="true"){
   const previous=process.env.SPRING_SCENARIOS;
-  try{process.env.SPRING_SCENARIOS="generated-invoice-real-provider-migration-permission-crud,registry-openapi-dto-rbac,auth-sliding-replay-logout-concurrency,outbox-snapshot-delivery-fencing";await verifySpringbootRuntime(database,"manual");}
+  try{process.env.SPRING_SCENARIOS="generated-invoice-real-provider-migration-permission-crud,registry-openapi-dto-rbac,auth-sliding-replay-logout-concurrency,cross-template-parity,outbox-snapshot-delivery-fencing";await verifySpringbootRuntime(database,"manual");}
   finally{if(previous===undefined)delete process.env.SPRING_SCENARIOS;else process.env.SPRING_SCENARIOS=previous;}
  }
  console.log("Spring tarball/native generator "+database+": "+(results.every(r=>r.exitCode===0)?"PASS":"FAIL"));
