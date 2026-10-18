@@ -1,5 +1,6 @@
 package com.example.backend.platform.endpoint;
 
+import com.example.backend.config.Settings;
 import com.example.backend.platform.http.*;
 import com.example.backend.platform.ratelimit.Quota;
 import com.example.backend.platform.security.Access;
@@ -16,13 +17,16 @@ public class PolicyInterceptor implements AsyncHandlerInterceptor {
   private final Access access;
   private final Quota quota;
   private final io.micrometer.core.instrument.MeterRegistry metrics;
+  private final Settings settings;
 
   public PolicyInterceptor(
       EndpointRegistry registry,
       Access access,
       Quota quota,
-      io.micrometer.core.instrument.MeterRegistry metrics) {
+      io.micrometer.core.instrument.MeterRegistry metrics,
+      Settings settings) {
     this.metrics = metrics;
+    this.settings = settings;
     this.registry = registry;
     this.access = access;
     this.quota = quota;
@@ -59,7 +63,12 @@ public class PolicyInterceptor implements AsyncHandlerInterceptor {
     response.setHeader("X-Request-ID", requestId);
     var policy = registry.get(id);
     try {
-      quota.consume(policy.rateLimit(), request.getRemoteAddr());
+      if ((id == EndpointId.DOCS_SPEC || id == EndpointId.DOCS_UI) && !docsEnabled())
+        throw new ApiException(404, "Resource not found");
+      // Authenticated routes are charged per user (the verified JWT subject), anonymous per IP.
+      quota.consume(
+          policy.rateLimit(),
+          policy.internal() ? "user:" + access.actor() : request.getRemoteAddr());
       if (policy.internal()) access.require(policy.permission());
       return true;
     } catch (RuntimeException failure) {
@@ -74,6 +83,12 @@ public class PolicyInterceptor implements AsyncHandlerInterceptor {
       clear();
       throw failure;
     }
+  }
+
+  /** API docs reveal every route and schema; off in production unless explicitly enabled. */
+  private boolean docsEnabled() {
+    return settings.bool(
+        "DOCS_ENABLED", !settings.text("APP_ENV", "development").equals("production"));
   }
 
   private @org.jspecify.annotations.Nullable EndpointId infrastructure(String path) {

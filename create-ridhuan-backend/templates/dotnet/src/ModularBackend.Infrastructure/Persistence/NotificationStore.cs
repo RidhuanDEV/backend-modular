@@ -238,8 +238,9 @@ public sealed class NotificationStore(
             UserId = context.Actor?.Id,
             ActorIdSnapshot = context.Actor?.Id,
             ActorEmailSnapshot = context.Actor?.Email,
-            Before = before,
-            After = after,
+            // Same redaction as every other audit writer, so a secret field added later never lands here.
+            Before = AuditRedactor.Redact(before),
+            After = AuditRedactor.Redact(after),
             CreatedAt = clock.GetUtcNow(),
         };
 

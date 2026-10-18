@@ -31,14 +31,15 @@ public class UploadController {
   @GetMapping(value = "/{id}", produces = "application/json")
   @EndpointPolicy(EndpointId.UPLOAD_GET)
   public Api.Success<UploadDto> get(@PathVariable UUID id) {
-    return Api.Success.of(service.get(id));
+    return Api.Success.of(service.get(id, access.actor()));
   }
 
   @GetMapping(value = "/{id}", produces = "application/octet-stream")
   @EndpointPolicy(EndpointId.UPLOAD_GET)
   public void download(@PathVariable UUID id, HttpServletResponse response)
       throws java.io.IOException {
-    var dto = service.get(id);
+    UUID actor = access.actor();
+    var dto = service.get(id, actor);
     response.setContentType("application/octet-stream");
     response.setContentLengthLong(dto.size());
     response.setHeader(
@@ -47,6 +48,6 @@ public class UploadController {
             .filename(dto.originalName(), java.nio.charset.StandardCharsets.UTF_8)
             .build()
             .toString());
-    service.download(id, response.getOutputStream());
+    service.download(id, actor, response.getOutputStream());
   }
 }

@@ -19,7 +19,13 @@ final class ListUsersRequest extends BackendRequest
             'search' => ['sometimes', 'string', 'max:255'],
             'sortBy' => ['sometimes', 'in:email,createdAt,updatedAt'],
             'orderBy' => ['sometimes', 'in:asc,desc'],
-            'fields' => ['sometimes', 'string', 'max:255'],
+            // Unknown projection fields are a client error, not a silently empty object.
+            'fields' => [
+                'sometimes',
+                'string',
+                'max:255',
+                'regex:/^\s*(id|email|roleId|createdAt|updatedAt|role)\s*(,\s*(id|email|roleId|createdAt|updatedAt|role)\s*)*$/D',
+            ],
         ];
     }
 

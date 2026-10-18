@@ -60,6 +60,12 @@ func (t *tracedQueries) CompleteEmail(ctx context.Context, arg sqlc.CompleteEmai
 	telemetry.Finish(span, r0)
 	return r0
 }
+func (t *tracedQueries) CountActivePermissionHolders(ctx context.Context, name string) (int64, error) {
+	ctx, span := telemetry.Start(ctx, "database")
+	r0, r1 := t.q.CountActivePermissionHolders(ctx, name)
+	telemetry.Finish(span, r1)
+	return r0, r1
+}
 func (t *tracedQueries) CountUsers(ctx context.Context, search string) (int64, error) {
 	ctx, span := telemetry.Start(ctx, "database")
 	r0, r1 := t.q.CountUsers(ctx, search)
@@ -252,6 +258,12 @@ func (t *tracedQueries) ListPermissions(ctx context.Context) ([]sqlc.Permission,
 	telemetry.Finish(span, r1)
 	return r0, r1
 }
+func (t *tracedQueries) ListRoleIDsWithPermissionName(ctx context.Context, name string) ([]string, error) {
+	ctx, span := telemetry.Start(ctx, "database")
+	r0, r1 := t.q.ListRoleIDsWithPermissionName(ctx, name)
+	telemetry.Finish(span, r1)
+	return r0, r1
+}
 func (t *tracedQueries) ListRolePermissionIDs(ctx context.Context, roleID string) ([]string, error) {
 	ctx, span := telemetry.Start(ctx, "database")
 	r0, r1 := t.q.ListRolePermissionIDs(ctx, roleID)
@@ -291,6 +303,12 @@ func (t *tracedQueries) LockOwnNotification(ctx context.Context, arg sqlc.LockOw
 func (t *tracedQueries) LockPermission(ctx context.Context, id string) (sqlc.Permission, error) {
 	ctx, span := telemetry.Start(ctx, "database")
 	r0, r1 := t.q.LockPermission(ctx, id)
+	telemetry.Finish(span, r1)
+	return r0, r1
+}
+func (t *tracedQueries) LockPermissionByName(ctx context.Context, name string) ([]string, error) {
+	ctx, span := telemetry.Start(ctx, "database")
+	r0, r1 := t.q.LockPermissionByName(ctx, name)
 	telemetry.Finish(span, r1)
 	return r0, r1
 }
@@ -369,6 +387,18 @@ func (t *tracedQueries) RevokeAuthRefreshToken(ctx context.Context, id string) (
 func (t *tracedQueries) RevokeRefreshFamilyRecord(ctx context.Context, id string) error {
 	ctx, span := telemetry.Start(ctx, "database")
 	r0 := t.q.RevokeRefreshFamilyRecord(ctx, id)
+	telemetry.Finish(span, r0)
+	return r0
+}
+func (t *tracedQueries) RevokeUserAuthRefreshTokens(ctx context.Context, userID string) error {
+	ctx, span := telemetry.Start(ctx, "database")
+	r0 := t.q.RevokeUserAuthRefreshTokens(ctx, userID)
+	telemetry.Finish(span, r0)
+	return r0
+}
+func (t *tracedQueries) RevokeUserRefreshFamilies(ctx context.Context, userID string) error {
+	ctx, span := telemetry.Start(ctx, "database")
+	r0 := t.q.RevokeUserRefreshFamilies(ctx, userID)
 	telemetry.Finish(span, r0)
 	return r0
 }

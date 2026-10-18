@@ -187,6 +187,24 @@ func (q *Queries) RevokeRefreshFamilyRecord(ctx context.Context, id string) erro
 	return err
 }
 
+const revokeUserAuthRefreshTokens = `-- name: RevokeUserAuthRefreshTokens :exec
+UPDATE auth_refresh_tokens SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeUserAuthRefreshTokens(ctx context.Context, userID string) error {
+	_, err := q.db.Exec(ctx, revokeUserAuthRefreshTokens, userID)
+	return err
+}
+
+const revokeUserRefreshFamilies = `-- name: RevokeUserRefreshFamilies :exec
+UPDATE refresh_families SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeUserRefreshFamilies(ctx context.Context, userID string) error {
+	_, err := q.db.Exec(ctx, revokeUserRefreshFamilies, userID)
+	return err
+}
+
 const userHasPermission = `-- name: UserHasPermission :one
 SELECT EXISTS (
   SELECT 1 FROM users u

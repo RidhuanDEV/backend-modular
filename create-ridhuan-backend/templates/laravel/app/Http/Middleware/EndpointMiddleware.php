@@ -66,14 +66,34 @@ final class EndpointMiddleware
         $started = microtime(true);
         $status = 500;
         try {
-            if (
-                !in_array($name, ['health.get', 'live.get', 'ready.get'], true)
-            ) {
+            $limited = !in_array(
+                $name,
+                ['health.get', 'live.get', 'ready.get'],
+                true,
+            );
+            if ($limited) {
                 Settings::validate();
+            }
+            if (
+                str_starts_with($name, 'docs.') &&
+                !Settings::boolean('backend.docs')
+            ) {
+                throw new ApiException(404, 'Endpoint not found');
+            }
+            // Each request is charged once: anonymous callers per IP, authenticated callers per user.
+            if ($limited && !$definition->authenticated) {
                 $this->quota->take(
                     $definition->rate === 'auth' ? 'auth' : 'public',
                     $request->ip() ?? 'unknown',
                 );
+                $email = $request->input('email');
+                if ($name === 'auth.login' && is_string($email)) {
+                    // Per-account limit: distributed guessing against one account is bounded too.
+                    $this->quota->take(
+                        'auth',
+                        'account:' . mb_strtolower(trim($email)),
+                    );
+                }
             }
             auth()->forgetGuards();
             $user = null;
@@ -84,6 +104,10 @@ final class EndpointMiddleware
                 }
                 $claims = $this->jwt->verify($bearer);
                 $request->attributes->set('accessExpiry', $claims->expiresAt);
+                // The signature is checked without a query, so floods are limited before the database.
+                if ($limited) {
+                    $this->quota->take($definition->rate, $claims->userId);
+                }
                 $candidate = auth('api')->user();
                 if (!($candidate instanceof User)) {
                     throw new ApiException(401, 'Inactive user');
@@ -95,7 +119,6 @@ final class EndpointMiddleware
                         $definition->permission,
                     );
                 }
-                $this->quota->take($definition->rate, $user->id);
             }
             if (
                 $definition->audit === 'optional' &&
@@ -196,6 +219,18 @@ final class EndpointMiddleware
             }
             $response->headers->set('X-Request-ID', $requestId);
             $response->headers->set('X-Content-Type-Options', 'nosniff');
+            $response->headers->set('X-Frame-Options', 'DENY');
+            $response->headers->set('Referrer-Policy', 'no-referrer');
+            $response->headers->set(
+                'Permissions-Policy',
+                'geolocation=(), microphone=(), camera=()',
+            );
+            if (app()->environment('production')) {
+                $response->headers->set(
+                    'Strict-Transport-Security',
+                    'max-age=31536000; includeSubDomains',
+                );
+            }
 
             return $response;
         } catch (Throwable $error) {

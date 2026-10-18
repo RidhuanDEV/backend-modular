@@ -78,13 +78,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.origins,
-        allow_credentials=False,
+        # Cookie mode sends the refresh cookie cross-origin, which needs credentialed CORS
+        # with the exact origin allowlist (never a wildcard).
+        allow_credentials=settings.refresh_token_transport == "cookie",
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=[
             "Authorization",
             "Content-Type",
             "X-Request-ID",
             "Last-Event-ID",
+            "X-Requested-With",
         ],
         expose_headers=["X-Request-ID", "X-Next-Cursor"],
     )

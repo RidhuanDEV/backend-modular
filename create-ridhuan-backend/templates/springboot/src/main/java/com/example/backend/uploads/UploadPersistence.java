@@ -12,7 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class UploadPersistence {
-  public record Stored(UploadDto dto, String key) {}
+  public record Stored(
+      UploadDto dto, String key, @org.jspecify.annotations.Nullable String uploader) {}
 
   private final Db db;
   private final AuditService audit;
@@ -58,7 +59,8 @@ public class UploadPersistence {
                         r.getString("mime_type"),
                         r.getLong("size"),
                         Db.instant(r, "created_at")),
-                    r.getString("object_key")),
+                    r.getString("object_key"),
+                    r.getString("uploader_id")),
             id,
             settings.storage().name());
     if (rows.isEmpty()) throw ApiException.missing();

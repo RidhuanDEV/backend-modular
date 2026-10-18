@@ -24,8 +24,9 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+// Optional so cookie mode can read the httpOnly cookie instead; the controller enforces presence.
 export const refreshSchema = z.object({
-  refreshToken: z.string().min(1),
+  refreshToken: z.string().min(1).optional(),
 });
 
 export const logoutSchema = refreshSchema;

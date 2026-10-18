@@ -196,3 +196,14 @@ Express, NestJS, Go dan .NET menghapus refresh token kedaluwarsa milik user saat
 4. Temuan #8, lalu enhancement nomor 1.
 
 (#3, #4 dan #9 dihapus dari daftar: false positive.)
+
+## Tindak lanjut (2026-10-18, audit `hasil-audit.md` F-01 s.d. F-15)
+
+Diterapkan di ketujuh template dan diuji di PostgreSQL dan MySQL:
+
+- **Temuan #1 dan #2 diganti dengan RBAC murni.** Tidak ada lagi role yang dikecualikan berdasarkan nama. Permission baru otomatis diberikan ke setiap role yang memegang `manage_permissions`, dan tidak ada perubahan (hapus user, ganti role, ubah permission role) yang boleh membuat permission sistem tanpa pemegang aktif. Nama `admin` hanya dipakai seeder, perlindungan nama sistem, dan akses file upload.
+- Permission dan role sistem tidak bisa di-rename, dihapus, atau dibuat ulang. Hapus user atau ganti role mencabut semua sesi refresh user itu.
+- File upload hanya bisa dibaca pemilik atau admin. Rate limit dihitung sekali per request (per IP atau per user sebelum user dimuat dari database), ditambah limit per akun saat login.
+- Mode opsional refresh token di cookie httpOnly (`REFRESH_TOKEN_TRANSPORT=cookie`, di .NET `RefreshCookie__Transport`), dengan header wajib `X-Requested-With` untuk refresh dan logout berbasis cookie.
+- Role PostgreSQL opsional tanpa superuser untuk Compose (`APP_DB_USER`/`APP_DB_PASSWORD`, kredensial owner khusus untuk migrasi).
+- Umur sesi (`REFRESH_TOKEN_IDLE_DAYS`/`REFRESH_TOKEN_ABSOLUTE_DAYS`) dan log exception penuh untuk error 500 mengikuti keputusan yang sudah di-push sebelumnya.

@@ -53,8 +53,46 @@ final class Settings
         throw new InvalidArgumentException("Invalid setting: {$key}");
     }
 
+    private static function validateRefreshCookie(): void
+    {
+        if (
+            !in_array(
+                self::string('backend.refresh.transport'),
+                ['body', 'cookie'],
+                true,
+            ) ||
+            !preg_match(
+                '/^[A-Za-z0-9_-]{1,64}$/D',
+                self::string('backend.refresh.name'),
+            ) ||
+            !in_array(
+                self::string('backend.refresh.samesite'),
+                ['lax', 'strict', 'none'],
+                true,
+            ) ||
+            (self::string('backend.refresh.domain') !== '' &&
+                !preg_match(
+                    '/^\.?[A-Za-z0-9.-]+$/D',
+                    self::string('backend.refresh.domain'),
+                ))
+        ) {
+            throw new InvalidArgumentException(
+                'Invalid refresh cookie settings',
+            );
+        }
+        if (
+            self::string('backend.refresh.samesite') === 'none' &&
+            !self::boolean('backend.refresh.secure')
+        ) {
+            throw new InvalidArgumentException(
+                'SameSite=None cookies must be Secure',
+            );
+        }
+    }
+
     public static function validate(): void
     {
+        self::validateRefreshCookie();
         if (
             PHP_INT_SIZE !== 8 ||
             !in_array(

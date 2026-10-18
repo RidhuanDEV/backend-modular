@@ -173,6 +173,44 @@ final class ContractsTest extends DatabaseCase
         );
     }
 
+    public function test_root_admin_grants_permissions_created_after_seed(): void
+    {
+        $permission = $this->postJson(
+            '/api/permissions',
+            ['name' => 'manage_invoices'],
+            $this->headers(),
+        )
+            ->assertCreated()
+            ->json('data.id');
+        $role = $this->postJson(
+            '/api/roles',
+            ['name' => 'billing'],
+            $this->headers(),
+        )
+            ->assertCreated()
+            ->json('data.id');
+        self::assertIsString($permission);
+        self::assertIsString($role);
+        $this->postJson(
+            '/api/roles/' . $role . '/permissions',
+            ['permissionIds' => [$permission]],
+            $this->headers(),
+        )->assertOk();
+        $this->patchJson(
+            '/api/roles/' . $role,
+            ['name' => 'billing-team'],
+            $this->headers(),
+        )->assertOk();
+    }
+
+    public function test_unknown_email_login_is_rejected(): void
+    {
+        $this->postJson('/api/auth/login', [
+            'email' => 'nobody@example.com',
+            'password' => 'Whatever!123',
+        ])->assertUnauthorized();
+    }
+
     public function test_inactive_user_and_privilege_escalation(): void
     {
         $this->postJson('/api/auth/register', [
@@ -390,6 +428,188 @@ final class ContractsTest extends DatabaseCase
             ],
             $this->headers(),
         )->assertStatus(422);
+    }
+
+    public function test_system_primitives_last_root_sessions_and_file_ownership(): void
+    {
+        $system = Permission::query()
+            ->where('name', 'manage_users')
+            ->firstOrFail();
+        $this->patchJson(
+            '/api/permissions/' . $system->id,
+            ['name' => 'renamed'],
+            $this->headers(),
+        )->assertForbidden();
+        $this->deleteJson(
+            '/api/permissions/' . $system->id,
+            [],
+            $this->headers(),
+        )->assertForbidden();
+        $custom = $this->postJson(
+            '/api/permissions',
+            ['name' => 'custom_access'],
+            $this->headers(),
+        )
+            ->assertCreated()
+            ->json('data.id');
+        self::assertIsString($custom);
+        // RBAC only: a new permission is granted to every role managing permissions.
+        self::assertTrue(
+            DB::table('role_permissions')
+                ->where('role_id', $this->admin->role_id)
+                ->where('permission_id', $custom)
+                ->exists(),
+        );
+        $this->patchJson(
+            '/api/permissions/' . $custom,
+            ['name' => 'manage_users'],
+            $this->headers(),
+        )->assertForbidden();
+        $this->patchJson(
+            '/api/permissions/' . $custom,
+            ['name' => 'custom_renamed'],
+            $this->headers(),
+        )->assertOk();
+        $userRole = Role::query()->where('name', 'user')->firstOrFail();
+        $this->patchJson(
+            '/api/roles/' . $userRole->id,
+            ['name' => 'renamed'],
+            $this->headers(),
+        )->assertForbidden();
+        $this->deleteJson(
+            '/api/roles/' . $userRole->id,
+            [],
+            $this->headers(),
+        )->assertForbidden();
+        $this->postJson(
+            '/api/roles',
+            ['name' => 'admin'],
+            $this->headers(),
+        )->assertForbidden();
+        // The root role must keep every system permission.
+        $this->postJson(
+            '/api/roles/' . $this->admin->role_id . '/permissions',
+            ['permissionIds' => [$custom]],
+            $this->headers(),
+        )->assertForbidden();
+        // A role change revokes every refresh session of that user.
+        $this->postJson('/api/auth/register', [
+            'email' => 'uploader@example.com',
+            'password' => 'ValidPassword!123',
+        ])->assertCreated();
+        $member = User::query()
+            ->where('email', 'uploader@example.com')
+            ->firstOrFail();
+        $tokens = app(AuthService::class)->login(
+            new Credentials('uploader@example.com', 'ValidPassword!123'),
+        );
+        $uploader = Role::query()->create(['name' => 'uploader']);
+        $uploader
+            ->permissions()
+            ->sync([
+                Permission::query()
+                    ->where('name', 'manage_uploads')
+                    ->firstOrFail()->id,
+            ]);
+        $this->patchJson(
+            '/api/users/' . $member->id,
+            ['roleId' => $uploader->id],
+            $this->headers(),
+        )->assertOk();
+        $this->postJson('/api/auth/refresh', [
+            'refreshToken' => $tokens->refreshToken,
+        ])->assertUnauthorized();
+        // Files are readable and downloadable by their uploader and root users only.
+        Storage::fake('local');
+        $id = $this->post(
+            '/api/upload',
+            [
+                'file' => UploadedFile::fake()->createWithContent(
+                    'private.pdf',
+                    "%PDF-1.7\nfixture\n%%EOF",
+                ),
+            ],
+            $this->headers(),
+        )
+            ->assertCreated()
+            ->json('data.id');
+        self::assertIsString($id);
+        $token = app(JwtService::class)->sign($member->refresh());
+        $this->getJson(
+            '/api/upload/' . $id,
+            $this->headers($token),
+        )->assertNotFound();
+        $this->get(
+            '/api/upload/' . $id . '?download=true',
+            $this->headers($token),
+        )->assertNotFound();
+        $this->getJson('/api/upload/' . $id, $this->headers())->assertOk();
+        // The only holder of the system permissions cannot be demoted.
+        $this->patchJson(
+            '/api/users/' . $this->admin->id,
+            ['roleId' => $userRole->id],
+            $this->headers(),
+        )->assertForbidden();
+        // Search wildcards match literally.
+        $this->getJson('/api/users?search=%25', $this->headers())
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+        $this->getJson(
+            '/api/users?fields=password',
+            $this->headers(),
+        )->assertStatus(422);
+    }
+
+    public function test_refresh_cookie_transport_keeps_token_out_of_json(): void
+    {
+        config([
+            'backend.refresh.transport' => 'cookie',
+            'backend.refresh.secure' => false,
+        ]);
+        // JSON test requests only carry cookies with credentials, like a browser fetch.
+        $this->withCredentials();
+        $login = $this->postJson('/api/auth/login', [
+            'email' => $this->admin->email,
+            'password' => 'FixtureOnly!123',
+        ])
+            ->assertOk()
+            ->assertJsonMissingPath('data.refreshToken');
+        $cookie = $login->getCookie('refresh_token', false);
+        self::assertNotNull($cookie);
+        self::assertTrue($cookie->isHttpOnly());
+        self::assertSame('/api/auth', $cookie->getPath());
+        self::assertSame('lax', $cookie->getSameSite());
+        $first = (string) $cookie->getValue();
+        // Test cookies persist across requests, so check the missing-token case first.
+        $this->postJson(
+            '/api/auth/refresh',
+            [],
+            [
+                'X-Requested-With' => 'fetch',
+            ],
+        )->assertStatus(400);
+        // Browsers attach cookies automatically, so a bare cross-site POST must fail.
+        $this->withUnencryptedCookie('refresh_token', $first)
+            ->postJson('/api/auth/refresh', [])
+            ->assertForbidden();
+        $refreshed = $this->withUnencryptedCookie('refresh_token', $first)
+            ->postJson('/api/auth/refresh', [], ['X-Requested-With' => 'fetch'])
+            ->assertOk()
+            ->assertJsonMissingPath('data.refreshToken');
+        $rotated = (string) $refreshed
+            ->getCookie('refresh_token', false)
+            ?->getValue();
+        self::assertNotSame('', $rotated);
+        self::assertNotSame($first, $rotated);
+        $logout = $this->withUnencryptedCookie('refresh_token', $rotated)
+            ->postJson('/api/auth/logout', [], ['X-Requested-With' => 'fetch'])
+            ->assertNoContent();
+        self::assertTrue(
+            (bool) $logout->getCookie('refresh_token', false)?->isCleared(),
+        );
+        $this->withUnencryptedCookie('refresh_token', $rotated)
+            ->postJson('/api/auth/refresh', [], ['X-Requested-With' => 'fetch'])
+            ->assertUnauthorized();
     }
 
     public function test_required_audit_rollback_and_optional_savepoint(): void

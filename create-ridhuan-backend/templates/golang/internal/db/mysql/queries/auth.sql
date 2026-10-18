@@ -24,3 +24,7 @@ INSERT INTO refresh_families(id,user_id,expires_at) VALUES(sqlc.arg(id),sqlc.arg
 SELECT * FROM refresh_families WHERE id=sqlc.arg(id) FOR UPDATE;
 -- name: RevokeRefreshFamilyRecord :exec
 UPDATE refresh_families SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP(3)) WHERE id=sqlc.arg(id);
+-- name: RevokeUserRefreshFamilies :exec
+UPDATE refresh_families SET revoked_at=CURRENT_TIMESTAMP(3) WHERE user_id=sqlc.arg(user_id) AND revoked_at IS NULL;
+-- name: RevokeUserAuthRefreshTokens :exec
+UPDATE auth_refresh_tokens SET revoked_at=CURRENT_TIMESTAMP(3) WHERE user_id=sqlc.arg(user_id) AND revoked_at IS NULL;

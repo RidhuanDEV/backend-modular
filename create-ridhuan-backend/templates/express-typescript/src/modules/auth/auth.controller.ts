@@ -12,6 +12,11 @@ import {
   refreshSchema,
   logoutSchema,
 } from "./auth.schema.js";
+import {
+  clearRefreshCookie,
+  issueTokens,
+  refreshTokenFrom,
+} from "../../core/http/refresh-cookie.js";
 
 const service = new AuthService();
 
@@ -42,7 +47,7 @@ export class AuthController {
         loginSchema.parse(req.body),
         req.requestId,
       );
-      sendSuccess(res, { data: result });
+      sendSuccess(res, { data: issueTokens(res, result) });
     } catch (err) {
       next(err);
     }
@@ -55,8 +60,11 @@ export class AuthController {
   ): Promise<void> => {
     try {
       const body = refreshSchema.parse(req.body);
-      const result = await service.refresh(body.refreshToken, req.requestId);
-      sendSuccess(res, { data: result });
+      const result = await service.refresh(
+        refreshTokenFrom(req, body.refreshToken),
+        req.requestId,
+      );
+      sendSuccess(res, { data: issueTokens(res, result) });
     } catch (err) {
       next(err);
     }
@@ -69,7 +77,11 @@ export class AuthController {
   ): Promise<void> => {
     try {
       const body = logoutSchema.parse(req.body);
-      await service.logout(body.refreshToken, req.requestId);
+      await service.logout(
+        refreshTokenFrom(req, body.refreshToken),
+        req.requestId,
+      );
+      clearRefreshCookie(res);
       sendNoContent(res);
     } catch (err) {
       next(err);

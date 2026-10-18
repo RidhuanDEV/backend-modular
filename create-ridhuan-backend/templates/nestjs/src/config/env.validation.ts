@@ -6,6 +6,7 @@ import {
   isEmail,
   IsInt,
   IsOptional,
+  Matches,
   IsString,
   Max,
   Min,
@@ -113,6 +114,20 @@ class EnvironmentInput {
 
   @IsIn(["true", "false"])
   UPLOAD_ENABLED!: string;
+  @IsOptional()
+  @IsIn(["true", "false"])
+  DOCS_ENABLED?: string;
+  @IsIn(["body", "cookie"])
+  REFRESH_TOKEN_TRANSPORT!: "body" | "cookie";
+  @Matches(/^[A-Za-z0-9_-]{1,64}$/)
+  REFRESH_COOKIE_NAME!: string;
+  @IsIn(["lax", "strict", "none"])
+  REFRESH_COOKIE_SAMESITE!: "lax" | "strict" | "none";
+  @IsOptional()
+  @Matches(/^\.?[A-Za-z0-9.-]+$/)
+  REFRESH_COOKIE_DOMAIN?: string;
+  @IsIn(["true", "false"])
+  REFRESH_COOKIE_SECURE!: string;
   @IsIn(["local", "s3"])
   UPLOAD_STORAGE!: UploadStorage;
   @IsString()
@@ -183,6 +198,15 @@ export interface AppConfig {
   RATE_LIMIT_INTERNAL_WINDOW_MS: number;
   RATE_LIMIT_INTERNAL_MAX: number;
   UPLOAD_ENABLED: boolean;
+  /** API docs reveal every route and schema; off in production unless explicitly enabled. */
+  DOCS_ENABLED: boolean;
+  /** body (default) returns the refresh token in JSON; cookie keeps it in an httpOnly cookie. */
+  REFRESH_TOKEN_TRANSPORT: "body" | "cookie";
+  REFRESH_COOKIE_NAME: string;
+  /** lax/strict for same-site frontends (including sibling subdomains); none for cross-site. */
+  REFRESH_COOKIE_SAMESITE: "lax" | "strict" | "none";
+  REFRESH_COOKIE_DOMAIN?: string;
+  REFRESH_COOKIE_SECURE: boolean;
   UPLOAD_STORAGE: UploadStorage;
   UPLOAD_LOCAL_DIR: string;
   UPLOAD_MAX_BYTES: number;
@@ -225,6 +249,10 @@ const defaults: Record<string, string> = {
   RATE_LIMIT_INTERNAL_WINDOW_MS: "900000",
   RATE_LIMIT_INTERNAL_MAX: "300",
   UPLOAD_ENABLED: "true",
+  REFRESH_TOKEN_TRANSPORT: "body",
+  REFRESH_COOKIE_NAME: "refresh_token",
+  REFRESH_COOKIE_SAMESITE: "lax",
+  REFRESH_COOKIE_SECURE: "true",
   UPLOAD_STORAGE: "local",
   UPLOAD_LOCAL_DIR: "./uploads",
   UPLOAD_MAX_BYTES: "10485760",
@@ -322,6 +350,12 @@ export function validateEnvironment(raw: Record<string, unknown>): AppConfig {
   if (input.NODE_ENV === "production" && origins.length === 0) {
     throw new Error("CORS_ORIGINS is required in production");
   }
+  if (
+    input.REFRESH_COOKIE_SAMESITE === "none" &&
+    input.REFRESH_COOKIE_SECURE !== "true"
+  ) {
+    throw new Error("SameSite=None cookies must be Secure");
+  }
   if (input.APP_INSTANCE_COUNT > 1 && input.RATE_LIMIT_STORE !== "redis") {
     throw new Error(
       "RATE_LIMIT_STORE=redis is required for multiple instances",
@@ -385,6 +419,17 @@ export function validateEnvironment(raw: Record<string, unknown>): AppConfig {
     RATE_LIMIT_INTERNAL_WINDOW_MS: input.RATE_LIMIT_INTERNAL_WINDOW_MS,
     RATE_LIMIT_INTERNAL_MAX: input.RATE_LIMIT_INTERNAL_MAX,
     UPLOAD_ENABLED: input.UPLOAD_ENABLED === "true",
+    DOCS_ENABLED:
+      input.DOCS_ENABLED === undefined
+        ? input.NODE_ENV !== "production"
+        : input.DOCS_ENABLED === "true",
+    REFRESH_TOKEN_TRANSPORT: input.REFRESH_TOKEN_TRANSPORT,
+    REFRESH_COOKIE_NAME: input.REFRESH_COOKIE_NAME,
+    REFRESH_COOKIE_SAMESITE: input.REFRESH_COOKIE_SAMESITE,
+    ...(input.REFRESH_COOKIE_DOMAIN
+      ? { REFRESH_COOKIE_DOMAIN: input.REFRESH_COOKIE_DOMAIN }
+      : {}),
+    REFRESH_COOKIE_SECURE: input.REFRESH_COOKIE_SECURE === "true",
     UPLOAD_STORAGE: input.UPLOAD_STORAGE,
     UPLOAD_LOCAL_DIR: input.UPLOAD_LOCAL_DIR,
     UPLOAD_MAX_BYTES: input.UPLOAD_MAX_BYTES,

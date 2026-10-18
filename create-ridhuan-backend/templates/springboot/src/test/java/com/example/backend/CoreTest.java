@@ -154,4 +154,51 @@ class CoreTest {
         Zones.present(value, "America/New_York").getOffset(),
         Zones.present(Instant.parse("2026-07-01T00:00:00Z"), "America/New_York").getOffset());
   }
+
+  @Test
+  void refreshCookieTransportKeepsTokenOutOfJsonAndRequiresHeader() {
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new RefreshCookies(
+                settings(
+                    Map.of("REFRESH_COOKIE_SAMESITE", "none", "REFRESH_COOKIE_SECURE", "false"))));
+    var body = new RefreshCookies(settings(Map.of()));
+    var tokens = new AuthDto.Tokens("access", "opaque-refresh");
+    var plain = new org.springframework.mock.web.MockHttpServletResponse();
+    assertEquals("opaque-refresh", body.issue(plain, tokens).refreshToken());
+    assertNull(plain.getHeader("Set-Cookie"));
+    var cookies =
+        new RefreshCookies(
+            settings(
+                Map.of("REFRESH_TOKEN_TRANSPORT", "cookie", "REFRESH_COOKIE_SECURE", "false")));
+    var response = new org.springframework.mock.web.MockHttpServletResponse();
+    assertNull(cookies.issue(response, tokens).refreshToken());
+    String header = Objects.requireNonNull(response.getHeader("Set-Cookie"));
+    assertTrue(header.startsWith("refresh_token=opaque-refresh"));
+    assertTrue(header.contains("HttpOnly"));
+    assertTrue(header.contains("Path=/api/auth"));
+    assertTrue(header.contains("SameSite=Lax"));
+    var request = new org.springframework.mock.web.MockHttpServletRequest();
+    assertEquals(
+        400,
+        assertThrows(
+                com.example.backend.platform.http.ApiException.class,
+                () -> cookies.token(request, null))
+            .status());
+    request.setCookies(new jakarta.servlet.http.Cookie("refresh_token", "opaque-refresh"));
+    // Browsers attach cookies automatically, so a bare cross-site POST must fail.
+    assertEquals(
+        403,
+        assertThrows(
+                com.example.backend.platform.http.ApiException.class,
+                () -> cookies.token(request, null))
+            .status());
+    request.addHeader("X-Requested-With", "fetch");
+    assertEquals("opaque-refresh", cookies.token(request, null));
+    assertEquals("from-body", cookies.token(request, "from-body"));
+    var cleared = new org.springframework.mock.web.MockHttpServletResponse();
+    cookies.clear(cleared);
+    assertTrue(Objects.requireNonNull(cleared.getHeader("Set-Cookie")).contains("Max-Age=0"));
+  }
 }

@@ -20,6 +20,33 @@ export interface AuditChange {
   requestId?: string;
 }
 
+const SECRET_KEY =
+  /password|token|authorization|secret|api.?key|credential|cookie/i;
+
+/**
+ * Defense in depth: snapshots are built explicitly by callers, but a secret
+ * field added to one later must still never reach the audit table.
+ */
+export function scrubAuditValue(
+  value: Prisma.InputJsonValue,
+): Prisma.InputJsonValue {
+  if (Array.isArray(value))
+    return value.map((item: Prisma.InputJsonValue) => scrubAuditValue(item));
+  if (value !== null && typeof value === "object") {
+    const output: Record<string, Prisma.InputJsonValue | null> = {};
+    for (const [key, nested] of Object.entries(value)) {
+      if (nested === undefined) continue;
+      output[key] = SECRET_KEY.test(key)
+        ? "[REDACTED]"
+        : nested === null
+          ? null
+          : scrubAuditValue(nested as Prisma.InputJsonValue);
+    }
+    return output;
+  }
+  return value;
+}
+
 @Injectable()
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
@@ -53,8 +80,8 @@ export class AuditService {
         ...(change.actor
           ? { userId: change.actor.id, actorIdSnapshot: change.actor.id }
           : {}),
-        ...(change.before ? { before: change.before } : {}),
-        ...(change.after ? { after: change.after } : {}),
+        ...(change.before ? { before: scrubAuditValue(change.before) } : {}),
+        ...(change.after ? { after: scrubAuditValue(change.after) } : {}),
         ...(change.requestId ? { requestId: change.requestId } : {}),
         endpointId: change.endpointId,
       },

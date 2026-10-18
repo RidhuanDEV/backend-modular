@@ -40,9 +40,10 @@ class Limiter:
             ),
         }
 
-    async def check(self, policy: Policy, ip: str) -> None:
+    async def check(self, policy: Policy, subject: str) -> None:
+        """Count one request for `subject`: the user id for internal routes, else the client IP."""
         maximum, window_ms = self.quotas[policy.rate]
-        key = f"{self.settings.redis_namespace}:rate:{policy.id}:{hashlib.sha256(ip.encode()).hexdigest()}"
+        key = f"{self.settings.redis_namespace}:rate:{policy.id}:{hashlib.sha256(subject.encode()).hexdigest()}"
         if self.settings.rate_limit_store == "redis":
             try:
                 value = await execute(self.redis, "EVAL", _LUA, 1, key, window_ms)
@@ -52,26 +53,30 @@ class Limiter:
             except (RedisError, TimeoutError) as error:
                 if policy.rate == "auth":
                     raise ApiError(503, "Rate limiter unavailable") from error
+                # Degrade to per-instance limits rather than no limits at all.
                 logger.warning(
-                    "Rate limiter Redis unavailable",
+                    "Rate limiter Redis unavailable; using per-instance memory limits",
                     extra={"endpoint_id": policy.id.value},
                 )
-                return
+                count = await self._take_memory(key, window_ms)
         else:
-            async with self.lock:
-                instant = time.monotonic()
-                bucket = self.buckets.get(key)
-                if bucket is None or bucket.expires <= instant:
-                    # Bound memory even under random IP traffic. Expired entries are removed first.
-                    if len(self.buckets) >= 10000:
-                        self.buckets = {
-                            k: v for k, v in self.buckets.items() if v.expires > instant
-                        }
-                        if len(self.buckets) >= 10000:
-                            raise ApiError(503, "Rate limiter capacity reached")
-                    bucket = Bucket(0, instant + window_ms / 1000)
-                    self.buckets[key] = bucket
-                bucket.count += 1
-                count = bucket.count
+            count = await self._take_memory(key, window_ms)
         if count > maximum:
             raise ApiError(429, "Too many requests")
+
+    async def _take_memory(self, key: str, window_ms: int) -> int:
+        async with self.lock:
+            instant = time.monotonic()
+            bucket = self.buckets.get(key)
+            if bucket is None or bucket.expires <= instant:
+                # Bound memory even under random IP traffic. Expired entries are removed first.
+                if len(self.buckets) >= 10000:
+                    self.buckets = {
+                        k: v for k, v in self.buckets.items() if v.expires > instant
+                    }
+                    if len(self.buckets) >= 10000:
+                        raise ApiError(503, "Rate limiter capacity reached")
+                bucket = Bucket(0, instant + window_ms / 1000)
+                self.buckets[key] = bucket
+            bucket.count += 1
+            return bucket.count

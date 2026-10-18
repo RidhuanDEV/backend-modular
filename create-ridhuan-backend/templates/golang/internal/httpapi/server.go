@@ -119,13 +119,27 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Request-ID", id)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		if s.Config.Environment == "production" {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		if s.Config.DocsDisabled && strings.HasPrefix(r.URL.Path, "/docs") {
+			writeError(w, &APIError{Status: http.StatusNotFound, Message: "Not found", Errors: []string{}})
+			return
+		}
 		if origin := r.Header.Get("Origin"); origin != "" {
 			if _, ok := s.Config.CORSOrigins[origin]; ok {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Vary", "Origin")
 				w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID,X-Next-Cursor")
 				w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Request-ID,Last-Event-ID")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Request-ID,Last-Event-ID,X-Requested-With")
+				// Cookie mode sends the refresh cookie cross-origin, which needs credentialed CORS
+				// with the exact origin allowlist (never a wildcard).
+				if s.Config.RefreshTransport == "cookie" {
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+				}
 			}
 		}
 		if r.Method == http.MethodOptions {

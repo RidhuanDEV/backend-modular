@@ -48,10 +48,3 @@ export const roleCacheSchema = z.object({
     }),
   ),
 });
-export const fileCacheSchema = z.object({
-  id: z.string(),
-  originalName: z.string(),
-  mimeType: z.string(),
-  size: z.number().int(),
-  createdAt: instant,
-});

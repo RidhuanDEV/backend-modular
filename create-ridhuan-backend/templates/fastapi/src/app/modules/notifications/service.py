@@ -16,6 +16,7 @@ from app.modules.notifications.models import Notification
 from app.modules.notifications.schemas import (
     CreateNotification,
     NotificationResponse,
+    audit_notification,
     public_notification,
 )
 from app.modules.users.repository import user_by_id
@@ -62,7 +63,7 @@ async def create(
             )
         )
     response = public_notification(row)
-    await ctx.commit(row.id, after=response)
+    await ctx.commit(row.id, after=audit_notification(row))
     return response
 
 
@@ -94,10 +95,10 @@ async def mark_read(ctx: Context, id: UUID) -> NotificationResponse:
     )
     if row is None:
         raise ApiError(404, "Notification not found")
-    before = public_notification(row)
+    before = audit_notification(row)
     row.read_at = row.read_at or now()
     response = public_notification(row)
-    await ctx.commit(id, before=before, after=response)
+    await ctx.commit(id, before=before, after=audit_notification(row))
     return response
 
 

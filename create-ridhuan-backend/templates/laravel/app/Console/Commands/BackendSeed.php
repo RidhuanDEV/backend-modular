@@ -22,7 +22,17 @@ final class BackendSeed extends Command
     {
         Settings::validate();
         $password = Settings::string('backend.seed.password');
-        if (strlen($password) < 6 || strlen($password) > 72) {
+        $production = Settings::string('app.env') === 'production';
+        if (
+            strlen($password) < ($production ? 12 : 6) ||
+            strlen($password) > 72 ||
+            ($production &&
+                in_array(
+                    strtolower($password),
+                    ['password123', 'changeme', 'password'],
+                    true,
+                ))
+        ) {
             $this->error('Invalid ADMIN_PASSWORD');
 
             return self::FAILURE;

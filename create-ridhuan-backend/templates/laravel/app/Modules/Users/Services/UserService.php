@@ -27,7 +27,12 @@ final class UserService
     {
         $builder = User::query()->with('role.permissions');
         if ($query->search !== null) {
-            $builder->where('email', 'like', '%' . $query->search . '%');
+            // Escape LIKE wildcards so the search matches literally.
+            $builder->where(
+                'email',
+                'like',
+                '%' . addcslashes($query->search, '%_\\') . '%',
+            );
         }
         $sort = match ($query->sortBy) {
             'email' => 'email',
@@ -104,10 +109,19 @@ final class UserService
                 }
                 $user->email = $data->email;
             }
-            if ($data->roleId !== null) {
+            $roleChanged =
+                $data->roleId !== null && $data->roleId !== $user->role_id;
+            $holders = $roleChanged
+                ? $this->policy->guardSystemPermissionHolders()
+                : null;
+            if ($roleChanged) {
                 $user->role_id = $data->roleId;
             }
             $user->save();
+            if ($holders !== null) {
+                $holders();
+                $this->policy->revokeSessions($id);
+            }
             $this->audit->write('UPDATE', 'user', $id, $actor->id, $before, [
                 'roleId' => $user->role_id,
             ]);
@@ -126,7 +140,10 @@ final class UserService
             if ($id === $actor->id) {
                 throw new ApiException(403, 'Cannot delete yourself');
             }
+            $holders = $this->policy->guardSystemPermissionHolders();
             $user->delete();
+            $holders();
+            $this->policy->revokeSessions($id);
             $this->audit->write('DELETE', 'user', $id, $actor->id, [
                 'roleId' => $user->role_id,
             ]);

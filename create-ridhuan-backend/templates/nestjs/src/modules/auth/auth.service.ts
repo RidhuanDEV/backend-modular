@@ -14,7 +14,7 @@ import { AuditService } from "../../common/audit/audit.service";
 import { EndpointPolicyService } from "../../common/endpoint/endpoint.registry";
 import type { Actor } from "../../common/http/request-context";
 import type {
-  AuthResponseDto,
+  IssuedTokens,
   AuthUserResponseDto,
   LoginDto,
   RegisterDto,
@@ -78,7 +78,7 @@ export class AuthService {
       Prisma.TransactionClient,
       "refreshToken" | "refreshFamily"
     > = this.prisma,
-  ): Promise<AuthResponseDto> {
+  ): Promise<IssuedTokens> {
     const token = await this.jwt.signAsync(
       { sub: user.id, tokenUse: "access" },
       {
@@ -142,7 +142,7 @@ export class AuthService {
     return this.toUser(user);
   }
 
-  async login(input: LoginDto, requestId?: string): Promise<AuthResponseDto> {
+  async login(input: LoginDto, requestId?: string): Promise<IssuedTokens> {
     const user = await this.prisma.user.findUnique({
       where: { email: normalizeEmail(input.email) },
       include: { role: true },
@@ -182,7 +182,7 @@ export class AuthService {
     return result;
   }
 
-  async refresh(value: string, requestId?: string): Promise<AuthResponseDto> {
+  async refresh(value: string, requestId?: string): Promise<IssuedTokens> {
     const existing = await this.prisma.refreshToken.findUnique({
       where: { tokenHash: hashToken(value) },
     });

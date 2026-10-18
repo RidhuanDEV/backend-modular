@@ -15,8 +15,11 @@ import type {
   UpdateRoleDto,
 } from "./dto/role.dto";
 import {
+  SYSTEM_ROLES,
+  assertNotSystemName,
   assertPermissionsWithinActor,
   assertRoleWithinActor,
+  guardSystemPermissionHolders,
 } from "../../common/auth/privilege";
 
 const include = { permissions: { include: { permission: true } } } as const;
@@ -102,6 +105,7 @@ export class RolesService {
     actor: Actor,
     requestId?: string,
   ): Promise<RoleResponseDto> {
+    assertNotSystemName(SYSTEM_ROLES, "role", dto.name);
     const item = await this.audit.transact(async (tx) => {
       const value = await tx.role.create({ data: { name: dto.name }, include });
       return [
@@ -130,6 +134,11 @@ export class RolesService {
     const value = await this.audit.transact(async (tx) => {
       const prior = await tx.role.findUnique({ where: { id }, include });
       if (!prior) throw new NotFoundException("Role not found");
+      // Code depends on system role names (registration, root exemption), so they are fixed.
+      if (dto.name !== undefined && dto.name !== prior.name) {
+        assertNotSystemName(SYSTEM_ROLES, "role", prior.name);
+        assertNotSystemName(SYSTEM_ROLES, "role", dto.name);
+      }
       await assertRoleWithinActor(tx, actor.roleId, id);
       const next = await tx.role.update({
         where: { id },
@@ -159,6 +168,7 @@ export class RolesService {
     await this.audit.transact(async (tx) => {
       const prior = await tx.role.findUnique({ where: { id } });
       if (!prior) throw new NotFoundException("Role not found");
+      assertNotSystemName(SYSTEM_ROLES, "role", prior.name);
       await assertRoleWithinActor(tx, actor.roleId, id);
       await tx.role.delete({ where: { id } });
       return [
@@ -195,6 +205,7 @@ export class RolesService {
       // Both the permissions being removed and the ones being granted must be within the actor's own.
       await assertRoleWithinActor(tx, actor.roleId, id);
       await assertPermissionsWithinActor(tx, actor.roleId, dto.permissionIds);
+      const holders = await guardSystemPermissionHolders(tx);
       await tx.rolePermission.deleteMany({ where: { roleId: id } });
       await tx.rolePermission.createMany({
         data: [...new Set(dto.permissionIds)].map((permissionId) => ({
@@ -202,6 +213,7 @@ export class RolesService {
           permissionId,
         })),
       });
+      await holders();
       const next = await tx.role.findUniqueOrThrow({ where: { id }, include });
       return [
         next,

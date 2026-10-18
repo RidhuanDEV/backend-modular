@@ -36,7 +36,9 @@ app.use(
   cors({
     origin: (origin, callback) =>
       callback(null, origin === undefined || allowedOrigins.has(origin)),
-    credentials: false,
+    // Cookie mode sends the refresh cookie cross-origin, which needs credentialed CORS
+    // with the exact origin allowlist above (never a wildcard).
+    credentials: env.REFRESH_TOKEN_TRANSPORT === "cookie",
     exposedHeaders: ["X-Request-ID", "X-Next-Cursor"],
   }),
 );

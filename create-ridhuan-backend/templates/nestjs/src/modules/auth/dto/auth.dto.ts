@@ -1,4 +1,10 @@
-import { IsEmail, IsString, MinLength, MaxLength } from "class-validator";
+import {
+  IsEmail,
+  IsOptional,
+  IsString,
+  MinLength,
+  MaxLength,
+} from "class-validator";
 import { MaxUtf8Bytes } from "../../../common/dto/password";
 
 export class RegisterDto {
@@ -12,7 +18,8 @@ export class LoginDto {
 }
 
 export class RefreshDto {
-  @IsString() @MinLength(1) refreshToken!: string;
+  // Optional so cookie mode can read the httpOnly cookie instead; the controller enforces presence.
+  @IsOptional() @IsString() @MinLength(1) refreshToken?: string;
 }
 
 export class AuthUserResponseDto {
@@ -25,5 +32,12 @@ export class AuthUserResponseDto {
 
 export class AuthResponseDto {
   token!: string;
-  refreshToken!: string;
+  /** Omitted when REFRESH_TOKEN_TRANSPORT=cookie (sent as an httpOnly cookie). */
+  refreshToken?: string;
+}
+
+/** Both tokens as issued; the controller decides how the refresh token is transported. */
+export interface IssuedTokens {
+  token: string;
+  refreshToken: string;
 }

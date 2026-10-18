@@ -33,6 +33,21 @@ class Settings(BaseSettings):
     endpoint_policies_json: str = "{}"
     app_instance_count: int = Field(default=1, ge=1)
     rate_limit_store: Literal["memory", "redis"] = "memory"
+    # Reverse proxy addresses whose X-Forwarded-For is trusted (comma separated); empty trusts none.
+    forwarded_allow_ips: str = ""
+    # API docs reveal every route and schema; off in production unless explicitly enabled.
+    docs_enabled: bool | None = None
+    # body (default) returns the refresh token in JSON; cookie keeps it in an httpOnly cookie.
+    refresh_token_transport: Literal["body", "cookie"] = "body"
+    refresh_cookie_name: str = Field(
+        default="refresh_token", pattern=r"^[A-Za-z0-9_-]{1,64}$"
+    )
+    # lax/strict for same-site frontends (including sibling subdomains); none for cross-site.
+    refresh_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    refresh_cookie_domain: str | None = Field(
+        default=None, pattern=r"^\.?[A-Za-z0-9.-]+$"
+    )
+    refresh_cookie_secure: bool = True
     rate_limit_auth_max: int = Field(default=20, ge=1)
     rate_limit_auth_window_ms: int = Field(default=900000, ge=1)
     rate_limit_public_max: int = Field(default=100, ge=1)
@@ -78,6 +93,14 @@ class Settings(BaseSettings):
     otel_exporter_otlp_endpoint: str = "http://localhost:4318"
 
     @property
+    def docs_active(self) -> bool:
+        return (
+            self.docs_enabled
+            if self.docs_enabled is not None
+            else self.environment != "production"
+        )
+
+    @property
     def origins(self) -> list[str]:
         return [
             origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
@@ -85,6 +108,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_deployment(self) -> Self:
+        if self.refresh_cookie_samesite == "none" and not self.refresh_cookie_secure:
+            raise ValueError("SameSite=None cookies must be Secure")
         username = unquote(
             urlsplit(self.database_url.get_secret_value()).username or ""
         )

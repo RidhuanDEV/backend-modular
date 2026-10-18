@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"github.com/RidhuanDEV/golang-backend/internal/auth"
 	"github.com/RidhuanDEV/golang-backend/internal/telemetry"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -40,26 +41,21 @@ func (s *Server) enforce(ep Endpoint) func(huma.Context, func(huma.Context)) {
 		if tracked, ok := w.(*statusWriter); ok {
 			tracked.endpointID = string(ep.ID)
 		}
-		var actor *Actor
+		// Verify the token without the database, throttle, then load the user:
+		// rejected or throttled requests never reach a query.
+		var claims *auth.Claims
 		if !ep.Public {
 			var err error
-			actor, err = s.Auth.Authenticate(ctx.Context(), ctx.Header("Authorization"))
+			claims, err = s.Auth.VerifyAccessToken(ctx.Header("Authorization"))
 			if err != nil {
 				writeError(w, err)
 				return
 			}
-			if err = s.Auth.Authorize(ctx.Context(), actor, ep.Permission); err != nil {
-				writeError(w, err)
-				return
-			}
-			if tracked, ok := w.(*statusWriter); ok {
-				tracked.actorID = actor.ID
-			}
 		}
 		if ep.ID != "health.get" && ep.ID != "live.get" && ep.ID != "ready.get" {
 			key := s.clientIP(r)
-			if actor != nil && ep.Rate == RateInternal {
-				key = actor.ID
+			if claims != nil && ep.Rate == RateInternal {
+				key = claims.ID
 			}
 			allowed, err := s.Limiter.Allow(ctx.Context(), string(ep.Rate), key, s.Config.Rates[string(ep.Rate)])
 			if err != nil {
@@ -73,12 +69,29 @@ func (s *Server) enforce(ep Endpoint) func(huma.Context, func(huma.Context)) {
 				return
 			}
 		}
+		var actor *Actor
+		if claims != nil {
+			var err error
+			actor, err = s.Auth.LoadActor(ctx.Context(), claims)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			if err = s.Auth.Authorize(ctx.Context(), actor, ep.Permission); err != nil {
+				writeError(w, err)
+				return
+			}
+			if tracked, ok := w.(*statusWriter); ok {
+				tracked.actorID = actor.ID
+			}
+		}
 		if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") == false && r.Body != http.NoBody && r.ContentLength != 0 && ep.ID != "upload.create" && ep.Method != http.MethodGet && ep.Method != http.MethodDelete {
 			writeError(w, badRequest("Content-Type must be application/json"))
 			return
 		}
 		ctx = huma.WithValue(ctx, actorKey{}, actor)
 		ctx = huma.WithValue(ctx, requestKey{}, r)
+		ctx = huma.WithValue(ctx, writerKey{}, w)
 		next(ctx)
 	}
 }

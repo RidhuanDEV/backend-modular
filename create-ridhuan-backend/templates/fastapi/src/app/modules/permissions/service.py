@@ -6,7 +6,12 @@ from app.core.context import Context
 from app.core.errors import ApiError
 from app.modules.permissions.models import Permission
 from app.modules.permissions.schemas import PermissionResponse, public_permission
-from app.modules.roles.repository import permissions_within_actor
+from app.modules.roles.repository import (
+    SYSTEM_PERMISSIONS,
+    assert_not_system_name,
+    grant_to_permission_managers,
+    permissions_within_actor,
+)
 
 
 async def get(ctx: Context, id: UUID) -> Permission:
@@ -26,9 +31,11 @@ async def list_permissions(ctx: Context) -> list[PermissionResponse]:
 
 
 async def create(ctx: Context, name: str) -> PermissionResponse:
+    assert_not_system_name(SYSTEM_PERMISSIONS, "permission", name)
     row = Permission(name=name)
     ctx.session.add(row)
     await ctx.session.flush()
+    await grant_to_permission_managers(ctx.session, row.id)
     response = public_permission(row)
     await ctx.commit(row.id, after=response)
     return response
@@ -37,6 +44,8 @@ async def create(ctx: Context, name: str) -> PermissionResponse:
 async def update(ctx: Context, id: UUID, name: str | None) -> PermissionResponse:
     await permissions_within_actor(ctx.require_actor(), {id})
     row = await get(ctx, id)
+    assert_not_system_name(SYSTEM_PERMISSIONS, "permission", row.name)
+    assert_not_system_name(SYSTEM_PERMISSIONS, "permission", name)
     before = public_permission(row)
     if name is not None:
         row.name = name
@@ -49,6 +58,7 @@ async def update(ctx: Context, id: UUID, name: str | None) -> PermissionResponse
 async def delete(ctx: Context, id: UUID) -> None:
     await permissions_within_actor(ctx.require_actor(), {id})
     row = await get(ctx, id)
+    assert_not_system_name(SYSTEM_PERMISSIONS, "permission", row.name)
     before = public_permission(row)
     await ctx.session.delete(row)
     await ctx.commit(id, before=before)

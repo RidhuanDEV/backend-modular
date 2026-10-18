@@ -65,9 +65,17 @@ public class SecurityConfiguration {
             .toList());
     c.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
     c.setAllowedHeaders(
-        List.of("Authorization", "Content-Type", "Accept", "Last-Event-ID", "X-Request-ID"));
+        List.of(
+            "Authorization",
+            "Content-Type",
+            "Accept",
+            "Last-Event-ID",
+            "X-Request-ID",
+            "X-Requested-With"));
     c.setExposedHeaders(List.of("X-Request-ID", "X-Next-Cursor"));
-    c.setAllowCredentials(false);
+    // Cookie mode sends the refresh cookie cross-origin, which needs credentialed CORS
+    // with the exact origin allowlist above (never a wildcard).
+    c.setAllowCredentials(settings.text("REFRESH_TOKEN_TRANSPORT", "body").equals("cookie"));
     var source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", c);
     return source;
@@ -79,6 +87,15 @@ public class SecurityConfiguration {
     http.csrf(c -> c.disable())
         .cors(c -> {})
         .sessionManagement(c -> c.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .headers(
+            h ->
+                h.referrerPolicy(
+                        r ->
+                            r.policy(
+                                org.springframework.security.web.header.writers
+                                    .ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
+                    .permissionsPolicyHeader(
+                        p -> p.policy("geolocation=(), microphone=(), camera=()")))
         .authorizeHttpRequests(
             c ->
                 c.dispatcherTypeMatchers(

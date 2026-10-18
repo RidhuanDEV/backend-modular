@@ -21,7 +21,11 @@ import type {
   UpdateUserDto,
   UserResponseDto,
 } from "./dto/user.dto";
-import { assertRoleWithinActor } from "../../common/auth/privilege";
+import {
+  guardSystemPermissionHolders,
+  assertRoleWithinActor,
+  revokeUserSessions,
+} from "../../common/auth/privilege";
 
 const include = {
   role: { include: { permissions: { include: { permission: true } } } },
@@ -174,6 +178,11 @@ export class UsersService {
       await assertRoleWithinActor(tx, actor.roleId, prior.roleId);
       if (dto.roleId !== undefined)
         await assertRoleWithinActor(tx, actor.roleId, dto.roleId);
+      const roleChanged =
+        dto.roleId !== undefined && dto.roleId !== prior.roleId;
+      const holders = roleChanged
+        ? await guardSystemPermissionHolders(tx)
+        : undefined;
       const next = await tx.user.update({
         where: { id },
         data: {
@@ -184,6 +193,8 @@ export class UsersService {
         },
         include,
       });
+      await holders?.();
+      if (roleChanged) await revokeUserSessions(tx, id);
       return [
         next,
         {
@@ -212,11 +223,10 @@ export class UsersService {
       });
       if (!prior) throw new NotFoundException("User not found");
       await assertRoleWithinActor(tx, actor.roleId, prior.roleId);
+      const holders = await guardSystemPermissionHolders(tx);
       await tx.user.update({ where: { id }, data: { deletedAt: new Date() } });
-      await tx.refreshToken.updateMany({
-        where: { userId: id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
+      await holders();
+      await revokeUserSessions(tx, id);
       return [
         undefined,
         {

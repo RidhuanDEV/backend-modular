@@ -12,6 +12,12 @@ import type {
   UpdatePermissionDto,
 } from "./permission.schema.js";
 import type { JwtUserPayload } from "../../types/index.js";
+import {
+  SYSTEM_PERMISSIONS,
+  assertNotSystemName,
+  assertPermissionsWithinActor,
+  grantToPermissionManagers,
+} from "../../core/auth/privilege.js";
 
 const repository = new PermissionRepository();
 const CACHE_PREFIX = PERMISSION_MODULE;
@@ -47,12 +53,14 @@ export class PermissionService {
     user: JwtUserPayload,
     requestId?: string,
   ) {
+    assertNotSystemName(SYSTEM_PERMISSIONS, "permission", dto.name);
     const existing = await repository.findByName(dto.name);
     if (existing)
       throw HttpError.conflict(`Permission '${dto.name}' already exists`);
 
     const permission = await prisma.$transaction(async (tx) => {
       const created = await repository.create(dto, tx);
+      await grantToPermissionManagers(tx, created.id);
 
       await auditService.persist({
         action: AuditAction.CREATE,
@@ -77,6 +85,7 @@ export class PermissionService {
     user: JwtUserPayload,
     requestId?: string,
   ) {
+    assertNotSystemName(SYSTEM_PERMISSIONS, "permission", dto.name);
     if (dto.name) {
       const existing = await repository.findByName(dto.name);
       if (existing && existing.id !== id) {
@@ -87,6 +96,12 @@ export class PermissionService {
     const permission = await prisma.$transaction(async (tx) => {
       const existingPermission = await repository.findById(id, tx);
       if (!existingPermission) throw HttpError.notFound("Permission not found");
+      assertNotSystemName(
+        SYSTEM_PERMISSIONS,
+        "permission",
+        existingPermission.name,
+      );
+      await assertPermissionsWithinActor(tx, user.id, [id]);
       const updated = await repository.update(id, dto, tx);
       if (!updated) throw HttpError.notFound("Permission not found");
 
@@ -115,6 +130,12 @@ export class PermissionService {
     await prisma.$transaction(async (tx) => {
       const existingPermission = await repository.findById(id, tx);
       if (!existingPermission) throw HttpError.notFound("Permission not found");
+      assertNotSystemName(
+        SYSTEM_PERMISSIONS,
+        "permission",
+        existingPermission.name,
+      );
+      await assertPermissionsWithinActor(tx, user.id, [id]);
       const deleted = await repository.delete(id, tx);
       if (!deleted) throw HttpError.notFound("Permission not found");
 

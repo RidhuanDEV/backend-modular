@@ -18,7 +18,7 @@
     "api-docs:check": "tsx src/scripts/generate-openapi.ts --check",
     "uploads:cleanup": "node dist/scripts/cleanup-orphan-uploads.js",
     "test": "npm run build && node --test tests/time-docs-audit.test.mjs tests/rate-limit.test.mjs tests/env-policies.test.mjs tests/storage.test.mjs tests/health-cors.test.mjs tests/input-errors.test.mjs tests/env-loader.test.mjs tests/hardening-config.test.mjs",
-    "test:database": "npm run build && node --test tests/notifications.integration.mjs tests/privilege.integration.mjs tests/session.integration.mjs",
+    "test:database": "npm run build && node --test --test-concurrency=1 tests/notifications.integration.mjs tests/privilege.integration.mjs tests/session.integration.mjs tests/audit-hardening.integration.mjs tests/refresh-cookie.integration.mjs",
     "lint": "eslint .",
     "verify:template": "npm run lint && npm run test && npm run api-docs:check && npx prisma validate",
     "prebuild": "prisma generate",

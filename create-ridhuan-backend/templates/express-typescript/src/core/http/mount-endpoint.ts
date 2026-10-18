@@ -1,5 +1,8 @@
 import type { Express, RequestHandler } from "express";
-import { authenticate } from "../auth/auth.middleware.js";
+import {
+  requireActiveUser,
+  verifyAccessToken,
+} from "../auth/auth.middleware.js";
 import { requirePermission } from "../auth/rbac.middleware.js";
 import { validate } from "../middleware/validate.middleware.js";
 import { rateLimiter } from "../middleware/rate-limit.middleware.js";
@@ -34,10 +37,15 @@ export function mountEndpoint(
   if (policy.access.kind === "public") {
     before.push(rateLimiter(policy.rateLimit));
   } else {
-    before.push(rateLimiter("public"), authenticate);
+    // Verify the token without the database, throttle per user, then load the user.
+    // One quota per request: authenticated traffic is not charged to the shared IP bucket.
+    before.push(
+      verifyAccessToken,
+      rateLimiter(policy.rateLimit),
+      requireActiveUser,
+    );
     if (policy.access.permission)
       before.push(requirePermission(policy.access.permission));
-    before.push(rateLimiter(policy.rateLimit));
   }
   before.push(
     validate({
@@ -112,7 +120,8 @@ export function assertEndpointCoverage(): void {
   for (const id of Object.keys(endpointRegistry) as EndpointId[]) {
     if (
       !mounted.has(id) &&
-      !(id.startsWith("upload.") && !env.UPLOAD_ENABLED)
+      !(id.startsWith("upload.") && !env.UPLOAD_ENABLED) &&
+      !(id.startsWith("docs.") && !env.DOCS_ENABLED)
     ) {
       throw new Error(`Endpoint is not mounted: ${id}`);
     }

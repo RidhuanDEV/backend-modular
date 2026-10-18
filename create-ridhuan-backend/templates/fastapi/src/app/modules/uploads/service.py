@@ -8,6 +8,7 @@ from fastapi import UploadFile
 from app.core.context import Context
 from app.core.errors import ApiError
 from app.core.settings import Settings
+from app.modules.roles.repository import ROOT_ROLE
 from app.modules.uploads.models import StoredFile
 from app.modules.uploads.schemas import FileResponse, public_file
 from app.platform.storage.service import Storage
@@ -77,7 +78,13 @@ async def create(
 
 
 async def get(ctx: Context, id: UUID) -> FileResponse:
+    actor = ctx.require_actor()
     row = await ctx.session.get(StoredFile, id)
-    if row is None or row.status != "READY":
+    # Only the uploader and root users may read a file; 404 hides whether it exists.
+    if (
+        row is None
+        or row.status != "READY"
+        or (row.uploader_id != actor.id and actor.role.name != ROOT_ROLE)
+    ):
         raise ApiError(404, "File not found")
     return public_file(row)

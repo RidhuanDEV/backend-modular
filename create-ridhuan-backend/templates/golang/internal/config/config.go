@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/mail"
 	"net/url"
 	"os"
@@ -22,26 +23,33 @@ type PolicyOverride struct {
 	Cache     string `json:"cache"`
 }
 type Config struct {
-	Operations             Operations
-	Environment            string
-	Port                   int
-	DatabaseURL            string
-	DatabaseProvider       string
-	JWTSecret              string
-	JWTIssuer              string
-	JWTAudience            string
-	RefreshIdleDays        int
-	RefreshAbsoluteDays    int
-	CORSOrigins            map[string]struct{}
-	RedisURL               string
-	RedisNamespace         string
-	CacheEnabled           bool
-	RateStore              string
-	Rates                  map[string]Rate
-	InstanceCount          int
-	TrustProxyHops         int
-	Policies               map[string]PolicyOverride
-	UploadEnabled          bool
+	Operations          Operations
+	Environment         string
+	Port                int
+	DatabaseURL         string
+	DatabaseProvider    string
+	JWTSecret           string
+	JWTIssuer           string
+	JWTAudience         string
+	RefreshIdleDays     int
+	RefreshAbsoluteDays int
+	CORSOrigins         map[string]struct{}
+	RedisURL            string
+	RedisNamespace      string
+	CacheEnabled        bool
+	RateStore           string
+	Rates               map[string]Rate
+	InstanceCount       int
+	TrustProxyHops      int
+	Policies            map[string]PolicyOverride
+	UploadEnabled       bool
+	DocsDisabled        bool
+	// RefreshTransport is body (JSON, default) or cookie (httpOnly refresh cookie).
+	RefreshTransport       string
+	RefreshCookieName      string
+	RefreshCookieSameSite  http.SameSite
+	RefreshCookieDomain    string
+	RefreshCookieSecure    bool
 	UploadStorage          string
 	UploadLocalDir         string
 	UploadMaxBytes         int64
@@ -64,6 +72,11 @@ type Config struct {
 	SMTPPassword           string
 	SMTPFrom               string
 }
+
+var (
+	cookieName   = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+	cookieDomain = regexp.MustCompile(`^\.?[A-Za-z0-9.-]+$`)
+)
 
 func getenv(key, fallback string) string {
 	if v, ok := os.LookupEnv(key); ok {
@@ -164,6 +177,41 @@ func Load() (Config, error) {
 	if c.UploadEnabled, err = boolean("UPLOAD_ENABLED", true); err != nil {
 		return c, fmt.Errorf("UPLOAD_ENABLED: %w", err)
 	}
+	// API docs reveal every route and schema; off in production unless explicitly enabled.
+	docsEnabled, err := boolean("DOCS_ENABLED", c.Environment != "production")
+	if err != nil {
+		return c, fmt.Errorf("DOCS_ENABLED: %w", err)
+	}
+	c.DocsDisabled = !docsEnabled
+	c.RefreshTransport = getenv("REFRESH_TOKEN_TRANSPORT", "body")
+	if c.RefreshTransport != "body" && c.RefreshTransport != "cookie" {
+		return c, errors.New("REFRESH_TOKEN_TRANSPORT must be body or cookie")
+	}
+	c.RefreshCookieName = getenv("REFRESH_COOKIE_NAME", "refresh_token")
+	if !cookieName.MatchString(c.RefreshCookieName) {
+		return c, errors.New("REFRESH_COOKIE_NAME must match [A-Za-z0-9_-]{1,64}")
+	}
+	// lax/strict for same-site frontends (including sibling subdomains); none for cross-site.
+	switch getenv("REFRESH_COOKIE_SAMESITE", "lax") {
+	case "lax":
+		c.RefreshCookieSameSite = http.SameSiteLaxMode
+	case "strict":
+		c.RefreshCookieSameSite = http.SameSiteStrictMode
+	case "none":
+		c.RefreshCookieSameSite = http.SameSiteNoneMode
+	default:
+		return c, errors.New("REFRESH_COOKIE_SAMESITE must be lax, strict or none")
+	}
+	c.RefreshCookieDomain = os.Getenv("REFRESH_COOKIE_DOMAIN")
+	if c.RefreshCookieDomain != "" && !cookieDomain.MatchString(c.RefreshCookieDomain) {
+		return c, errors.New("REFRESH_COOKIE_DOMAIN is invalid")
+	}
+	if c.RefreshCookieSecure, err = boolean("REFRESH_COOKIE_SECURE", true); err != nil {
+		return c, fmt.Errorf("REFRESH_COOKIE_SECURE: %w", err)
+	}
+	if c.RefreshCookieSameSite == http.SameSiteNoneMode && !c.RefreshCookieSecure {
+		return c, errors.New("SameSite=None cookies must be Secure")
+	}
 	if c.S3PathStyle, err = boolean("S3_FORCE_PATH_STYLE", true); err != nil {
 		return c, fmt.Errorf("S3_FORCE_PATH_STYLE: %w", err)
 	}
@@ -217,6 +265,9 @@ func Load() (Config, error) {
 	}
 	if c.DatabaseURL == "" || len(c.JWTSecret) < 32 {
 		return c, errors.New("DATABASE_URL and JWT_SECRET (minimum 32 characters) are required")
+	}
+	if c.Environment == "production" && strings.Contains(strings.ToLower(c.JWTSecret), "replace") {
+		return c, errors.New("JWT_SECRET must be a generated secret in production")
 	}
 	if c.DatabaseProvider != "postgresql" && c.DatabaseProvider != "mysql" {
 		return c, errors.New("DB_PROVIDER must be postgresql or mysql")

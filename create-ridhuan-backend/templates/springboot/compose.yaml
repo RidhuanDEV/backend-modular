@@ -21,11 +21,14 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-backend}
       POSTGRES_USER: ${POSTGRES_USER:-backend}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      APP_DB_USER: ${APP_DB_USER:-}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-}
       TZ: UTC
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - db-data:/var/lib/postgresql
+      - ./scripts/postgres-init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 3s
@@ -34,6 +37,11 @@ services:
   migrate:
     <<: *runtime
     command: ["--app.mode=migrate"]
+    environment:
+      <<: *runtime-env
+      # Optional owner credentials so migrations run as the schema owner while the app uses APP_DB_USER.
+      DB_USER: ${MIGRATION_DB_USER:-${DB_USER:-backend}}
+      DB_PASSWORD: ${MIGRATION_DB_PASSWORD:-${DB_PASSWORD:?set DB_PASSWORD}}
     depends_on:
       postgres: {condition: service_healthy}
   seeder:

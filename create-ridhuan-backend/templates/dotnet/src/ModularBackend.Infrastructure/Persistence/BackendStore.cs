@@ -126,6 +126,61 @@ public sealed class BackendStore(BackendDbContext db) : IBackendStore
             .RefreshTokens.Where(x => x.FamilyId == familyId && x.RevokedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, revokedAt), ct);
 
+    public async Task RevokeUserSessionsAsync(
+        Guid userId,
+        DateTimeOffset revokedAt,
+        CancellationToken ct
+    )
+    {
+        _ = await db
+            .RefreshFamilies.Where(x => x.UserId == userId && x.RevokedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, revokedAt), ct);
+        _ = await db
+            .RefreshTokens.Where(x => x.UserId == userId && x.RevokedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, revokedAt), ct);
+    }
+
+    // Locking read sees committed rows under PostgreSQL and MySQL REPEATABLE READ.
+    // Fixed order keeps concurrent RBAC mutations from deadlocking on these row locks.
+    public async Task LockPermissionsByNameAsync(IReadOnlyList<string> names, CancellationToken ct)
+    {
+        foreach (var name in names.Order(StringComparer.Ordinal))
+            _ = db.Database.IsMySql()
+                ? await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT Id FROM permissions WHERE Name = {name} FOR UPDATE",
+                    ct
+                )
+                : await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT \"Id\" FROM permissions WHERE \"Name\" = {name} FOR UPDATE",
+                    ct
+                );
+    }
+
+    public async Task<IReadOnlyList<string>> UnheldPermissionNamesAsync(
+        IReadOnlyList<string> names,
+        CancellationToken ct
+    ) =>
+        await db
+            .Permissions.Where(p =>
+                names.Contains(p.Name)
+                && !db.RolePermissions.Any(rp =>
+                    rp.PermissionId == p.Id
+                    && db.Users.IgnoreQueryFilters()
+                        .Any(u => u.RoleId == rp.RoleId && u.DeletedAt == null)
+                )
+            )
+            .Select(p => p.Name)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Role>> RolesWithPermissionAsync(
+        string name,
+        CancellationToken ct
+    ) =>
+        await db
+            .Roles.Include(r => r.Permissions)
+            .Where(r => r.Permissions.Any(rp => rp.Permission.Name == name))
+            .ToListAsync(ct);
+
     public async Task DeleteExpiredRefreshTokensAsync(
         Guid userId,
         DateTimeOffset now,

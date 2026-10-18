@@ -5,10 +5,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-modular_net}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-modular_net}
+      APP_DB_USER: ${APP_DB_USER:-}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-}
     ports:
     - 127.0.0.1:${POSTGRES_PORT:-55432}:5432
     volumes:
     - postgres_data:/var/lib/postgresql
+    - ./scripts/postgres-init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
     healthcheck:
       test:
       - CMD-SHELL
@@ -22,7 +25,8 @@ services:
     - dotnet
     - /app/migrator/ModularBackend.Migrator.dll
     environment:
-      Database__ConnectionString: ${Database__ConnectionString_DOCKER:?Set Database__ConnectionString_DOCKER}
+      # Optional owner connection so migrations run as the schema owner while the app uses APP_DB_USER.
+      Database__ConnectionString: ${Database__MigrationConnectionString_DOCKER:-${Database__ConnectionString_DOCKER:?Set Database__ConnectionString_DOCKER}}
     depends_on:
       postgres:
         condition: service_healthy

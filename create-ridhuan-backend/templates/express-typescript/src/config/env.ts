@@ -50,6 +50,24 @@ const envSchema = z
     RATE_LIMIT_INTERNAL_MAX: z.coerce.number().int().positive().default(300),
     APP_INSTANCE_COUNT: z.coerce.number().int().positive().default(1),
     TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
+    // API docs reveal every route and schema; off in production unless explicitly enabled.
+    DOCS_ENABLED: z.enum(["true", "false"]).optional(),
+    // body (default) returns the refresh token in JSON; cookie keeps it in an httpOnly cookie.
+    REFRESH_TOKEN_TRANSPORT: z.enum(["body", "cookie"]).default("body"),
+    REFRESH_COOKIE_NAME: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,64}$/)
+      .default("refresh_token"),
+    // lax/strict for same-site frontends (including sibling subdomains); none for cross-site.
+    REFRESH_COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("lax"),
+    REFRESH_COOKIE_DOMAIN: z
+      .string()
+      .regex(/^\.?[A-Za-z0-9.-]+$/)
+      .optional(),
+    REFRESH_COOKIE_SECURE: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((v) => v === "true"),
     UPLOAD_ENABLED: z
       .enum(["true", "false"])
       .default("true")
@@ -181,6 +199,16 @@ const envSchema = z
         message: "JWT_SECRET must be a generated secret in production",
       });
     }
+    if (
+      value.REFRESH_COOKIE_SAMESITE === "none" &&
+      !value.REFRESH_COOKIE_SECURE
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["REFRESH_COOKIE_SECURE"],
+        message: "SameSite=None cookies must be Secure",
+      });
+    }
     if (value.NODE_ENV === "production" && value.CORS_ORIGINS.length === 0) {
       ctx.addIssue({
         code: "custom",
@@ -248,5 +276,11 @@ if (!result.success) {
 }
 
 operationsConfig();
-export const env = result.data;
-export type Env = z.infer<typeof envSchema>;
+export const env = {
+  ...result.data,
+  DOCS_ENABLED:
+    result.data.DOCS_ENABLED === undefined
+      ? result.data.NODE_ENV !== "production"
+      : result.data.DOCS_ENABLED === "true",
+};
+export type Env = typeof env;

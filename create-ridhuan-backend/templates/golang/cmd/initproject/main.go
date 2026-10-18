@@ -21,6 +21,7 @@ import (
 const originalModule = "github.com/RidhuanDEV/golang-backend"
 
 var sqlIdentifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+var validModulePath = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._~-]*(?:/[a-zA-Z0-9][a-zA-Z0-9._~-]*)+$`)
 
 func main() {
 	if err := run(); err != nil {
@@ -47,7 +48,9 @@ func run() error {
 		return errors.New("project directory name is required")
 	}
 	module := ask(reader, "Go module path", "example.com/"+filepath.Base(name))
-	if strings.ContainsAny(module, " \t\r\n") || !strings.Contains(module, "/") || strings.Contains(module, "..") {
+	// Same rule as the CLI: the path is substituted into Go import strings, so
+	// quotes or other syntax characters must never get through.
+	if !validModulePath.MatchString(module) || strings.Contains(module, "..") {
 		return errors.New("invalid Go module path")
 	}
 	port := ask(reader, "HTTP port", "8080")

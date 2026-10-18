@@ -9,10 +9,11 @@ import type { Actor } from "../../common/http/request-context";
 import { PrismaService } from "../../platform/database/prisma.service";
 import { StorageService } from "../../platform/storage/storage.service";
 import type { UploadResponseDto } from "./dto/upload.dto";
+import { isRootRole } from "../../common/auth/privilege";
 
 function inspect(buffer: Buffer): string | undefined {
   if (buffer.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) return "image/png";
-  if (buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[buffer.length - 2] === 0xff && buffer[buffer.length - 1] === 0xd9) return "image/jpeg";
+  if (buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff && buffer[buffer.length - 2] === 0xff && buffer[buffer.length - 1] === 0xd9) return "image/jpeg";
   if (buffer.subarray(0, 5).toString() === "%PDF-") return "application/pdf";
   return undefined;
 }
@@ -56,7 +57,9 @@ export class UploadsService {
       const cached = await this.cache.get<UploadResponseDto>(key); if (cached) return cached;
     }
     const value = await this.prisma.storedFile.findUnique({ where: { id } });
-    if (!value) throw new NotFoundException("Upload not found");
+    // Only the uploader and root users may read a file; 404 hides whether it exists.
+    if (!value || (value.uploaderId !== actor.id && !(await isRootRole(this.prisma, actor.roleId))))
+      throw new NotFoundException("Upload not found");
     const result = mapUpload(value);
     if (this.policy.for("upload.get").cache === "read") await this.cache.set(key, result);
     return result;

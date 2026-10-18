@@ -13,14 +13,32 @@ func (s *Server) mountAuth() {
 	register[CredentialsInput, Token](s, "auth.login", func(ctx context.Context, input *CredentialsInput, _ *Actor) (Success[Token], error) {
 		b := input.Body
 		pair, err := s.Auth.Login(ctx, s.policy(ctx, "auth.login"), b)
-		return ok(tokenResponse(pair)), err
+		if err != nil {
+			return Success[Token]{}, err
+		}
+		return ok(s.issueTokens(ctx, pair)), nil
 	})
 	register[RefreshInput, Token](s, "auth.refresh", func(ctx context.Context, input *RefreshInput, _ *Actor) (Success[Token], error) {
-		pair, err := s.Auth.Refresh(ctx, s.policy(ctx, "auth.refresh"), input.Body.RefreshToken)
-		return ok(tokenResponse(pair)), err
+		raw, err := s.refreshTokenFrom(ctx, input.Body.RefreshToken)
+		if err != nil {
+			return Success[Token]{}, err
+		}
+		pair, err := s.Auth.Refresh(ctx, s.policy(ctx, "auth.refresh"), raw)
+		if err != nil {
+			return Success[Token]{}, err
+		}
+		return ok(s.issueTokens(ctx, pair)), nil
 	})
 	register[RefreshInput, struct{}](s, "auth.logout", func(ctx context.Context, input *RefreshInput, _ *Actor) (Success[struct{}], error) {
-		return Success[struct{}]{}, s.Auth.Logout(ctx, s.policy(ctx, "auth.logout"), input.Body.RefreshToken)
+		raw, err := s.refreshTokenFrom(ctx, input.Body.RefreshToken)
+		if err != nil {
+			return Success[struct{}]{}, err
+		}
+		if err = s.Auth.Logout(ctx, s.policy(ctx, "auth.logout"), raw); err != nil {
+			return Success[struct{}]{}, err
+		}
+		s.clearRefreshCookie(ctx)
+		return Success[struct{}]{}, nil
 	})
 	register[Empty, AuthUser](s, "auth.me", func(ctx context.Context, input *Empty, actor *Actor) (Success[AuthUser], error) {
 		user, err := s.Auth.Me(ctx, actor)

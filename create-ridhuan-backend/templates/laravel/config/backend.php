@@ -10,16 +10,25 @@ return [
         'issuer' => env('JWT_ISSUER', 'modular-laravel'),
         'audience' => env('JWT_AUDIENCE', 'modular-laravel'),
     ],
-    'refresh' => [
-        'idle' => env('REFRESH_TOKEN_IDLE_DAYS', '30'),
-        'absolute' => env('REFRESH_TOKEN_ABSOLUTE_DAYS', '90'),
-    ],
     'policies' => env('ENDPOINT_POLICIES_JSON', '{}'),
     'cors' => env(
         'CORS_ORIGINS',
         'http://localhost:5173,http://localhost:3000',
     ),
     'proxy' => env('TRUST_PROXY', ''),
+    // API docs reveal every route and schema; off in production unless explicitly enabled.
+    'docs' => env('DOCS_ENABLED', env('APP_ENV') !== 'production'),
+    'refresh' => [
+        'idle' => env('REFRESH_TOKEN_IDLE_DAYS', '30'),
+        'absolute' => env('REFRESH_TOKEN_ABSOLUTE_DAYS', '90'),
+        // body (default) returns the refresh token in JSON; cookie keeps it in an httpOnly cookie.
+        'transport' => env('REFRESH_TOKEN_TRANSPORT', 'body'),
+        'name' => env('REFRESH_COOKIE_NAME', 'refresh_token'),
+        // lax/strict for same-site frontends (including sibling subdomains); none for cross-site.
+        'samesite' => env('REFRESH_COOKIE_SAMESITE', 'lax'),
+        'domain' => env('REFRESH_COOKIE_DOMAIN', ''),
+        'secure' => env('REFRESH_COOKIE_SECURE', true),
+    ],
     'namespace' => env('REDIS_NAMESPACE', 'modular-laravel'),
     'rate' => [
         'store' => env('RATE_LIMIT_STORE', 'file'),

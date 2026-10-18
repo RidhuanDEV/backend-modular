@@ -11,6 +11,10 @@ import { buildFindOptions } from "../../core/database/query-builder.js";
 import { buildPaginationMeta } from "../../utils/pagination.js";
 import { toUserResponse, toUserResponseList } from "./mappers/user.mapper.js";
 import { userPolicy } from "./policies/user.policy.js";
+import {
+  guardSystemPermissionHolders,
+  revokeUserSessions,
+} from "../../core/auth/privilege.js";
 import { userQueryConfig } from "./queries/user.query.js";
 import { AuditAction } from "../../constants/audit.constants.js";
 import { USER_MODULE } from "../../constants/modules.constants.js";
@@ -99,8 +103,15 @@ export class UserService {
       const existing = await repository.findById(id, tx);
       if (!existing) throw HttpError.notFound("User not found");
       await userPolicy.canUpdate(user, existing, data.roleId, tx);
+      const roleChanged =
+        data.roleId !== undefined && data.roleId !== existing.roleId;
+      const holders = roleChanged
+        ? await guardSystemPermissionHolders(tx)
+        : undefined;
       const record = await repository.update(id, data, tx);
       if (!record) throw HttpError.notFound("User not found");
+      await holders?.();
+      if (roleChanged) await revokeUserSessions(tx, id);
       await auditService.persist({
         action: AuditAction.UPDATE,
         module: USER_MODULE,
@@ -131,7 +142,10 @@ export class UserService {
       const existing = await repository.findById(id, tx);
       if (!existing) throw HttpError.notFound("User not found");
       await userPolicy.canDelete(user, existing, tx);
+      const holders = await guardSystemPermissionHolders(tx);
       await repository.delete(id, tx);
+      await holders();
+      await revokeUserSessions(tx, id);
       await auditService.persist({
         action: AuditAction.DELETE,
         module: USER_MODULE,

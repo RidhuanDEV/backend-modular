@@ -12,11 +12,12 @@ final class RefreshRequest extends BackendRequest
     /** @return array<string, list<string>> */
     public function rules(): array
     {
-        return ['refreshToken' => ['required', 'string', 'min:1', 'max:512']];
+        // Optional so cookie mode can read the httpOnly cookie instead; the controller enforces presence.
+        return ['refreshToken' => ['sometimes', 'string', 'min:1', 'max:512']];
     }
 
-    public function token(): string
+    public function token(): ?string
     {
-        return Input::string($this->validated(), 'refreshToken');
+        return Input::optionalString($this->validated(), 'refreshToken');
     }
 }

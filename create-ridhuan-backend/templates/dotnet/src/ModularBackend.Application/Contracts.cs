@@ -25,9 +25,10 @@ public sealed record Pagination(
 
 public sealed record StatusResult(string Status);
 
+// RefreshToken is null (omitted) when the refresh token travels in an httpOnly cookie.
 public sealed record AuthTokensResult(
     string AccessToken,
-    string RefreshToken,
+    string? RefreshToken,
     string TokenType,
     int ExpiresIn
 );

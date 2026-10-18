@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
@@ -9,7 +9,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from app.api.dependencies import AppRuntime, RequestContext
 from app.api.registry import EndpointId
 from app.api.schemas import Success
-from app.modules.notifications import service
+from app.modules.notifications import service, stream_slots
 from app.modules.notifications.schemas import CreateNotification, NotificationResponse
 from app.platform.telemetry import sse_connection
 
@@ -53,6 +53,7 @@ class StreamAccess:
     recipient: UUID
     expiry: int
     after: int | None
+    release: Callable[[], None]
 
 
 async def stream_access(
@@ -60,10 +61,11 @@ async def stream_access(
 ) -> StreamAccess:
     # Validate access and cursor before headers. Only immutable values survive
     # the function-scoped database session; polling opens its own short sessions.
+    actor = ctx.require_actor().id
+    after = await service.cursor(ctx, last_event_id)
+    # Reserve the slot before headers so an over-limit client gets 429, not a broken stream.
     return StreamAccess(
-        ctx.require_actor().id,
-        ctx.token_expiry or 0,
-        await service.cursor(ctx, last_event_id),
+        actor, ctx.token_expiry or 0, after, stream_slots.acquire(actor)
     )
 
 
@@ -82,6 +84,7 @@ async def stream(
         ):
             yield event
     finally:
+        access.release()
         sse_connection(-1)
 
 

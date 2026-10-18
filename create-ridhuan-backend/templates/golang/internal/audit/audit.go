@@ -60,6 +60,22 @@ func Capture[T any](id string, before, after *T) (Change, error) {
 	change.After, err = redact(change.After)
 	return change, err
 }
+
+// sensitiveKey matches by substring so variants such as passwordHash,
+// resetToken, apiKey or clientSecret are dropped too.
+func sensitiveKey(key string) bool {
+	lower := strings.ToLower(key)
+	if lower == "hash" {
+		return true
+	}
+	for _, part := range []string{"password", "token", "secret", "credential", "authorization", "cookie", "apikey", "api_key"} {
+		if strings.Contains(lower, part) {
+			return true
+		}
+	}
+	return false
+}
+
 func redact(raw json.RawMessage) (json.RawMessage, error) {
 	if raw == nil {
 		return nil, nil
@@ -70,16 +86,15 @@ func redact(raw json.RawMessage) (json.RawMessage, error) {
 			return nil, err
 		}
 		for key, value := range object {
-			switch strings.ToLower(key) {
-			case "password", "passwordhash", "password_hash", "hash", "token", "accesstoken", "access_token", "refreshtoken", "refresh_token", "secret", "secretkey", "credential", "credentials", "authorization":
+			if sensitiveKey(key) {
 				delete(object, key)
-			default:
-				clean, err := redact(value)
-				if err != nil {
-					return nil, err
-				}
-				object[key] = clean
+				continue
 			}
+			clean, err := redact(value)
+			if err != nil {
+				return nil, err
+			}
+			object[key] = clean
 		}
 		return json.Marshal(object)
 	}

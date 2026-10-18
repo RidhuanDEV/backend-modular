@@ -44,10 +44,15 @@ export class PreAuthRateGuard implements CanActivate {
     request.endpointId = id;
     if (id === "health.get" || id === "live.get" || id === "ready.get")
       return true;
+    const policy = this.policy.for(id);
+    // Authenticated endpoints are throttled per user in AccessGuard, after the
+    // token is verified and before any database access. Charge each request once.
+    if (!policy.public) return true;
     const address = request.ip || request.socket.remoteAddress || "unknown";
-    await this.rate.consume("public", address);
-    if (this.policy.for(id).rateLimit === "auth")
-      await this.rate.consume("auth", address);
+    await this.rate.consume(
+      policy.rateLimit === "auth" ? "auth" : "public",
+      address,
+    );
     return true;
   }
 }
@@ -92,6 +97,13 @@ export class AccessGuard implements CanActivate {
       !Number.isInteger(claims.exp)
     )
       throw new UnauthorizedException("Invalid access token");
+    if (policy.rateLimit === "internal")
+      await this.rate.consume("internal", claims.sub);
+    else
+      await this.rate.consume(
+        policy.rateLimit,
+        request.ip || request.socket.remoteAddress || "unknown",
+      );
     const user = await this.prisma.user.findFirst({
       where: { id: claims.sub, deletedAt: null },
       select: { id: true, email: true, roleId: true },
@@ -113,8 +125,6 @@ export class AccessGuard implements CanActivate {
       });
       if (granted === 0) throw new ForbiddenException("Permission denied");
     }
-    if (policy.rateLimit === "internal")
-      await this.rate.consume("internal", actor.id);
     return true;
   }
 }

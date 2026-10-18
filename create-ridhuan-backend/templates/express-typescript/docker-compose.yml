@@ -36,7 +36,8 @@ services:
   migrate:
     env_file: .env
     environment:
-      DATABASE_URL: ${DATABASE_URL_DOCKER:?Set DATABASE_URL_DOCKER}
+      # Optional owner URL so migrations can run as the schema owner while the app uses APP_DB_USER.
+      DATABASE_URL: ${MIGRATION_DATABASE_URL_DOCKER:-${DATABASE_URL_DOCKER:?Set DATABASE_URL_DOCKER}}
     command:
     - npx
     - prisma
@@ -54,6 +55,7 @@ services:
       TZ: UTC
     volumes:
     - postgres_data:/var/lib/postgresql
+    - ./scripts/postgres-init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
     healthcheck:
       test:
       - CMD-SHELL

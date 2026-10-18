@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import request from "supertest";
 import type { INestApplication } from "@nestjs/common";
+import type { Prisma } from "../generated/prisma/client";
 import { AuditService } from "../common/audit/audit.service";
 import { endpointRegistry } from "../common/endpoint/endpoint.registry";
 import { PrismaService } from "../platform/database/prisma.service";
@@ -587,4 +588,175 @@ test("user and role managers cannot grant privileges they do not hold", async ()
     200,
   );
   assert.equal((await call("delete", `/api/users/${plain.id}`)).status, 204);
+});
+
+test("system RBAC primitives, last root user, session revocation and file ownership", async () => {
+  const suffix = randomUUID();
+  const login = await request(app.getHttpServer())
+    .post("/api/auth/login")
+    .send({
+      email: process.env.ADMIN_EMAIL,
+      password: process.env.ADMIN_PASSWORD,
+    });
+  const authorization = `Bearer ${textField(field(login.body, "data"), "token")}`;
+  const call = (
+    method: "get" | "patch" | "post" | "delete",
+    path: string,
+    body?: object,
+    auth = authorization,
+  ) =>
+    request(app.getHttpServer())
+      [method](path)
+      .set("Authorization", auth)
+      .send(body);
+  const manageUsers = await prisma.permission.findUniqueOrThrow({
+    where: { name: "manage_users" },
+  });
+  const manageUploads = await prisma.permission.findUniqueOrThrow({
+    where: { name: "manage_uploads" },
+  });
+  const adminRole = await prisma.role.findUniqueOrThrow({
+    where: { name: "admin" },
+  });
+  const userRole = await prisma.role.findUniqueOrThrow({
+    where: { name: "user" },
+  });
+  // RBAC only: a new permission is granted to every role managing permissions.
+  const createdPermission = await call("post", "/api/permissions", {
+    name: `custom_${suffix}`,
+  });
+  assert.equal(createdPermission.status, 201);
+  const custom = await prisma.permission.findUniqueOrThrow({
+    where: { name: `custom_${suffix}` },
+  });
+  assert.ok(
+    await prisma.rolePermission.findFirst({
+      where: { roleId: adminRole.id, permissionId: custom.id },
+    }),
+  );
+  // F-01: system permissions are immutable and their names are reserved.
+  assert.equal(
+    (
+      await call("patch", `/api/permissions/${manageUsers.id}`, {
+        name: `x_${suffix}`,
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (await call("delete", `/api/permissions/${manageUsers.id}`)).status,
+    403,
+  );
+  assert.equal(
+    (
+      await call("patch", `/api/permissions/${custom.id}`, {
+        name: "manage_users",
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await call("patch", `/api/permissions/${custom.id}`, {
+        name: `renamed_${suffix}`,
+      })
+    ).status,
+    200,
+  );
+  // F-02: system roles keep their names, cannot be deleted; root keeps system permissions.
+  assert.equal(
+    (await call("patch", `/api/roles/${userRole.id}`, { name: `x_${suffix}` }))
+      .status,
+    403,
+  );
+  assert.equal((await call("delete", `/api/roles/${userRole.id}`)).status, 403);
+  assert.equal(
+    (await call("post", "/api/roles", { name: "admin" })).status,
+    403,
+  );
+  // F-07: files are readable by their uploader and root users only.
+  const bcrypt = (await import("bcrypt")).default;
+  const uploaderRole = await prisma.role.create({
+    data: { name: `uploader_${suffix}` },
+  });
+  await prisma.rolePermission.create({
+    data: { roleId: uploaderRole.id, permissionId: manageUploads.id },
+  });
+  const password = "member-password-123";
+  const member = await prisma.user.create({
+    data: {
+      email: `member-${suffix}@example.com`,
+      password: await bcrypt.hash(password, 4),
+      roleId: uploaderRole.id,
+    },
+  });
+  const admin = await prisma.user.findFirstOrThrow({
+    where: { email: process.env.ADMIN_EMAIL!.toLowerCase() },
+  });
+  const file = await prisma.storedFile.create({
+    data: {
+      storage: "local",
+      objectKey: randomUUID(),
+      originalName: "a.pdf",
+      mimeType: "application/pdf",
+      size: 1,
+      uploaderId: admin.id,
+    },
+  });
+  const memberLogin = await request(app.getHttpServer())
+    .post("/api/auth/login")
+    .send({ email: member.email, password });
+  const memberAuth = `Bearer ${textField(field(memberLogin.body, "data"), "token")}`;
+  assert.equal(
+    (await call("get", `/api/upload/${file.id}`, undefined, memberAuth)).status,
+    404,
+  );
+  assert.equal((await call("get", `/api/upload/${file.id}`)).status, 200);
+  // F-10: a role change revokes the user's refresh sessions.
+  const otherRole = await prisma.role.create({
+    data: { name: `other_${suffix}` },
+  });
+  assert.equal(
+    (await call("patch", `/api/users/${member.id}`, { roleId: otherRole.id }))
+      .status,
+    200,
+  );
+  assert.equal(
+    await prisma.refreshFamily.count({
+      where: { userId: member.id, revokedAt: null },
+    }),
+    0,
+  );
+  // F-09: no change may leave a system permission without an active holder,
+  // whether by demoting the last holder or stripping the role's permissions.
+  const { guardSystemPermissionHolders } =
+    await import("../common/auth/privilege");
+  const changes = [
+    (tx: Prisma.TransactionClient) =>
+      tx.user.update({
+        where: { id: admin.id },
+        data: { roleId: otherRole.id },
+      }),
+    (tx: Prisma.TransactionClient) =>
+      tx.rolePermission.deleteMany({
+        where: { roleId: adminRole.id, permissionId: { not: custom.id } },
+      }),
+  ];
+  for (const change of changes) {
+    await assert.rejects(
+      prisma.$transaction(async (tx) => {
+        await tx.user.updateMany({
+          where: { id: { not: admin.id }, deletedAt: null },
+          data: { deletedAt: new Date() },
+        });
+        const holders = await guardSystemPermissionHolders(tx);
+        await change(tx);
+        await holders();
+        throw new Error("expected lockout guard");
+      }),
+      (error: unknown) =>
+        error instanceof Error && /no active user holding/.test(error.message),
+    );
+  }
+  await prisma.storedFile.delete({ where: { id: file.id } });
 });

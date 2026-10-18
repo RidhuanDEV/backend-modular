@@ -18,6 +18,8 @@ interface Counter {
 const LUA =
   "local hits = redis.call('INCR', KEYS[1]); if hits == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]); end; return hits";
 
+const MAX_MEMORY_COUNTERS = 10_000;
+
 @Injectable()
 export class RateLimitService {
   private readonly logger = new Logger(RateLimitService.name);
@@ -47,6 +49,24 @@ export class RateLimitService {
       }),
       max: this.config.get("RATE_LIMIT_INTERNAL_MAX", { infer: true }),
     };
+  }
+
+  /**
+   * Bounded memory store: drop expired entries, then the oldest ones, down to
+   * 90% of the cap so the O(n) sweep runs once per batch, not on every request.
+   * Under a flood of distinct keys this can forget some counters early; a
+   * shared Redis store is required for production limits anyway.
+   */
+  private pruneMemoryCounters(): void {
+    if (this.counters.size < MAX_MEMORY_COUNTERS) return;
+    const now = Date.now();
+    for (const [key, value] of this.counters)
+      if (value.expiresAt <= now) this.counters.delete(key);
+    const target = Math.floor(MAX_MEMORY_COUNTERS * 0.9);
+    for (const key of this.counters.keys()) {
+      if (this.counters.size <= target) break;
+      this.counters.delete(key);
+    }
   }
 
   async consume(group: RateGroup, subject: string): Promise<void> {
@@ -89,10 +109,7 @@ export class RateLimitService {
         current.count += 1;
         this.counters.set(key, current);
         hits = current.count;
-        if (this.counters.size > 10000) {
-          for (const [oldKey, value] of this.counters)
-            if (value.expiresAt <= Date.now()) this.counters.delete(oldKey);
-        }
+        this.pruneMemoryCounters();
       }
       if (hits > max)
         throw new HttpException(

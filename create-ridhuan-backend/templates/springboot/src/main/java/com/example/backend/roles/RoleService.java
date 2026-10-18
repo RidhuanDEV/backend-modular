@@ -81,6 +81,7 @@ public class RoleService {
 
   @Transactional
   public RoleDto.Base create(RoleDto.Create input) {
+    Access.notSystemName(Access.SYSTEM_ROLES, "role", input.name());
     RoleEntity e = new RoleEntity();
     e.id = UUID.randomUUID();
     e.name = input.name();
@@ -95,6 +96,10 @@ public class RoleService {
   @Transactional
   public RoleDto.Base update(UUID id, RoleDto.Update input) {
     RoleEntity e = entity(id);
+    if (input.name() != null && !input.name().equals(e.name)) {
+      Access.notSystemName(Access.SYSTEM_ROLES, "role", e.name);
+      Access.notSystemName(Access.SYSTEM_ROLES, "role", input.name());
+    }
     access.within(access.actor(), e.id);
     Snapshot before = snapshot(e);
     if (input.name() != null) e.name = input.name();
@@ -108,6 +113,7 @@ public class RoleService {
   @Transactional
   public void delete(UUID id) {
     RoleEntity e = entity(id);
+    Access.notSystemName(Access.SYSTEM_ROLES, "role", e.name);
     access.within(access.actor(), id);
     repository.delete(e);
     repository.flush();
@@ -120,10 +126,12 @@ public class RoleService {
     RoleEntity e = entity(id);
     access.within(access.actor(), id);
     access.grant(access.actor(), input.permissionIds());
+    Runnable holders = access.guardSystemPermissionHolders();
     Snapshot before = permissionSnapshot(e);
     db.update("DELETE FROM role_permissions WHERE role_id=?", id);
     for (UUID permission : new HashSet<>(input.permissionIds()))
       db.update("INSERT INTO role_permissions(role_id,permission_id) VALUES(?,?)", id, permission);
+    holders.run();
     audit.write(
         EndpointId.ROLE_ASSIGN_PERMISSIONS,
         access.actor(),

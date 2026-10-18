@@ -15,7 +15,8 @@ final class CreateNotificationRequest extends BackendRequest
     {
         return [
             'recipientId' => ['required', 'uuid'],
-            'title' => ['required', 'string', 'max:160'],
+            // Titles become email subjects: line breaks are rejected to prevent header injection.
+            'title' => ['required', 'string', 'max:160', 'not_regex:/[\r\n]/'],
             'body' => ['required', 'string', 'max:4000'],
             'sendEmail' => ['sometimes', 'boolean'],
         ];

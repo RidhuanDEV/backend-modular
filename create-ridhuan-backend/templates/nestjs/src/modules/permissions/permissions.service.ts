@@ -13,6 +13,12 @@ import type {
   PermissionResponseDto,
   UpdatePermissionDto,
 } from "./dto/permission.dto";
+import {
+  SYSTEM_PERMISSIONS,
+  assertNotSystemName,
+  assertPermissionsWithinActor,
+  grantToPermissionManagers,
+} from "../../common/auth/privilege";
 
 function mapPermission(value: Permission): PermissionResponseDto {
   return {
@@ -88,8 +94,10 @@ export class PermissionsService {
     actor: Actor,
     requestId?: string,
   ): Promise<PermissionResponseDto> {
+    assertNotSystemName(SYSTEM_PERMISSIONS, "permission", dto.name);
     const value = await this.audit.transact(async (tx) => {
       const next = await tx.permission.create({ data: { name: dto.name } });
+      await grantToPermissionManagers(tx, next.id);
       return [
         next,
         {
@@ -116,6 +124,9 @@ export class PermissionsService {
     const value = await this.audit.transact(async (tx) => {
       const prior = await tx.permission.findUnique({ where: { id } });
       if (!prior) throw new NotFoundException("Permission not found");
+      assertNotSystemName(SYSTEM_PERMISSIONS, "permission", prior.name);
+      assertNotSystemName(SYSTEM_PERMISSIONS, "permission", dto.name);
+      await assertPermissionsWithinActor(tx, actor.roleId, [id]);
       const next = await tx.permission.update({
         where: { id },
         data: { ...(dto.name !== undefined ? { name: dto.name } : {}) },
@@ -144,6 +155,8 @@ export class PermissionsService {
     await this.audit.transact(async (tx) => {
       const prior = await tx.permission.findUnique({ where: { id } });
       if (!prior) throw new NotFoundException("Permission not found");
+      assertNotSystemName(SYSTEM_PERMISSIONS, "permission", prior.name);
+      await assertPermissionsWithinActor(tx, actor.roleId, [id]);
       await tx.permission.delete({ where: { id } });
       return [
         undefined,

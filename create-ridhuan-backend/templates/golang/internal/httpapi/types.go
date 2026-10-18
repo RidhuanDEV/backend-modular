@@ -45,7 +45,8 @@ type NamedInput struct{ Body NameBody }
 type CredentialsInput struct{ Body Credentials }
 type RefreshInput struct {
 	Body struct {
-		RefreshToken string `json:"refreshToken" minLength:"1"`
+		// Optional so cookie mode can read the httpOnly cookie instead; the handler enforces presence.
+		RefreshToken string `json:"refreshToken,omitempty" required:"false" minLength:"1"`
 	}
 }
 type RegisterInput struct {

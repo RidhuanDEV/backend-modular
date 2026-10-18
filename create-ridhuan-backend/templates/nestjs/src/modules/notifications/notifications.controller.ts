@@ -90,6 +90,7 @@ export class NotificationsController {
     );
     await serveNotifications(
       response,
+      actor.id,
       cursor,
       request.accessExpiresAt ?? Date.now(),
       (after) => this.service.streamBatch(actor, after, cursor === undefined),

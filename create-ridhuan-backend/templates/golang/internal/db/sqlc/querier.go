@@ -18,6 +18,7 @@ type Querier interface {
 	CleanupFamilies(ctx context.Context, arg CleanupFamiliesParams) ([]string, error)
 	ClearRolePermissions(ctx context.Context, roleID string) error
 	CompleteEmail(ctx context.Context, arg CompleteEmailParams) error
+	CountActivePermissionHolders(ctx context.Context, name string) (int64, error)
 	CountUsers(ctx context.Context, search string) (int64, error)
 	CreateAuthRefreshToken(ctx context.Context, arg CreateAuthRefreshTokenParams) error
 	CreateFile(ctx context.Context, arg CreateFileParams) (StoredFile, error)
@@ -50,6 +51,7 @@ type Querier interface {
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	ListOwnNotifications(ctx context.Context, arg ListOwnNotificationsParams) ([]Notification, error)
 	ListPermissions(ctx context.Context) ([]Permission, error)
+	ListRoleIDsWithPermissionName(ctx context.Context, name string) ([]string, error)
 	ListRolePermissionIDs(ctx context.Context, roleID string) ([]string, error)
 	ListRolePermissions(ctx context.Context, roleID string) ([]ListRolePermissionsRow, error)
 	ListRoles(ctx context.Context) ([]Role, error)
@@ -57,6 +59,7 @@ type Querier interface {
 	LockEmail(ctx context.Context, id string) (EmailJob, error)
 	LockOwnNotification(ctx context.Context, arg LockOwnNotificationParams) (Notification, error)
 	LockPermission(ctx context.Context, id string) (Permission, error)
+	LockPermissionByName(ctx context.Context, name string) ([]string, error)
 	LockRefreshFamily(ctx context.Context, id string) (RefreshFamily, error)
 	LockRole(ctx context.Context, id string) (Role, error)
 	LockUser(ctx context.Context, id string) (User, error)
@@ -70,6 +73,8 @@ type Querier interface {
 	RevokeAuthRefreshFamily(ctx context.Context, familyID string) error
 	RevokeAuthRefreshToken(ctx context.Context, id string) (int64, error)
 	RevokeRefreshFamilyRecord(ctx context.Context, id string) error
+	RevokeUserAuthRefreshTokens(ctx context.Context, userID string) error
+	RevokeUserRefreshFamilies(ctx context.Context, userID string) error
 	SeedAdminPermissions(ctx context.Context) error
 	SeedPermission(ctx context.Context, name string) error
 	SeedRole(ctx context.Context, name string) error

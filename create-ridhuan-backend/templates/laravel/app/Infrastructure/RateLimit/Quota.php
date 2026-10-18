@@ -116,6 +116,10 @@ final class Quota
         if (!is_dir($directory)) {
             throw new \RuntimeException('Quota directory unavailable');
         }
+        // Resolve the store and load its classes before locking, so the critical section is
+        // only the read-increment-write and concurrent processes do not hit the lock timeout.
+        $cache = Cache::store('quota');
+        $cache->get($key);
         // Bounded mutex stripes; flock ownership lasts until finally/process termination.
         $handle = fopen(
             $directory . '/' . substr(sha1($key), 0, 2) . '.lock',
@@ -132,7 +136,6 @@ final class Quota
                 }
                 usleep(10000);
             }
-            $cache = Cache::store('quota');
             $prior = $cache->get($key, 0);
             if (!is_int($prior)) {
                 throw new \RuntimeException('Invalid quota state');

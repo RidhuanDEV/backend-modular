@@ -262,16 +262,8 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
 builder.Services.AddAuthorization(options =>
 {
-    foreach (
-        var name in new[]
-        {
-            "manage_users",
-            "manage_roles",
-            "manage_permissions",
-            "manage_uploads",
-            "manage_notifications",
-        }
-    )
+    // One list: route policies and the immutable system permissions must never drift apart.
+    foreach (var name in BackendService.SystemPermissions)
         options.AddPolicy(
             name,
             p => p.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(name))
@@ -301,35 +293,17 @@ builder
             };
             options.Events = new JwtBearerEvents
             {
-                OnTokenValidated = async context =>
+                // Signature and claims only; ActiveUserMiddleware loads the user after rate limiting.
+                OnTokenValidated = context =>
                 {
                     if (
                         !Guid.TryParse(
                             context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier),
-                            out var id
+                            out _
                         )
                     )
-                    {
                         context.Fail("Invalid subject");
-                        return;
-                    }
-                    var user = await context
-                        .HttpContext.RequestServices.GetRequiredService<IBackendStore>()
-                        .UserAsync(id, context.HttpContext.RequestAborted);
-                    if (user is null)
-                    {
-                        context.Fail("Inactive user");
-                        return;
-                    }
-                    if (context.Principal?.Identity is ClaimsIdentity identity)
-                    {
-                        foreach (var claim in identity.FindAll("roleId").ToArray())
-                            identity.RemoveClaim(claim);
-                        identity.AddClaim(new Claim("roleId", user.RoleId.ToString()));
-                        foreach (var claim in identity.FindAll(ClaimTypes.Email).ToArray())
-                            identity.RemoveClaim(claim);
-                        identity.AddClaim(new Claim(ClaimTypes.Email, user.Email));
-                    }
+                    return Task.CompletedTask;
                 },
                 OnChallenge = async c =>
                 {
@@ -374,6 +348,7 @@ builder.WebHost.ConfigureKestrel(o =>
     o.Limits.MaxRequestBodySize =
         (builder.Configuration.GetValue<long?>("Upload:MaxBytes") ?? 10485760) + 65536
 );
+builder.Services.AddSingleton<RefreshCookies>();
 builder.Services.AddCors(o =>
     o.AddDefaultPolicy(p =>
     {
@@ -388,6 +363,10 @@ builder.Services.AddCors(o =>
             .AllowAnyHeader()
             .AllowAnyMethod()
             .WithExposedHeaders("X-Request-ID", "X-Next-Cursor");
+        // Cookie mode sends the refresh cookie cross-origin, which needs credentialed CORS
+        // with the exact origin allowlist above (never a wildcard).
+        if (builder.Configuration["RefreshCookie:Transport"] == "cookie")
+            p.AllowCredentials();
     })
 );
 foreach (
@@ -422,9 +401,41 @@ foreach (
 }
 builder.Services.AddBackendTelemetry(builder.Configuration);
 var app = builder.Build();
+
+// Validates the refresh cookie settings at startup instead of on the first login.
+_ = app.Services.GetRequiredService<RefreshCookies>();
 app.UseMiddleware<ErrorMiddleware>();
 app.UseForwardedHeaders();
 app.UseRouting();
+
+// API docs reveal every route and schema; off in production unless Docs__Enabled=true.
+var docsEnabled =
+    app.Configuration.GetValue<bool?>("Docs:Enabled") ?? !app.Environment.IsProduction();
+app.Use(
+    async (http, next) =>
+    {
+        http.Response.Headers.XContentTypeOptions = "nosniff";
+        http.Response.Headers.XFrameOptions = "DENY";
+        http.Response.Headers["Referrer-Policy"] = "no-referrer";
+        http.Response.Headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()";
+        if (app.Environment.IsProduction())
+            http.Response.Headers.StrictTransportSecurity = "max-age=31536000; includeSubDomains";
+        if (!docsEnabled && http.Request.Path.StartsWithSegments("/docs"))
+        {
+            http.Response.StatusCode = StatusCodes.Status404NotFound;
+            await http.Response.WriteAsJsonAsync(new Failure("Not found", []), http.RequestAborted);
+            return;
+        }
+        // JSON endpoints never need the upload-sized body limit; only upload.create keeps it.
+        if (
+            http.GetEndpoint()?.Metadata.GetMetadata<EndpointAttribute>() is { } endpoint
+            && endpoint.Id != EndpointId.UploadCreate
+            && http.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit
+        )
+            limit.MaxRequestBodySize = 1_048_576;
+        await next(http);
+    }
+);
 app.UseCors();
 app.UseWhen(
     http =>
@@ -436,6 +447,7 @@ app.UseWhen(
     branch => branch.UseAuthentication()
 );
 app.UseMiddleware<RateMiddleware>();
+app.UseMiddleware<ActiveUserMiddleware>();
 app.UseAuthorization();
 app.UseStatusCodePages(async c =>
 {

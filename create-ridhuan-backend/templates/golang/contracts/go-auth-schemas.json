@@ -31,7 +31,7 @@
         "type": "object",
         "properties": {
           "success": {"type": "boolean", "const": true},
-          "data": {"type": "object", "properties": {"token": {"type": "string"}, "refreshToken": {"type": "string"}, "tokenType": {"type": "string", "const": "Bearer"}, "expiresIn": {"type": "integer", "const": 900}}, "required": ["token", "refreshToken", "tokenType", "expiresIn"], "additionalProperties": false}
+          "data": {"type": "object", "properties": {"token": {"type": "string"}, "refreshToken": {"type": "string"}, "tokenType": {"type": "string", "const": "Bearer"}, "expiresIn": {"type": "integer", "const": 900}}, "required": ["token", "tokenType", "expiresIn"], "additionalProperties": false}
         },
         "required": ["success", "data"],
         "additionalProperties": false
@@ -43,7 +43,7 @@
         "type": "object",
         "properties": {
           "success": {"type": "boolean", "const": true},
-          "data": {"type": "object", "properties": {"token": {"type": "string"}, "refreshToken": {"type": "string"}, "tokenType": {"type": "string", "const": "Bearer"}, "expiresIn": {"type": "integer", "const": 900}}, "required": ["token", "refreshToken", "tokenType", "expiresIn"], "additionalProperties": false}
+          "data": {"type": "object", "properties": {"token": {"type": "string"}, "refreshToken": {"type": "string"}, "tokenType": {"type": "string", "const": "Bearer"}, "expiresIn": {"type": "integer", "const": 900}}, "required": ["token", "tokenType", "expiresIn"], "additionalProperties": false}
         },
         "required": ["success", "data"],
         "additionalProperties": false

@@ -4,8 +4,10 @@ import { mountEndpoint } from "../core/http/mount-endpoint.js";
 import { activeDocModules, generateOpenApi } from "./openapi.js";
 import { rateLimiter } from "../core/middleware/rate-limit.middleware.js";
 import { HttpError } from "../core/errors/http-error.js";
+import { env } from "../config/env.js";
 
 export function setupSwagger(app: Express): void {
+  if (!env.DOCS_ENABLED) return;
   const spec = generateOpenApi();
   mountEndpoint(app, "docs.spec", (_req, res) => {
     res.json(spec);

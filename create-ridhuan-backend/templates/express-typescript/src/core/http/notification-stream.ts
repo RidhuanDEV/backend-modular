@@ -1,5 +1,30 @@
 import type { Response } from "express";
 import { sseConnection } from "../observability/telemetry.js";
+import { HttpError } from "../errors/http-error.js";
+
+// Each open stream polls the database; cap them so one account cannot exhaust the pool.
+const MAX_STREAMS_PER_USER = 4;
+const MAX_STREAMS_TOTAL = 128;
+const streamsByUser = new Map<string, number>();
+let streamsTotal = 0;
+
+function acquireStreamSlot(userId: string): () => void {
+  const current = streamsByUser.get(userId) ?? 0;
+  if (streamsTotal >= MAX_STREAMS_TOTAL || current >= MAX_STREAMS_PER_USER) {
+    throw new HttpError(429, "Too many open notification streams");
+  }
+  streamsTotal += 1;
+  streamsByUser.set(userId, current + 1);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    streamsTotal -= 1;
+    const remaining = (streamsByUser.get(userId) ?? 1) - 1;
+    if (remaining <= 0) streamsByUser.delete(userId);
+    else streamsByUser.set(userId, remaining);
+  };
+}
 
 export interface NotificationEvent {
   id: string;
@@ -47,11 +72,13 @@ async function write(
 /** Cursor validation belongs to the caller, before opening this stream. */
 export async function serveNotifications<T extends NotificationEvent>(
   response: Response,
+  userId: string,
   cursor: bigint | undefined,
   expiresAt: number,
   batch: (after: bigint | undefined) => Promise<StreamRow<T>[] | undefined>,
   report: () => void,
 ): Promise<void> {
+  const release = acquireStreamSlot(userId);
   const lifetime = Math.min(14 * 60_000, Math.max(0, expiresAt - Date.now()));
   const stop = new AbortController();
   const close = (): void => {
@@ -96,6 +123,7 @@ export async function serveNotifications<T extends NotificationEvent>(
   } catch {
     report();
   } finally {
+    release();
     sseConnection(-1);
     clearTimeout(expiry);
     clearInterval(heartbeat);

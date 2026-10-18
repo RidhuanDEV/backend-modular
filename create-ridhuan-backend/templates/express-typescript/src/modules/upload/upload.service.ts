@@ -1,12 +1,11 @@
 import { prisma } from "../../config/prisma.js";
 import { env } from "../../config/env.js";
 import { auditService } from "../../core/audit/audit.service.js";
-import { cacheService } from "../../core/cache/cache.service.js";
-import { fileCacheSchema } from "../../core/cache/cache-schemas.js";
 import { HttpError } from "../../core/errors/http-error.js";
 import { AuditAction } from "../../constants/audit.constants.js";
 import { UPLOAD_MODULE } from "../../constants/modules.constants.js";
 import { storageService } from "./storage.service.js";
+import { isRootUser } from "../../core/auth/privilege.js";
 import { logger } from "../../core/logger/logger.js";
 
 function validSignature(body: Buffer, mime: string): boolean {
@@ -80,15 +79,15 @@ export class UploadService {
       throw err;
     }
   }
-  async get(id: string): Promise<FileMetadata> {
-    const key = `file:${id}`;
-    const cached = await cacheService.get(key, fileCacheSchema);
-    if (cached) return cached;
+  /** Only the uploader and root users may read a file; others get 404 so existence is not revealed. */
+  async get(id: string, actorId: string): Promise<FileMetadata> {
     const stored = await prisma.storedFile.findUnique({ where: { id } });
-    if (!stored) throw HttpError.notFound("File not found");
-    const result = this.toMetadata(stored);
-    await cacheService.set(key, result, 60);
-    return result;
+    if (
+      !stored ||
+      (stored.uploaderId !== actorId && !(await isRootUser(prisma, actorId)))
+    )
+      throw HttpError.notFound("File not found");
+    return this.toMetadata(stored);
   }
   private toMetadata(record: {
     id: string;

@@ -4,7 +4,7 @@ x-runtime: &runtime
     target: app
   env_file: [.env]
   dns_opt: ["timeout:1", "attempts:2"]
-  environment:
+  environment: &runtime-env
       APP_ENV: ${APP_ENV:-local}
       DB_HOST: postgres
       DB_PORT: 5432
@@ -22,8 +22,12 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+      APP_DB_USER: ${APP_DB_USER:-}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-}
     ports: ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
-    volumes: ["database_data:/var/lib/postgresql"]
+    volumes:
+      - database_data:/var/lib/postgresql
+      - ./scripts/postgres-init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 3s
@@ -32,6 +36,11 @@ services:
   migrate:
     <<: *runtime
     command: ["php", "artisan", "backend:migrate", "--force"]
+    environment:
+      <<: *runtime-env
+      # Optional owner credentials so migrations run as the schema owner while the app uses APP_DB_USER.
+      DB_USERNAME: ${MIGRATION_DB_USERNAME:-${DB_USERNAME:?Set DB_USERNAME}}
+      DB_PASSWORD: ${MIGRATION_DB_PASSWORD:-${DB_PASSWORD:-}}
     depends_on:
       postgres: {condition: service_healthy}
     restart: "no"

@@ -139,6 +139,13 @@ func (s *Service) Update(ctx context.Context, p audit.Policy, actor *audit.Actor
 				return model.User{}, audit.Change{}, err
 			}
 		}
+		roleChanged := b.RoleID != nil && *b.RoleID != old.RoleID
+		holders := func() error { return nil }
+		if roleChanged {
+			if holders, err = role.GuardSystemPermissionHolders(ctx, q); err != nil {
+				return model.User{}, audit.Change{}, err
+			}
+		}
 		var email sql.NullString
 		if b.Email != nil {
 			email = sql.NullString{String: *b.Email, Valid: true}
@@ -146,6 +153,14 @@ func (s *Service) Update(ctx context.Context, p audit.Policy, actor *audit.Actor
 		row, err := q.UpdateUser(ctx, sqlc.UpdateUserParams{ID: id, Email: email, RoleID: b.RoleID})
 		if err != nil {
 			return model.User{}, audit.Change{}, fault.DB(err)
+		}
+		if err = holders(); err != nil {
+			return model.User{}, audit.Change{}, err
+		}
+		if roleChanged {
+			if err = role.RevokeUserSessions(ctx, q, id); err != nil {
+				return model.User{}, audit.Change{}, err
+			}
 		}
 		before, out := projection.User(old), projection.User(row)
 		change, err := audit.Capture(id, &before, &out)
@@ -171,8 +186,18 @@ func (s *Service) Delete(ctx context.Context, p audit.Policy, actor *audit.Actor
 		if err = role.RoleWithinActor(ctx, q, actor, row.RoleID); err != nil {
 			return struct{}{}, audit.Change{}, err
 		}
+		holders, err := role.GuardSystemPermissionHolders(ctx, q)
+		if err != nil {
+			return struct{}{}, audit.Change{}, err
+		}
 		if err = q.SoftDeleteUser(ctx, id); err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)
+		}
+		if err = holders(); err != nil {
+			return struct{}{}, audit.Change{}, err
+		}
+		if err = role.RevokeUserSessions(ctx, q, id); err != nil {
+			return struct{}{}, audit.Change{}, err
 		}
 		before := projection.User(row)
 		change, err := audit.Capture(id, &before, (*model.User)(nil))

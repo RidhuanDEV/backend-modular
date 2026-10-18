@@ -8,8 +8,11 @@ import { auditService } from "../../core/audit/audit.service.js";
 import { AuditAction } from "../../constants/audit.constants.js";
 import { ROLE_MODULE } from "../../constants/modules.constants.js";
 import {
+  SYSTEM_ROLES,
+  assertNotSystemName,
   assertPermissionsWithinActor,
   assertRoleWithinActor,
+  guardSystemPermissionHolders,
 } from "../../core/auth/privilege.js";
 import type {
   CreateRoleDto,
@@ -45,6 +48,7 @@ export class RoleService {
   }
 
   async create(dto: CreateRoleDto, user: JwtUserPayload, requestId?: string) {
+    assertNotSystemName(SYSTEM_ROLES, "role", dto.name);
     const existing = await repository.findByName(dto.name);
     if (existing) throw HttpError.conflict(`Role '${dto.name}' already exists`);
 
@@ -82,6 +86,11 @@ export class RoleService {
     const role = await prisma.$transaction(async (tx) => {
       const existingRole = await repository.findById(id, tx);
       if (!existingRole) throw HttpError.notFound("Role not found");
+      // Code depends on system role names (registration, root exemption), so they are fixed.
+      if (dto.name !== undefined && dto.name !== existingRole.name) {
+        assertNotSystemName(SYSTEM_ROLES, "role", existingRole.name);
+        assertNotSystemName(SYSTEM_ROLES, "role", dto.name);
+      }
       await assertRoleWithinActor(tx, user.id, id);
       const updated = await repository.update(id, dto, tx);
       if (!updated) throw HttpError.notFound("Role not found");
@@ -109,6 +118,7 @@ export class RoleService {
     await prisma.$transaction(async (tx) => {
       const existingRole = await repository.findById(id, tx);
       if (!existingRole) throw HttpError.notFound("Role not found");
+      assertNotSystemName(SYSTEM_ROLES, "role", existingRole.name);
       await assertRoleWithinActor(tx, user.id, id);
       const deleted = await repository.delete(id, tx);
       if (!deleted) throw HttpError.notFound("Role not found");
@@ -139,10 +149,17 @@ export class RoleService {
     const updatedRole = await prisma.$transaction(async (tx) => {
       const existingRole = await repository.findById(id, tx);
       if (!existingRole) throw HttpError.notFound("Role not found");
+      const known = await tx.permission.count({
+        where: { id: { in: [...new Set(dto.permissionIds)] } },
+      });
+      if (known !== new Set(dto.permissionIds).size)
+        throw HttpError.notFound("Permission not found");
       // Both the permissions being removed and the ones being granted must be within the actor's own.
       await assertRoleWithinActor(tx, user.id, id);
       await assertPermissionsWithinActor(tx, user.id, dto.permissionIds);
+      const holders = await guardSystemPermissionHolders(tx);
       await repository.setPermissions(id, dto.permissionIds, tx);
+      await holders();
       const updated = await repository.findById(id, tx);
       if (!updated) throw HttpError.notFound("Role not found");
 

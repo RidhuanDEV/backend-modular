@@ -10,9 +10,25 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.api.registry import Policy
 from app.core.errors import ApiError
 from app.core.runtime import Runtime
+from app.core.security import verify_access
+from app.core.settings import Settings
 from app.platform.telemetry import record_http, request_span
 
 logger = logging.getLogger(__name__)
+
+
+def token_subject(headers: list[tuple[bytes, bytes]], settings: Settings) -> str | None:
+    """Verified JWT subject without a database query, so internal routes are limited per user."""
+    for key, value in headers:
+        if key.lower() == b"authorization":
+            raw = value.decode("latin-1")
+            if not raw.startswith("Bearer "):
+                return None
+            try:
+                return str(verify_access(raw[7:], settings).sub)
+            except ApiError:
+                return None
+    return None
 
 
 class PolicyMiddleware:
@@ -91,6 +107,13 @@ class PolicyMiddleware:
         scope["headers"] = [
             (key, value) for key, value in headers if key.lower() != b"x-request-id"
         ] + [(b"x-request-id", request_id.encode())]
+        if not self.runtime.settings.docs_active and scope["path"].startswith("/docs"):
+            await JSONResponse(
+                {"success": False, "message": "Not found"},
+                status_code=404,
+                headers={"X-Request-ID": request_id},
+            )(scope, receive, send)
+            return
         policy = next(
             (
                 policy
@@ -102,9 +125,11 @@ class PolicyMiddleware:
         try:
             if policy and policy.module != "system":
                 client = scope.get("client")
-                await self.runtime.limiter.check(
-                    policy, client[0] if client else "unknown"
-                )
+                subject = client[0] if client else "unknown"
+                # Shared office or proxy IPs must not pool every user into one bucket.
+                if policy.rate == "internal":
+                    subject = token_subject(headers, self.runtime.settings) or subject
+                await self.runtime.limiter.check(policy, subject)
         except ApiError as error:
             logger.info(
                 "HTTP response",
@@ -152,10 +177,29 @@ class PolicyMiddleware:
                         "duration_ms": round((time.monotonic() - started) * 1000, 2),
                     },
                 )
-                message["headers"] = list(message.get("headers", [])) + [
-                    (b"x-request-id", request_id.encode()),
-                    (b"x-content-type-options", b"nosniff"),
-                ]
+                message["headers"] = (
+                    list(message.get("headers", []))
+                    + [
+                        (b"x-request-id", request_id.encode()),
+                        (b"x-content-type-options", b"nosniff"),
+                        (b"x-frame-options", b"DENY"),
+                        (b"referrer-policy", b"no-referrer"),
+                        (
+                            b"permissions-policy",
+                            b"geolocation=(), microphone=(), camera=()",
+                        ),
+                    ]
+                    + (
+                        [
+                            (
+                                b"strict-transport-security",
+                                b"max-age=31536000; includeSubDomains",
+                            )
+                        ]
+                        if self.runtime.settings.environment == "production"
+                        else []
+                    )
+                )
             await send(message)
             if message["type"] == "http.response.body" and not message.get(
                 "more_body", False

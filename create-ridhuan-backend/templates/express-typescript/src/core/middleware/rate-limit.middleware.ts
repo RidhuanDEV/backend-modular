@@ -7,6 +7,7 @@ import type { RedisReply } from "rate-limit-redis";
 import { redis } from "../../config/redis.js";
 import { env } from "../../config/env.js";
 import { observed } from "../observability/telemetry.js";
+import type { Request } from "express";
 
 function isRedisData(value: unknown): value is string | number | boolean {
   return (
@@ -33,12 +34,16 @@ const policies = {
   },
 } satisfies Record<RateLimitGroup, { windowMs: number; limit: number }>;
 
-function createLimiter(group: RateLimitGroup): RateLimitRequestHandler {
+function createLimiter(
+  group: RateLimitGroup,
+  bucket: string = group,
+  accountKey?: (req: Request) => string | undefined,
+): RateLimitRequestHandler {
   const config = policies[group];
   const store =
     env.RATE_LIMIT_STORE === "redis" && redis
       ? new RedisStore({
-          prefix: `${env.REDIS_NAMESPACE}:rate:${group}:`,
+          prefix: `${env.REDIS_NAMESPACE}:rate:${bucket}:`,
           sendCommand: async (...args: string[]): Promise<RedisReply> => {
             if (!redis)
               throw new Error("Redis rate limit store is unavailable");
@@ -63,10 +68,13 @@ function createLimiter(group: RateLimitGroup): RateLimitRequestHandler {
     skip: (req) =>
       group === "public" && ["/health", "/live", "/ready"].includes(req.path),
     passOnStoreError: group !== "auth",
-    keyGenerator: (req) =>
-      group === "internal" && req.user
+    keyGenerator: (req) => {
+      const account = accountKey?.(req);
+      if (account !== undefined) return `account:${account}`;
+      return group === "internal" && req.user
         ? `user:${req.user.id}`
-        : ipKeyGenerator(req.ip ?? "127.0.0.1"),
+        : ipKeyGenerator(req.ip ?? "127.0.0.1");
+    },
     message: { success: false, message: "Too many requests", errors: [] },
   });
 }
@@ -80,3 +88,18 @@ const limiters: Record<RateLimitGroup, RateLimitRequestHandler> = {
 export function rateLimiter(group: RateLimitGroup): RateLimitRequestHandler {
   return limiters[group];
 }
+
+/**
+ * Login attempts per target account, on top of the per-IP auth limit, so
+ * credential stuffing spread across many IPs still hits a ceiling.
+ */
+export const loginAccountLimiter = createLimiter(
+  "auth",
+  "auth-account",
+  (req) => {
+    const body: unknown = req.body;
+    if (typeof body !== "object" || body === null) return undefined;
+    const email = (body as { email?: unknown }).email;
+    return typeof email === "string" ? email : undefined;
+  },
+);

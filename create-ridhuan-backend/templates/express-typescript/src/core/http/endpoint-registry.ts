@@ -90,7 +90,11 @@ const safeAuthUser = z.object({
   createdAt: isoDate,
   updatedAt: isoDate,
 });
-const authTokens = z.object({ token: z.string(), refreshToken: z.string() });
+// refreshToken is omitted when REFRESH_TOKEN_TRANSPORT=cookie (sent as an httpOnly cookie).
+const authTokens = z.object({
+  token: z.string(),
+  refreshToken: z.string().optional(),
+});
 const file = z.object({
   id: z.string(),
   originalName: z.string(),

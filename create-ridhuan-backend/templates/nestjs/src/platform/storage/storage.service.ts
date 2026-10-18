@@ -48,6 +48,8 @@ export class StorageService {
             Key: key,
             Body: buffer,
             ContentType: mimeType,
+            // A direct bucket URL must download, never render inline in the browser.
+            ContentDisposition: "attachment",
           }),
         );
         return { key, storage: "s3" };

@@ -130,7 +130,9 @@ def main() -> None:
             factory=True,
             host="0.0.0.0",
             port=settings.port,
-            proxy_headers=False,
+            # Uvicorn takes the rightmost address not in the trusted list, so clients cannot spoof it.
+            proxy_headers=bool(settings.forwarded_allow_ips),
+            forwarded_allow_ips=settings.forwarded_allow_ips or None,
             access_log=False,
             log_config=None,
             loop="app.core.event_loop:loop_factory",

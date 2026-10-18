@@ -43,14 +43,7 @@ func (l *Limiter) Allow(ctx context.Context, group, key string, rate config.Rate
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if len(l.memory) > 10000 {
-		now := time.Now()
-		for k, v := range l.memory {
-			if now.After(v.Expires) {
-				delete(l.memory, k)
-			}
-		}
-	}
+	l.prune()
 	b := l.memory[fullKey]
 	if b.Count == 0 {
 		b.Expires = time.Now().Add(window)
@@ -58,4 +51,29 @@ func (l *Limiter) Allow(ctx context.Context, group, key string, rate config.Rate
 	b.Count++
 	l.memory[fullKey] = b
 	return b.Count <= rate.Max, nil
+}
+
+const maxMemoryBuckets = 10000
+
+// prune bounds the memory store: drop expired buckets, then arbitrary ones down
+// to 90% of the cap, so the O(n) sweep runs once per batch instead of on every
+// request. A flood of distinct keys can therefore reset some counters early;
+// the shared Redis store is required for production limits anyway.
+func (l *Limiter) prune() {
+	if len(l.memory) < maxMemoryBuckets {
+		return
+	}
+	now := time.Now()
+	for k, v := range l.memory {
+		if now.After(v.Expires) {
+			delete(l.memory, k)
+		}
+	}
+	target := maxMemoryBuckets * 9 / 10
+	for k := range l.memory {
+		if len(l.memory) <= target {
+			break
+		}
+		delete(l.memory, k)
+	}
 }

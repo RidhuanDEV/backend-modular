@@ -29,9 +29,9 @@ export class UploadController {
     next: NextFunction,
   ): Promise<void> => {
     try {
-      requireAuthenticatedUser(req);
+      const actor = requireAuthenticatedUser(req);
       sendSuccess(res, {
-        data: await service.get(requireRouteParam(req, "id")),
+        data: await service.get(requireRouteParam(req, "id"), actor.id),
       });
     } catch (err) {
       next(err);

@@ -179,8 +179,63 @@ public sealed class BackendService(
         passwords.Verify(dummy, password);
     }
 
-    // The seeded root role is exempt: it must be able to hand out permissions created after seeding, which it does not hold itself.
+    // The seeded administrator role. Access is decided by RBAC permissions; only file ownership trusts it by name.
     public const string RootRole = "admin";
+    public const string DefaultRole = "user";
+
+    // Code depends on these by name (registration, file ownership, route policies),
+    // so they cannot be renamed, deleted or recreated; renaming a permission would mint access.
+    public static readonly IReadOnlyList<string> SystemRoles = [RootRole, DefaultRole];
+    public static readonly IReadOnlyList<string> SystemPermissions =
+    [
+        "manage_users",
+        "manage_roles",
+        "manage_permissions",
+        "manage_uploads",
+        "manage_notifications",
+    ];
+
+    // Names are compared exactly, so " admin " must not slip past the system-name rules.
+    private static string NormalizeName(string name)
+    {
+        var trimmed = name.Trim();
+        if (trimmed.Length == 0)
+            throw new ApiException(400, "Name must not be blank");
+        return trimmed;
+    }
+
+    private static void EnsureNotSystemName(IReadOnlyList<string> names, string kind, string? name)
+    {
+        if (name is not null && names.Contains(name, StringComparer.Ordinal))
+            throw new ApiException(
+                403,
+                $"System {kind} '{name}' cannot be created, renamed or deleted"
+            );
+    }
+
+    // Lockout guard: every system permission must stay held by at least one active user,
+    // or nobody could grant it again. Locks the system permission rows so concurrent RBAC
+    // mutations serialize, and returns a check to run after the mutation. Only permissions
+    // that become unheld fail.
+    private async Task<Func<Task>> GuardSystemPermissionHoldersAsync(CancellationToken ct)
+    {
+        await store.LockPermissionsByNameAsync(SystemPermissions, ct);
+        var before = (await store.UnheldPermissionNamesAsync(SystemPermissions, ct)).ToHashSet(
+            StringComparer.Ordinal
+        );
+        return async () =>
+        {
+            await store.SaveAsync(ct);
+            var lost = (
+                await store.UnheldPermissionNamesAsync(SystemPermissions, ct)
+            ).FirstOrDefault(name => !before.Contains(name));
+            if (lost is not null)
+                throw new ApiException(403, $"Change would leave no active user holding '{lost}'");
+        };
+    }
+
+    private async Task<bool> IsRootAsync(Actor? actor, CancellationToken ct) =>
+        actor is not null && (await store.RoleAsync(actor.RoleId, ct))?.Name == RootRole;
 
     // Anti-escalation rule: an actor may only grant, assign or manage permissions it already holds.
     // Route policies (manage_users, manage_roles) decide who may call an endpoint; this decides what they may hand out.
@@ -194,8 +249,6 @@ public sealed class BackendService(
         if (required.Count == 0)
             return;
         var actorRole = ctx.Actor is null ? null : await store.RoleAsync(ctx.Actor.RoleId, ct);
-        if (actorRole?.Name == RootRole)
-            return;
         if (
             actorRole is null
             || !required.IsSubsetOf(actorRole.Permissions.Select(p => p.PermissionId))
@@ -255,9 +308,13 @@ public sealed class BackendService(
     )
     {
         var user = await store.UserByEmailAsync(NormalizeEmail(email), ct);
+        // Always pay one hash verification, so neither unknown nor deleted accounts answer faster.
+        var valid = false;
         if (user is null)
             VerifyAgainstDummyHash(password);
-        if (user is null || user.DeletedAt is not null || !passwords.Verify(user, password))
+        else
+            valid = passwords.Verify(user, password);
+        if (user is null || user.DeletedAt is not null || !valid)
             throw new ApiException(401, "Invalid email or password");
         var (refresh, plaintext) = CreateRefreshToken(user.Id);
         await store.BeginAsync(ct);
@@ -515,14 +572,18 @@ public sealed class BackendService(
                 var before = JsonSerializer.Serialize(Map(user));
                 if (email is not null)
                     user.Email = NormalizeEmail(email);
-                if (roleId is not null)
+                if (roleId is not null && roleId.Value != user.RoleId)
                 {
                     var nextRole =
                         await store.RoleAsync(roleId.Value, token)
                         ?? throw new ApiException(400, "Role not found");
                     await EnsureRoleWithinActorAsync(ctx, nextRole, token);
+                    var holders = await GuardSystemPermissionHoldersAsync(token);
                     user.Role = nextRole;
                     user.RoleId = roleId.Value;
+                    await holders();
+                    // Access changed: every refresh session must re-authenticate under the new role.
+                    await store.RevokeUserSessionsAsync(user.Id, clock.GetUtcNow(), token);
                 }
                 user.UpdatedAt = clock.GetUtcNow();
                 var result = Map(user);
@@ -544,9 +605,12 @@ public sealed class BackendService(
                     await store.UserAsync(id, token)
                     ?? throw new ApiException(404, "User not found");
                 await EnsureRoleWithinActorAsync(ctx, user.Role, token);
+                var holders = await GuardSystemPermissionHoldersAsync(token);
                 var before = JsonSerializer.Serialize(Map(user));
                 user.DeletedAt = clock.GetUtcNow();
                 user.UpdatedAt = clock.GetUtcNow();
+                await holders();
+                await store.RevokeUserSessionsAsync(user.Id, clock.GetUtcNow(), token);
                 return (true, id, before, (string?)null);
             },
             ct
@@ -570,6 +634,8 @@ public sealed class BackendService(
             token =>
             {
                 token.ThrowIfCancellationRequested();
+                name = NormalizeName(name);
+                EnsureNotSystemName(SystemRoles, "role", name);
                 var role = new Role
                 {
                     Name = name,
@@ -602,7 +668,13 @@ public sealed class BackendService(
                 var before = JsonSerializer.Serialize(Map(role));
                 await EnsureRoleWithinActorAsync(ctx, role, token);
                 if (name is not null)
+                    name = NormalizeName(name);
+                if (name is not null && name != role.Name)
+                {
+                    EnsureNotSystemName(SystemRoles, "role", role.Name);
+                    EnsureNotSystemName(SystemRoles, "role", name);
                     role.Name = name;
+                }
                 role.UpdatedAt = clock.GetUtcNow();
                 var result = Map(role, false);
                 return (result, id, before, JsonSerializer.Serialize(result));
@@ -619,6 +691,7 @@ public sealed class BackendService(
                 var role =
                     await store.RoleAsync(id, token)
                     ?? throw new ApiException(404, "Role not found");
+                EnsureNotSystemName(SystemRoles, "role", role.Name);
                 await EnsureRoleWithinActorAsync(ctx, role, token);
                 if (await store.HasRoleUsersAsync(id, token))
                     throw new ApiException(409, "Role is assigned to users");
@@ -647,6 +720,7 @@ public sealed class BackendService(
                 // Both the permissions being removed and the ones being granted must be within the actor's own.
                 await EnsureRoleWithinActorAsync(ctx, role, token);
                 await EnsureWithinActorAsync(ctx, ids, token);
+                var holders = await GuardSystemPermissionHoldersAsync(token);
                 var permissions = new List<Permission>();
                 foreach (var permissionId in ids.Distinct())
                     permissions.Add(
@@ -669,6 +743,7 @@ public sealed class BackendService(
                         }
                     );
                 role.UpdatedAt = clock.GetUtcNow();
+                await holders();
                 var result = Map(role);
                 return (result, id, before, JsonSerializer.Serialize(result));
             },
@@ -692,9 +767,10 @@ public sealed class BackendService(
         MutateAsync(
             ctx,
             "CREATE",
-            token =>
+            async token =>
             {
-                token.ThrowIfCancellationRequested();
+                name = NormalizeName(name);
+                EnsureNotSystemName(SystemPermissions, "permission", name);
                 var p = new Permission
                 {
                     Name = name,
@@ -702,10 +778,22 @@ public sealed class BackendService(
                     UpdatedAt = clock.GetUtcNow(),
                 };
                 store.AddPermission(p);
+                // RBAC only: a new permission goes to every role that manages permissions, so its
+                // creator and other permission managers can hand it out without a role-name exemption.
+                foreach (
+                    var role in await store.RolesWithPermissionAsync("manage_permissions", token)
+                )
+                    role.Permissions.Add(
+                        new RolePermission
+                        {
+                            RoleId = role.Id,
+                            PermissionId = p.Id,
+                            Permission = p,
+                            Role = role,
+                        }
+                    );
                 var result = Map(p);
-                return Task.FromResult(
-                    (result, p.Id, (string?)null, (string?)JsonSerializer.Serialize(result))
-                );
+                return (result, p.Id, (string?)null, (string?)JsonSerializer.Serialize(result));
             },
             ct
         );
@@ -726,6 +814,11 @@ public sealed class BackendService(
                     ?? throw new ApiException(404, "Permission not found");
                 var before = JsonSerializer.Serialize(Map(p));
                 if (name is not null)
+                    name = NormalizeName(name);
+                EnsureNotSystemName(SystemPermissions, "permission", p.Name);
+                EnsureNotSystemName(SystemPermissions, "permission", name);
+                await EnsureWithinActorAsync(ctx, [p.Id], token);
+                if (name is not null)
                     p.Name = name;
                 p.UpdatedAt = clock.GetUtcNow();
                 var result = Map(p);
@@ -744,6 +837,8 @@ public sealed class BackendService(
                     await store.PermissionAsync(id, token)
                     ?? throw new ApiException(404, "Permission not found");
                 var before = JsonSerializer.Serialize(Map(p));
+                EnsureNotSystemName(SystemPermissions, "permission", p.Name);
+                await EnsureWithinActorAsync(ctx, [p.Id], token);
                 store.RemovePermission(p);
                 return (true, id, before, (string?)null);
             },
@@ -753,8 +848,14 @@ public sealed class BackendService(
     public Task<bool> IsFileReferencedAsync(string objectKey, CancellationToken ct) =>
         store.IsFileReferencedAsync(objectKey, ct);
 
-    public async Task<FileResult> FileAsync(Guid id, CancellationToken ct) =>
-        MapFile(await store.FileAsync(id, ct) ?? throw new ApiException(404, "File not found"));
+    // Only the uploader and root users may read a file; others get 404 so existence is not revealed.
+    public async Task<FileResult> FileAsync(Guid id, OperationContext ctx, CancellationToken ct)
+    {
+        var file = await store.FileAsync(id, ct);
+        if (file is null || (file.UploaderId != ctx.Actor?.Id && !await IsRootAsync(ctx.Actor, ct)))
+            throw new ApiException(404, "File not found");
+        return MapFile(file);
+    }
 
     public Task<FileResult> SaveFileAsync(
         StoredFile file,

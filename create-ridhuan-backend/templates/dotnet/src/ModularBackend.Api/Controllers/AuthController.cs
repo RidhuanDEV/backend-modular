@@ -8,8 +8,11 @@ using ModularBackend.Infrastructure.Caching;
 namespace ModularBackend.Api.Controllers;
 
 [ApiController, Route("api/auth")]
-public sealed class AuthController(BackendService service, EndpointRegistry registry)
-    : ControllerBase
+public sealed class AuthController(
+    BackendService service,
+    EndpointRegistry registry,
+    RefreshCookies cookies
+) : ControllerBase
 {
     private OperationContext Context =>
         EndpointFilter.Context(HttpContext, registry.Get(HttpContext));
@@ -41,7 +44,10 @@ public sealed class AuthController(BackendService service, EndpointRegistry regi
     ) =>
         Ok(
             new Success<AuthTokensResult>(
-                await service.LoginAsync(input.Email, input.Password, Context, ct)
+                cookies.Issue(
+                    Response,
+                    await service.LoginAsync(input.Email, input.Password, Context, ct)
+                )
             )
         );
 
@@ -56,14 +62,22 @@ public sealed class AuthController(BackendService service, EndpointRegistry regi
     ) =>
         Ok(
             new Success<AuthTokensResult>(
-                await service.RefreshAsync(input.RefreshToken, Context, ct)
+                cookies.Issue(
+                    Response,
+                    await service.RefreshAsync(
+                        cookies.Token(Request, input.RefreshToken),
+                        Context,
+                        ct
+                    )
+                )
             )
         );
 
     [HttpPost("logout"), Endpoint(EndpointId.AuthLogout), ProducesResponseType(204)]
     public async Task<IActionResult> Logout(RefreshTokenRequest input, CancellationToken ct)
     {
-        await service.LogoutAsync(input.RefreshToken, Context, ct);
+        await service.LogoutAsync(cookies.Token(Request, input.RefreshToken), Context, ct);
+        cookies.Clear(Response);
         return NoContent();
     }
 

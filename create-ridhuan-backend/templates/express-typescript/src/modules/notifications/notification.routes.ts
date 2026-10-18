@@ -76,6 +76,7 @@ async function stream(
     const cursor = await service.cursor(actor.id, req.get("Last-Event-ID"));
     await serveNotifications(
       res,
+      actor.id,
       cursor,
       (actor.exp ?? 0) * 1000,
       (after) => service.streamBatch(actor.id, after, cursor === undefined),

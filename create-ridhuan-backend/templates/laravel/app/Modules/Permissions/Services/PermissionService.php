@@ -6,6 +6,7 @@ namespace App\Modules\Permissions\Services;
 
 use App\Modules\Permissions\Models\Permission;
 use App\Modules\Users\Models\User;
+use App\Modules\Users\Policies\AccessPolicy;
 use App\Support\Audit\Audit;
 use App\Support\Http\ApiException;
 use Illuminate\Database\Eloquent\Collection;
@@ -13,7 +14,10 @@ use Illuminate\Support\Facades\DB;
 
 final class PermissionService
 {
-    public function __construct(private readonly Audit $audit) {}
+    public function __construct(
+        private readonly AccessPolicy $policy,
+        private readonly Audit $audit,
+    ) {}
 
     /** @return Collection<int, Permission> */
     public function list(): Collection
@@ -29,11 +33,18 @@ final class PermissionService
 
     public function create(string $name, User $actor): Permission
     {
+        AccessPolicy::notSystemName(
+            AccessPolicy::SYSTEM_PERMISSIONS,
+            'permission',
+            $name,
+        );
+
         return DB::transaction(function () use ($name, $actor): Permission {
             if (Permission::query()->where('name', $name)->exists()) {
                 throw new ApiException(409, 'Permission exists');
             }
             $role = Permission::query()->create(['name' => $name]);
+            $this->policy->grantToPermissionManagers($role);
             $this->audit->write(
                 'CREATE',
                 'permission',
@@ -52,6 +63,19 @@ final class PermissionService
             $role =
                 Permission::query()->whereKey($id)->lockForUpdate()->first() ??
                 throw new ApiException(404, 'Permission not found');
+            if ($name !== null && $name !== $role->name) {
+                AccessPolicy::notSystemName(
+                    AccessPolicy::SYSTEM_PERMISSIONS,
+                    'permission',
+                    $role->name,
+                );
+                AccessPolicy::notSystemName(
+                    AccessPolicy::SYSTEM_PERMISSIONS,
+                    'permission',
+                    $name,
+                );
+            }
+            $this->policy->within($actor, [$id]);
             $before = ['name' => $role->name];
             if ($name !== null) {
                 if (
@@ -84,6 +108,12 @@ final class PermissionService
             $role =
                 Permission::query()->whereKey($id)->lockForUpdate()->first() ??
                 throw new ApiException(404, 'Permission not found');
+            AccessPolicy::notSystemName(
+                AccessPolicy::SYSTEM_PERMISSIONS,
+                'permission',
+                $role->name,
+            );
+            $this->policy->within($actor, [$id]);
             $role->delete();
             $this->audit->write('DELETE', 'permission', $id, $actor->id, [
                 'name' => $role->name,

@@ -54,6 +54,9 @@ func (s *Service) Create(ctx context.Context, p audit.Policy, actor *audit.Actor
 	if err := fault.Name(name, 64); err != nil {
 		return model.Role{}, err
 	}
+	if err := NotSystemName(SystemRoles, "role", strings.TrimSpace(name)); err != nil {
+		return model.Role{}, err
+	}
 	return audit.Mutate(ctx, s.Audit, p, actor, "CREATE", func(q sqlc.Querier) (model.Role, audit.Change, error) {
 		row, err := q.CreateRole(ctx, strings.TrimSpace(name))
 		if err != nil {
@@ -85,6 +88,15 @@ func (s *Service) Update(ctx context.Context, p audit.Policy, actor *audit.Actor
 		if name != nil {
 			newName = strings.TrimSpace(*name)
 		}
+		// Code depends on system role names (registration, root exemption), so they are fixed.
+		if newName != old.Name {
+			if err = NotSystemName(SystemRoles, "role", old.Name); err != nil {
+				return model.Role{}, audit.Change{}, err
+			}
+			if err = NotSystemName(SystemRoles, "role", newName); err != nil {
+				return model.Role{}, audit.Change{}, err
+			}
+		}
 		row, err := q.UpdateRole(ctx, sqlc.UpdateRoleParams{ID: id, Name: newName})
 		if err != nil {
 			return model.Role{}, audit.Change{}, fault.DB(err)
@@ -102,6 +114,9 @@ func (s *Service) Delete(ctx context.Context, p audit.Policy, actor *audit.Actor
 		row, err := q.LockRole(ctx, id)
 		if err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)
+		}
+		if err = NotSystemName(SystemRoles, "role", row.Name); err != nil {
+			return struct{}{}, audit.Change{}, err
 		}
 		if err = RoleWithinActor(ctx, q, actor, id); err != nil {
 			return struct{}{}, audit.Change{}, err
@@ -145,11 +160,24 @@ func (s *Service) Assign(ctx context.Context, p audit.Policy, actor *audit.Actor
 		if err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)
 		}
+		// Unknown permissions are invalid input, reported before the privilege check.
+		for _, v := range ids {
+			if _, err = q.FindPermission(ctx, v); err != nil {
+				if known, ok := fault.DB(err).(*fault.Error); ok && known.Kind == fault.Missing {
+					return struct{}{}, audit.Change{}, fault.New(fault.Invalid, "Referenced record does not exist or is in use")
+				}
+				return struct{}{}, audit.Change{}, fault.DB(err)
+			}
+		}
 		// Both the permissions being removed and the ones being granted must be within the actor's own.
 		if err = PermissionsWithinActor(ctx, q, actor, old); err != nil {
 			return struct{}{}, audit.Change{}, err
 		}
 		if err = PermissionsWithinActor(ctx, q, actor, ids); err != nil {
+			return struct{}{}, audit.Change{}, err
+		}
+		holders, err := GuardSystemPermissionHolders(ctx, q)
+		if err != nil {
 			return struct{}{}, audit.Change{}, err
 		}
 		if err = q.ClearRolePermissions(ctx, id); err != nil {
@@ -159,6 +187,9 @@ func (s *Service) Assign(ctx context.Context, p audit.Policy, actor *audit.Actor
 			if err = q.AssignRolePermission(ctx, sqlc.AssignRolePermissionParams{RoleID: id, PermissionID: v}); err != nil {
 				return struct{}{}, audit.Change{}, fault.DB(err)
 			}
+		}
+		if err = holders(); err != nil {
+			return struct{}{}, audit.Change{}, err
 		}
 		before, after := assignmentSnapshot{row.Name, old}, assignmentSnapshot{row.Name, ids}
 		change, err := audit.Capture(id, &before, &after)

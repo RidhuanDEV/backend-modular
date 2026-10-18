@@ -42,12 +42,14 @@ public class PermissionService {
 
   @Transactional
   public PermissionDto.Response create(PermissionDto.Create input) {
+    Access.notSystemName(Access.SYSTEM_PERMISSIONS, "permission", input.name());
     PermissionEntity e = new PermissionEntity();
     e.id = UUID.randomUUID();
     e.name = input.name();
     e.createdAt = clock.instant();
     e.updatedAt = e.createdAt;
     repository.saveAndFlush(e);
+    access.grantToPermissionManagers(e.id);
     audit.write(EndpointId.PERMISSION_CREATE, access.actor(), "CREATE", e.id, null, snapshot(e));
     cache.invalidate();
     return dto(e);
@@ -57,6 +59,10 @@ public class PermissionService {
   public PermissionDto.Response update(UUID id, PermissionDto.Update input) {
     PermissionEntity e = entity(id);
     Snapshot before = snapshot(e);
+    if (input.name() != null && !input.name().equals(e.name)) {
+      Access.notSystemName(Access.SYSTEM_PERMISSIONS, "permission", e.name);
+      Access.notSystemName(Access.SYSTEM_PERMISSIONS, "permission", input.name());
+    }
     if (!access.permissions(access.actor()).contains(e.name)) throw ApiException.denied();
     if (input.name() != null) e.name = input.name();
     e.updatedAt = clock.instant();
@@ -69,6 +75,7 @@ public class PermissionService {
   @Transactional
   public void delete(UUID id) {
     PermissionEntity e = entity(id);
+    Access.notSystemName(Access.SYSTEM_PERMISSIONS, "permission", e.name);
     if (!access.permissions(access.actor()).contains(e.name)) throw ApiException.denied();
     repository.delete(e);
     repository.flush();

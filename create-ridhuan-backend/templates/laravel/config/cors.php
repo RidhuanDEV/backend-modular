@@ -22,8 +22,12 @@ return [
         'Content-Type',
         'Last-Event-ID',
         'X-Request-ID',
+        'X-Requested-With',
     ],
     'exposed_headers' => ['X-Request-ID', 'X-Next-Cursor', 'Retry-After'],
     'max_age' => 600,
-    'supports_credentials' => false,
+    // Cookie mode sends the refresh cookie cross-origin, which needs credentialed CORS
+    // with the exact origin allowlist above (never a wildcard).
+    'supports_credentials' =>
+        env('REFRESH_TOKEN_TRANSPORT', 'body') === 'cookie',
 ];

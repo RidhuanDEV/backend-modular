@@ -29,12 +29,22 @@ export async function createApp() {
   app.use(accessLog);
   app.enableCors({
     origin: config.get("CORS_ORIGINS", { infer: true }),
-    credentials: false,
+    // Cookie mode sends the refresh cookie cross-origin, which needs credentialed CORS
+    // with the exact origin allowlist above (never a wildcard).
+    credentials:
+      config.get("REFRESH_TOKEN_TRANSPORT", { infer: true }) === "cookie",
     exposedHeaders: ["X-Request-ID", "X-Next-Cursor"],
   });
   const rate = app.get(RateLimitService);
+  const docsEnabled = config.get("DOCS_ENABLED", { infer: true });
   app.use(
     (request: ApiRequest, response: Response, next: NextFunction): void => {
+      if (!docsEnabled && request.path.startsWith("/docs")) {
+        response
+          .status(404)
+          .json({ success: false, message: "Not found", errors: [] });
+        return;
+      }
       const endpointId =
         request.path === "/docs"
           ? "docs.ui"
@@ -98,9 +108,10 @@ export async function createApp() {
   };
   verifyOpenApi(doc);
   app.get(DocsService).setDocument(doc);
-  SwaggerModule.setup("docs", app, doc, {
-    jsonDocumentUrl: "/docs/openapi.json",
-  });
+  if (docsEnabled)
+    SwaggerModule.setup("docs", app, doc, {
+      jsonDocumentUrl: "/docs/openapi.json",
+    });
   await app.init();
   verifyRegisteredControllers(app.get(ModulesContainer));
   return app;

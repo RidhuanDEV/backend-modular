@@ -15,16 +15,7 @@ public sealed class DocsController(IServiceProvider services) : ControllerBase
             "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Modular .NET API</title><h1>API specifications</h1><p><a href=\"/docs/openapi.json\">All modules</a></p>"
                 + string.Join(
                     "",
-                    new[]
-                    {
-                        "auth",
-                        "user",
-                        "roles",
-                        "permissions",
-                        "upload",
-                        "system",
-                        "docs",
-                    }.Select(m => $"<p><a href=\"/docs/specs/{m}.json\">{m}</a></p>")
+                    Modules.Select(m => $"<p><a href=\"/docs/specs/{m}.json\">{m}</a></p>")
                 )
                 + "</html>",
             "text/html"
@@ -38,6 +29,19 @@ public sealed class DocsController(IServiceProvider services) : ControllerBase
     ]
     public Task<ContentResult> All(CancellationToken ct) => Specification("v1", ct);
 
+    // One list for the index page and the allowlist, matching the OpenAPI documents registered at startup.
+    private static readonly string[] Modules =
+    [
+        "auth",
+        "user",
+        "roles",
+        "permissions",
+        "upload",
+        "notifications",
+        "system",
+        "docs",
+    ];
+
     [
         HttpGet("docs/specs/{module}.json"),
         Endpoint(EndpointId.DocsModuleSpec),
@@ -46,10 +50,7 @@ public sealed class DocsController(IServiceProvider services) : ControllerBase
     ]
     public Task<ContentResult> Module(string module, CancellationToken ct)
     {
-        if (
-            module
-            is not ("auth" or "user" or "roles" or "permissions" or "upload" or "system" or "docs")
-        )
+        if (!Modules.Contains(module, StringComparer.Ordinal))
             throw new ApiException(404, "Module not found");
         return Specification(module, ct);
     }

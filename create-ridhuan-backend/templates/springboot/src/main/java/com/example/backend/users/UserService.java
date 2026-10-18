@@ -151,14 +151,21 @@ public class UserService {
     UserEntity e = entity(id);
     access.within(access.actor(), e.roleId);
     Snapshot before = snapshot(e);
-    if (input.roleId() != null) {
-      roles.entity(input.roleId());
-      access.within(access.actor(), input.roleId());
-      e.roleId = input.roleId();
+    UUID role = input.roleId();
+    Runnable holders = () -> {};
+    if (role != null) {
+      roles.entity(role);
+      access.within(access.actor(), role);
+      if (!role.equals(e.roleId)) {
+        holders = access.guardSystemPermissionHolders();
+        e.roleId = role;
+        access.revokeSessions(id);
+      }
     }
     if (input.email() != null) e.email = Passwords.email(input.email());
     e.updatedAt = clock.instant();
     repository.flush();
+    holders.run();
     audit.write(EndpointId.USER_UPDATE, access.actor(), "UPDATE", id, before, snapshot(e));
     cache.invalidate();
     return dto(e);
@@ -170,9 +177,12 @@ public class UserService {
     if (e.deletedAt != null) throw ApiException.missing();
     if (id.equals(access.actor())) throw ApiException.denied();
     access.within(access.actor(), e.roleId);
+    Runnable holders = access.guardSystemPermissionHolders();
+    access.revokeSessions(id);
     e.deletedAt = clock.instant();
     e.updatedAt = e.deletedAt;
     repository.flush();
+    holders.run();
     audit.write(EndpointId.USER_DELETE, access.actor(), "DELETE", id, snapshot(e), null);
     cache.invalidate();
   }

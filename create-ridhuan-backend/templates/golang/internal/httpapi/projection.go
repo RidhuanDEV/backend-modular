@@ -25,7 +25,7 @@ type AuthUserResponse struct {
 
 type TokenResponse struct {
 	Token        string `json:"token" doc:"15-minute JWT access token"`
-	RefreshToken string `json:"refreshToken" doc:"Single-use opaque refresh token"`
+	RefreshToken string `json:"refreshToken,omitempty" required:"false" doc:"Single-use opaque refresh token; omitted when REFRESH_TOKEN_TRANSPORT=cookie"`
 	TokenType    string `json:"tokenType" example:"Bearer"`
 	ExpiresIn    int64  `json:"expiresIn" example:"900" doc:"Access token lifetime in seconds"`
 }

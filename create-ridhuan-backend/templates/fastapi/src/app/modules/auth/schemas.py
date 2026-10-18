@@ -22,7 +22,8 @@ class Login(Register):
 
 
 class Refresh(DTO):
-    refreshToken: str = Field(min_length=1, max_length=1024)
+    # Optional so cookie mode can read the httpOnly cookie instead; the router enforces presence.
+    refreshToken: str | None = Field(default=None, min_length=1, max_length=1024)
 
 
 class AuthUser(DTO):
@@ -36,3 +37,10 @@ class AuthUser(DTO):
 class Tokens(DTO):
     token: str
     refreshToken: str
+
+
+class PublicTokens(DTO):
+    """refreshToken is omitted when REFRESH_TOKEN_TRANSPORT=cookie (sent as an httpOnly cookie)."""
+
+    token: str
+    refreshToken: str | None = None

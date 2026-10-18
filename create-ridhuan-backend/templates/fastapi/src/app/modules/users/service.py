@@ -9,7 +9,11 @@ from app.core.context import Context
 from app.core.errors import ApiError
 from app.core.runtime import Runtime
 from app.core.security import passwords
-from app.modules.roles.repository import role_within_actor
+from app.modules.roles.repository import (
+    SystemPermissionHolders,
+    revoke_user_sessions,
+    role_within_actor,
+)
 from app.modules.users.models import User
 from app.modules.users.repository import user_by_id
 from app.modules.users.schemas import (
@@ -98,11 +102,15 @@ async def update_user(ctx: Context, id: UUID, dto: UpdateUser) -> UserResponse:
         raise ApiError(404, "User not found")
     await role_within_actor(ctx.session, ctx.require_actor(), user.role_id)
     before = public_user(user)
-    if dto.roleId is not None:
-        user.role = await role_within_actor(
+    if dto.roleId is not None and dto.roleId != user.role_id:
+        next_role = await role_within_actor(
             ctx.session, ctx.require_actor(), dto.roleId
         )
+        holders = await SystemPermissionHolders(ctx.session).lock()
+        user.role = next_role
         user.role_id = dto.roleId
+        await holders.check()
+        await revoke_user_sessions(ctx.session, id)
     if dto.email is not None:
         user.email = str(dto.email)
     await ctx.session.flush()
@@ -119,6 +127,9 @@ async def delete_user(ctx: Context, id: UUID) -> None:
     if user is None:
         raise ApiError(404, "User not found")
     await role_within_actor(ctx.session, actor, user.role_id)
+    holders = await SystemPermissionHolders(ctx.session).lock()
     before = public_user(user)
     user.deleted_at = now()
+    await holders.check()
+    await revoke_user_sessions(ctx.session, id)
     await ctx.commit(id, before=before)

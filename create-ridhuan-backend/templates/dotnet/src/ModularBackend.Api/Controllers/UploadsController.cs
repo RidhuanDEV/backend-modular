@@ -64,7 +64,7 @@ public sealed class UploadsController(
                 await cache.ReadAsync(
                     "upload:" + Context.Actor?.Id + ":" + id,
                     registry.Get(HttpContext).Cache == CacheMode.Read,
-                    token => backend.FileAsync(id, token),
+                    token => backend.FileAsync(id, Context, token),
                     f => f.Id == id && f.Size > 0,
                     ct
                 )

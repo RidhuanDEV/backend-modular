@@ -2,6 +2,7 @@ package com.example.backend.uploads;
 
 import com.example.backend.config.Settings;
 import com.example.backend.platform.http.ApiException;
+import com.example.backend.platform.security.Access;
 import com.example.backend.platform.storage.ObjectStorage;
 import java.io.*;
 import java.time.Clock;
@@ -16,9 +17,15 @@ public class UploadService {
   private final UploadPersistence persistence;
   private final Settings settings;
   private final Clock clock;
+  private final Access access;
 
   public UploadService(
-      ObjectStorage storage, UploadPersistence persistence, Settings settings, Clock clock) {
+      ObjectStorage storage,
+      UploadPersistence persistence,
+      Settings settings,
+      Clock clock,
+      Access access) {
+    this.access = access;
     this.storage = storage;
     this.persistence = persistence;
     this.settings = settings;
@@ -35,9 +42,7 @@ public class UploadService {
       mime = new Tika().detect(input);
     }
     if (!Arrays.asList(
-            settings
-                .text("UPLOAD_ALLOWED_MIME", "image/png,image/jpeg,application/pdf,text/plain")
-                .split(","))
+            settings.text("UPLOAD_ALLOWED_MIME", "image/png,image/jpeg,application/pdf").split(","))
         .contains(mime)) throw new ApiException(400, "Unsupported file content");
     String original =
         Objects.requireNonNullElse(file.getOriginalFilename(), "file")
@@ -60,14 +65,22 @@ public class UploadService {
     }
   }
 
-  public UploadDto get(UUID id) {
-    return persistence.stored(id).dto();
+  public UploadDto get(UUID id, UUID actor) {
+    return owned(id, actor).dto();
   }
 
-  public void download(UUID id, OutputStream output) throws IOException {
-    var stored = persistence.stored(id);
+  public void download(UUID id, UUID actor, OutputStream output) throws IOException {
+    var stored = owned(id, actor);
     try (InputStream input = storage.open(stored.key())) {
       input.transferTo(output);
     }
+  }
+
+  /** Only the uploader and root users may read a file; 404 hides whether it exists. */
+  private UploadPersistence.Stored owned(UUID id, UUID actor) {
+    var stored = persistence.stored(id);
+    if (!actor.toString().equalsIgnoreCase(String.valueOf(stored.uploader()))
+        && !access.isRoot(actor)) throw ApiException.missing();
+    return stored;
   }
 }

@@ -39,8 +39,8 @@ func (s *Server) mountUploads() {
 		}
 		return ok(file), nil
 	})
-	register[IDInput, StoredFile](s, "upload.get", func(ctx context.Context, input *IDInput, _ *Actor) (Success[StoredFile], error) {
-		file, err := s.Uploads.Get(ctx, input.ID)
+	register[IDInput, StoredFile](s, "upload.get", func(ctx context.Context, input *IDInput, actor *Actor) (Success[StoredFile], error) {
+		file, err := s.Uploads.Get(ctx, actor, input.ID)
 		return ok(file), err
 	})
 

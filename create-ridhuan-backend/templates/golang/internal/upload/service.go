@@ -7,10 +7,12 @@ import (
 	"github.com/RidhuanDEV/golang-backend/internal/db/sqlc"
 	"github.com/RidhuanDEV/golang-backend/internal/fault"
 	"github.com/RidhuanDEV/golang-backend/internal/model"
+	"github.com/RidhuanDEV/golang-backend/internal/role"
 	"github.com/RidhuanDEV/golang-backend/internal/storage"
 	"github.com/google/uuid"
 	"io"
 	"log/slog"
+	"strings"
 	"time"
 )
 
@@ -27,12 +29,43 @@ type Input struct {
 	Size       int64
 }
 
-func (s *Service) Get(ctx context.Context, id string) (model.StoredFile, error) {
+// Get returns a file to its uploader or a root user; others get 404 so
+// existence is not revealed.
+func (s *Service) Get(ctx context.Context, actor *audit.Actor, id string) (model.StoredFile, error) {
 	if err := fault.UUID(id); err != nil {
 		return model.StoredFile{}, err
 	}
 	row, err := s.Queries.FindFile(ctx, id)
-	return projection.File(row), fault.DB(err)
+	if err != nil {
+		return model.StoredFile{}, fault.DB(err)
+	}
+	if actor == nil {
+		return model.StoredFile{}, fault.New(fault.Missing, "Not found")
+	}
+	if row.UploaderID == nil || *row.UploaderID != actor.ID {
+		root, err := role.IsRootRole(ctx, s.Queries, actor.RoleID)
+		if err != nil {
+			return model.StoredFile{}, err
+		}
+		if !root {
+			return model.StoredFile{}, fault.New(fault.Missing, "Not found")
+		}
+	}
+	return projection.File(row), nil
+}
+
+// cleanName keeps only the final path segment of a client file name and caps
+// it to the 255-character column, so a long or path-like name cannot fail the
+// insert after the object is already stored.
+func cleanName(name string) string {
+	name = strings.TrimSpace(name[strings.LastIndexAny(name, `/\`)+1:])
+	if name == "" || name == "." || name == ".." {
+		return "file"
+	}
+	if runes := []rune(name); len(runes) > 255 {
+		return string(runes[:255])
+	}
+	return name
 }
 func (s *Service) Create(ctx context.Context, p audit.Policy, actor *audit.Actor, input Input) (model.StoredFile, error) {
 	if s.Storage == nil {
@@ -49,7 +82,7 @@ func (s *Service) Create(ctx context.Context, p audit.Policy, actor *audit.Actor
 			value := actor.ID
 			uploader = &value
 		}
-		row, err := q.CreateFile(ctx, sqlc.CreateFileParams{Storage: s.Kind, ObjectKey: key, OriginalName: input.Name, MimeType: input.MIME, Size: input.Size, UploaderID: uploader})
+		row, err := q.CreateFile(ctx, sqlc.CreateFileParams{Storage: s.Kind, ObjectKey: key, OriginalName: cleanName(input.Name), MimeType: input.MIME, Size: input.Size, UploaderID: uploader})
 		if err != nil {
 			return model.StoredFile{}, audit.Change{}, fault.DB(err)
 		}

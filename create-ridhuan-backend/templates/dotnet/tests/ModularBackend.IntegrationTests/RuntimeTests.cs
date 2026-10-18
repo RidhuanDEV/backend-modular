@@ -324,6 +324,177 @@ public sealed class RuntimeTests
         await Send(HttpMethod.Delete, "/api/users/" + plainId, new { }, HttpStatusCode.NoContent);
     }
 
+    [TestMethod]
+    public async Task SystemPrimitivesLastRootSessionsAndFileOwnership()
+    {
+        var now = TimeProvider.System.GetUtcNow();
+        Guid manageUsersId,
+            customId,
+            otherRoleId,
+            memberId,
+            fileId;
+        await using (var db = Db())
+        {
+            manageUsersId = await db
+                .Permissions.Where(p => p.Name == "manage_users")
+                .Select(p => p.Id)
+                .SingleAsync();
+            var uploads = await db.Permissions.SingleAsync(p => p.Name == "manage_uploads");
+            // Holds manage_uploads, so only the ownership rule can deny it another user's file.
+            var uploaderRole = new Role
+            {
+                Name = "uploader",
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            uploaderRole.Permissions.Add(
+                new()
+                {
+                    Role = uploaderRole,
+                    RoleId = uploaderRole.Id,
+                    Permission = uploads,
+                    PermissionId = uploads.Id,
+                }
+            );
+            var otherRole = new Role
+            {
+                Name = "other",
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            var member = new User
+            {
+                Email = "member@example.test",
+                PasswordHash = "",
+                Role = uploaderRole,
+                RoleId = uploaderRole.Id,
+                CreatedAt = now,
+                UpdatedAt = now,
+            };
+            member.PasswordHash = new PasswordService().Hash(member, "member-password");
+            var file = new StoredFile
+            {
+                Storage = "local",
+                ObjectKey = Guid.NewGuid().ToString("N"),
+                OriginalName = "owned.pdf",
+                MimeType = "application/pdf",
+                Size = 1,
+                UploaderId = adminId,
+                CreatedAt = now,
+            };
+            db.AddRange(uploaderRole, otherRole, member, file);
+            await db.SaveChangesAsync();
+            otherRoleId = otherRole.Id;
+            memberId = member.Id;
+            fileId = file.Id;
+        }
+        var adminRoleId = await AdminRoleIdAsync();
+        // RBAC only: a new permission is granted to every role managing permissions.
+        customId = Guid.Parse(
+            (
+                await Send(
+                    HttpMethod.Post,
+                    "/api/permissions",
+                    new { name = "custom_capability" },
+                    HttpStatusCode.Created
+                )
+            )
+                .GetProperty("data")
+                .GetProperty("id")
+                .GetString()!
+        );
+        await using (var db = Db())
+            Assert.IsTrue(
+                await db.RolePermissions.AnyAsync(rp =>
+                    rp.RoleId == adminRoleId && rp.PermissionId == customId
+                )
+            );
+        // F-01: system permissions are immutable and their names are reserved.
+        await Send(
+            HttpMethod.Patch,
+            "/api/permissions/" + manageUsersId,
+            new { name = "renamed" },
+            HttpStatusCode.Forbidden
+        );
+        await Send(
+            HttpMethod.Delete,
+            "/api/permissions/" + manageUsersId,
+            new { },
+            HttpStatusCode.Forbidden
+        );
+        await Send(
+            HttpMethod.Patch,
+            "/api/permissions/" + customId,
+            new { name = "manage_users" },
+            HttpStatusCode.Forbidden
+        );
+        await Send(
+            HttpMethod.Patch,
+            "/api/permissions/" + customId,
+            new { name = "custom_renamed" },
+            HttpStatusCode.OK
+        );
+        // F-02: system roles keep their names and cannot be deleted; system permissions keep a holder.
+        await Send(
+            HttpMethod.Patch,
+            "/api/roles/" + userRoleId,
+            new { name = " user " },
+            HttpStatusCode.OK
+        );
+        await Send(
+            HttpMethod.Patch,
+            "/api/roles/" + userRoleId,
+            new { name = "renamed" },
+            HttpStatusCode.Forbidden
+        );
+        await Send(
+            HttpMethod.Delete,
+            "/api/roles/" + userRoleId,
+            new { },
+            HttpStatusCode.Forbidden
+        );
+        await Send(HttpMethod.Post, "/api/roles", new { name = "admin" }, HttpStatusCode.Forbidden);
+        await Send(
+            HttpMethod.Post,
+            "/api/roles/" + adminRoleId + "/permissions",
+            new { permissionIds = new[] { customId } },
+            HttpStatusCode.Forbidden
+        );
+        // F-09: the only holder of the system permissions cannot demote itself.
+        await Send(
+            HttpMethod.Patch,
+            "/api/users/" + adminId,
+            new { roleId = userRoleId },
+            HttpStatusCode.Forbidden
+        );
+        // F-07: files are readable by their uploader and root users only.
+        using var memberClient = host.CreateClient();
+        var memberLogin = await Send(
+            HttpMethod.Post,
+            "/api/auth/login",
+            new { email = "member@example.test", password = "member-password" },
+            HttpStatusCode.OK
+        );
+        memberClient.DefaultRequestHeaders.Authorization = new(
+            "Bearer",
+            memberLogin.GetProperty("data").GetProperty("accessToken").GetString()
+        );
+        using (var denied = await memberClient.GetAsync("/api/upload/" + fileId))
+            Assert.AreEqual(HttpStatusCode.NotFound, denied.StatusCode);
+        await Get("/api/upload/" + fileId);
+        // F-10: a role change revokes the user's refresh sessions.
+        await Send(
+            HttpMethod.Patch,
+            "/api/users/" + memberId,
+            new { roleId = otherRoleId },
+            HttpStatusCode.OK
+        );
+        await using (var db = Db())
+            Assert.IsFalse(
+                await db.RefreshFamilies.AnyAsync(f => f.UserId == memberId && f.RevokedAt == null)
+            );
+    }
+
     private async Task<Guid> AdminRoleIdAsync()
     {
         await using var db = Db();
@@ -650,6 +821,74 @@ public sealed class RuntimeTests
         );
         Assert.AreEqual(HttpStatusCode.Created, response.StatusCode);
         Assert.IsTrue(await db.Roles.AnyAsync(r => r.Name == "optional_committed"));
+    }
+
+    [TestMethod]
+    public async Task RefreshCookieTransportKeepsTokenOutOfJson()
+    {
+        await using var cookieHost = new TestHost(
+            new Dictionary<string, string?>
+            {
+                ["Database:ConnectionString"] = connectionString,
+                ["Upload:LocalRoot"] = uploadRoot,
+                ["RefreshCookie:Transport"] = "cookie",
+                ["RefreshCookie:Secure"] = "false",
+            }
+        );
+        using var browser = cookieHost.CreateClient(
+            new() { HandleCookies = false, BaseAddress = new("http://localhost") }
+        );
+        async Task<HttpResponseMessage> Post(string path, string? cookie, bool header, object body)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, path)
+            {
+                Content = JsonContent.Create(body),
+            };
+            if (cookie is not null)
+                request.Headers.Add("Cookie", cookie);
+            if (header)
+                request.Headers.Add("X-Requested-With", "fetch");
+            return await browser.SendAsync(request);
+        }
+        static string CookieOf(HttpResponseMessage response)
+        {
+            var header = response
+                .Headers.GetValues("Set-Cookie")
+                .Single(v => v.StartsWith("refresh_token=", StringComparison.Ordinal));
+            StringAssert.Contains(header, "httponly");
+            StringAssert.Contains(header, "path=/api/auth");
+            StringAssert.Contains(header, "samesite=lax");
+            return header.Split(';')[0];
+        }
+        using var login = await Post(
+            "/api/auth/login",
+            null,
+            false,
+            new { email = "admin@example.test", password = "fixture-password" }
+        );
+        Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+        using (var body = JsonDocument.Parse(await login.Content.ReadAsStringAsync()))
+            Assert.IsFalse(
+                body.RootElement.GetProperty("data").TryGetProperty("refreshToken", out _)
+            );
+        var cookie = CookieOf(login);
+        // Browsers attach cookies automatically, so a bare cross-site POST must fail.
+        using (var bare = await Post("/api/auth/refresh", cookie, false, new { }))
+            Assert.AreEqual(HttpStatusCode.Forbidden, bare.StatusCode);
+        using (var missing = await Post("/api/auth/refresh", null, true, new { }))
+            Assert.AreEqual(HttpStatusCode.BadRequest, missing.StatusCode);
+        using var refreshed = await Post("/api/auth/refresh", cookie, true, new { });
+        Assert.AreEqual(HttpStatusCode.OK, refreshed.StatusCode);
+        var rotated = CookieOf(refreshed);
+        Assert.AreNotEqual(cookie, rotated);
+        using var logout = await Post("/api/auth/logout", rotated, true, new { });
+        Assert.AreEqual(HttpStatusCode.NoContent, logout.StatusCode);
+        StringAssert.Contains(
+            logout.Headers.GetValues("Set-Cookie").Single(),
+            "expires=Thu, 01 Jan 1970"
+        );
+        using var revoked = await Post("/api/auth/refresh", rotated, true, new { });
+        Assert.AreEqual(HttpStatusCode.Unauthorized, revoked.StatusCode);
     }
 
     [TestMethod]

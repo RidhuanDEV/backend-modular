@@ -18,7 +18,13 @@ export function loadEnvironment(path = ".env"): void {
     if (raw.startsWith("'") && raw.endsWith("'"))
       process.env[key] = raw.slice(1, -1).replaceAll("\\'", "'");
     else if (raw.startsWith('"') && raw.endsWith('"')) {
-      const decoded: unknown = JSON.parse(raw.replaceAll("\\$", "$"));
+      // Hand-written values such as a Windows path are not valid JSON; keep dotenv's value.
+      let decoded: unknown;
+      try {
+        decoded = JSON.parse(raw.replaceAll("\\$", "$"));
+      } catch {
+        continue;
+      }
       if (typeof decoded !== "string")
         throw new Error(`Invalid quoted environment key: ${key}`);
       process.env[key] = decoded;

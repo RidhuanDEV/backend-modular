@@ -32,28 +32,30 @@ final class AuthController
     public function login(LoginRequest $request): JsonResponse
     {
         $v = $this->service->login($request->dto());
+        $response = Api::data(RefreshCookie::body($v));
+        RefreshCookie::issue($response, $v);
 
-        return Api::data([
-            'token' => $v->token,
-            'refreshToken' => $v->refreshToken,
-        ]);
+        return $response;
     }
 
     public function refresh(RefreshRequest $request): JsonResponse
     {
-        $v = $this->service->refresh($request->token());
+        $v = $this->service->refresh(
+            RefreshCookie::token($request, $request->token()),
+        );
+        $response = Api::data(RefreshCookie::body($v));
+        RefreshCookie::issue($response, $v);
 
-        return Api::data([
-            'token' => $v->token,
-            'refreshToken' => $v->refreshToken,
-        ]);
+        return $response;
     }
 
     public function logout(RefreshRequest $request): Response
     {
-        $this->service->logout($request->token());
+        $this->service->logout(
+            RefreshCookie::token($request, $request->token()),
+        );
 
-        return response()->noContent();
+        return RefreshCookie::clear(response()->noContent());
     }
 
     public function me(): JsonResponse

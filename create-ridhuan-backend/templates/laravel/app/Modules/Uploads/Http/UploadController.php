@@ -38,7 +38,7 @@ final class UploadController
         DownloadRequest $request,
         string $id,
     ): JsonResponse|StreamedResponse {
-        $file = $this->service->get($id);
+        $file = $this->service->get($id, $this->actor->user());
         if (!$request->download()) {
             return Api::resource(new StoredFileResource($file));
         }

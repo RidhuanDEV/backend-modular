@@ -13,9 +13,8 @@ public sealed record LoginRequest(
     [Required, MinLength(1)] string Password
 );
 
-public sealed record RefreshTokenRequest(
-    [Required, MinLength(32), MaxLength(128)] string RefreshToken
-);
+// Optional so cookie mode can read the httpOnly cookie instead; the controller enforces presence.
+public sealed record RefreshTokenRequest([MinLength(32), MaxLength(128)] string? RefreshToken);
 
 public sealed record CreateUserRequest(
     [Required, EmailAddress] string Email,

@@ -7,6 +7,7 @@ import (
 	"github.com/RidhuanDEV/golang-backend/internal/db/sqlc"
 	"github.com/RidhuanDEV/golang-backend/internal/fault"
 	"github.com/RidhuanDEV/golang-backend/internal/model"
+	"github.com/RidhuanDEV/golang-backend/internal/role"
 	"strings"
 )
 
@@ -37,10 +38,16 @@ func (s *Service) Create(ctx context.Context, p audit.Policy, actor *audit.Actor
 	if err := fault.Name(name, 128); err != nil {
 		return model.Permission{}, err
 	}
+	if err := role.NotSystemName(role.SystemPermissions, "permission", strings.TrimSpace(name)); err != nil {
+		return model.Permission{}, err
+	}
 	return audit.Mutate(ctx, s.Audit, p, actor, "CREATE", func(q sqlc.Querier) (model.Permission, audit.Change, error) {
 		row, err := q.CreatePermission(ctx, strings.TrimSpace(name))
 		if err != nil {
 			return model.Permission{}, audit.Change{}, fault.DB(err)
+		}
+		if err = role.GrantToPermissionManagers(ctx, q, row.ID); err != nil {
+			return model.Permission{}, audit.Change{}, err
 		}
 		out := projection.Permission(row)
 		change, err := audit.Capture(out.ID, (*model.Permission)(nil), &out)
@@ -65,6 +72,15 @@ func (s *Service) Update(ctx context.Context, p audit.Policy, actor *audit.Actor
 		if name != nil {
 			newName = strings.TrimSpace(*name)
 		}
+		if err = role.NotSystemName(role.SystemPermissions, "permission", old.Name); err != nil {
+			return model.Permission{}, audit.Change{}, err
+		}
+		if err = role.NotSystemName(role.SystemPermissions, "permission", newName); err != nil {
+			return model.Permission{}, audit.Change{}, err
+		}
+		if err = role.PermissionsWithinActor(ctx, q, actor, []string{id}); err != nil {
+			return model.Permission{}, audit.Change{}, err
+		}
 		row, err := q.UpdatePermission(ctx, sqlc.UpdatePermissionParams{ID: id, Name: newName})
 		if err != nil {
 			return model.Permission{}, audit.Change{}, fault.DB(err)
@@ -82,6 +98,12 @@ func (s *Service) Delete(ctx context.Context, p audit.Policy, actor *audit.Actor
 		row, err := q.LockPermission(ctx, id)
 		if err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)
+		}
+		if err = role.NotSystemName(role.SystemPermissions, "permission", row.Name); err != nil {
+			return struct{}{}, audit.Change{}, err
+		}
+		if err = role.PermissionsWithinActor(ctx, q, actor, []string{id}); err != nil {
+			return struct{}{}, audit.Change{}, err
 		}
 		if err = q.DeletePermission(ctx, id); err != nil {
 			return struct{}{}, audit.Change{}, fault.DB(err)

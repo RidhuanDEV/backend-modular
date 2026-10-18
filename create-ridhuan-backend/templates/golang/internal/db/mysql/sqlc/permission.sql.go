@@ -9,6 +9,17 @@ import (
 	"context"
 )
 
+const countActivePermissionHolders = `-- name: CountActivePermissionHolders :one
+SELECT COUNT(*) FROM users u JOIN role_permissions rp ON rp.role_id=u.role_id JOIN permissions p ON p.id=rp.permission_id WHERE p.name=? AND u.deleted_at IS NULL
+`
+
+func (q *Queries) CountActivePermissionHolders(ctx context.Context, name string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countActivePermissionHolders, name)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createPermission = `-- name: CreatePermission :exec
 INSERT INTO permissions(id,name) VALUES(?,?)
 `
@@ -80,6 +91,33 @@ func (q *Queries) ListPermissions(ctx context.Context) ([]Permission, error) {
 	return items, nil
 }
 
+const listRoleIDsWithPermissionName = `-- name: ListRoleIDsWithPermissionName :many
+SELECT rp.role_id FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE p.name=?
+`
+
+func (q *Queries) ListRoleIDsWithPermissionName(ctx context.Context, name string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listRoleIDsWithPermissionName, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var role_id string
+		if err := rows.Scan(&role_id); err != nil {
+			return nil, err
+		}
+		items = append(items, role_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockPermission = `-- name: LockPermission :one
 SELECT id, name, created_at, updated_at FROM permissions WHERE id=? FOR UPDATE
 `
@@ -94,6 +132,33 @@ func (q *Queries) LockPermission(ctx context.Context, id string) (Permission, er
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const lockPermissionByName = `-- name: LockPermissionByName :many
+SELECT id FROM permissions WHERE name=? FOR UPDATE
+`
+
+func (q *Queries) LockPermissionByName(ctx context.Context, name string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, lockPermissionByName, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updatePermission = `-- name: UpdatePermission :exec

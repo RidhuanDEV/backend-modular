@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -88,5 +90,47 @@ func TestMySQLUpgradeUTCAndTransactionRollback(t *testing.T) {
 	}
 	if _, err = queries.FindRoleByName(ctx, "must-rollback"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatal("failed transaction persisted mutation", err)
+	}
+	// The lockout guard queries and session revocation run through the MySQL adapter.
+	if err = queries.SeedRole(ctx, "root-fixture"); err != nil {
+		t.Fatal(err)
+	}
+	root, err := queries.FindRoleByName(ctx, "root-fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := queries.CreateUser(ctx, sqlc.CreateUserParams{Lower: "root-fixture@example.test", Password: "unused", RoleID: root.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	family := uuid.NewString()
+	if err = queries.CreateRefreshFamily(ctx, sqlc.CreateRefreshFamilyParams{ID: family, UserID: user.ID, ExpiresAt: sql.NullTime{Time: time.Now().UTC().Add(time.Hour), Valid: true}}); err != nil {
+		t.Fatal(err)
+	}
+	err = connection.Transaction(ctx, func(transaction sqlc.Querier) error {
+		if _, lockErr := transaction.LockPermissionByName(ctx, "manage_users"); lockErr != nil {
+			return lockErr
+		}
+		if _, countErr := transaction.CountActivePermissionHolders(ctx, "manage_users"); countErr != nil {
+			return countErr
+		}
+		roles, listErr := transaction.ListRoleIDsWithPermissionName(ctx, "manage_permissions")
+		if listErr != nil {
+			return listErr
+		}
+		if slices.Contains(roles, root.ID) {
+			return fmt.Errorf("fixture role unexpectedly manages permissions")
+		}
+		if revokeErr := transaction.RevokeUserRefreshFamilies(ctx, user.ID); revokeErr != nil {
+			return revokeErr
+		}
+		return transaction.RevokeUserAuthRefreshTokens(ctx, user.ID)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	revoked, err := queries.LockRefreshFamily(ctx, family)
+	if err != nil || !revoked.RevokedAt.Valid {
+		t.Fatal("refresh family was not revoked", err)
 	}
 }

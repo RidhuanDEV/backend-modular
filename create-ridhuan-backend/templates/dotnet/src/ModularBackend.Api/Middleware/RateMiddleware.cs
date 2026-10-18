@@ -106,16 +106,13 @@ public sealed class RateMiddleware(RequestDelegate next)
             await next(http);
             return;
         }
+        // One quota per request: authenticated traffic is not also charged to the shared IP bucket.
         var ip = http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        var status = await limiter.CheckAsync(RateLimitGroup.Public, ip, http.RequestAborted);
-        if (status == 200 && policy.RateLimit != RateLimitGroup.Public)
-        {
-            var identity =
-                policy.RateLimit == RateLimitGroup.Internal
-                    ? http.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? ip
-                    : ip;
-            status = await limiter.CheckAsync(policy.RateLimit, identity, http.RequestAborted);
-        }
+        var identity =
+            policy.RateLimit == RateLimitGroup.Internal
+                ? http.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? ip
+                : ip;
+        var status = await limiter.CheckAsync(policy.RateLimit, identity, http.RequestAborted);
         if (status != 200)
         {
             http.Response.StatusCode = status;

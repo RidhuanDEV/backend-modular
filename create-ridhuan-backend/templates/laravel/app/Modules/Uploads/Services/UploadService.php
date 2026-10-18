@@ -7,6 +7,7 @@ namespace App\Modules\Uploads\Services;
 use App\Infrastructure\Storage\ObjectStorage;
 use App\Modules\Uploads\Models\StoredFile;
 use App\Modules\Users\Models\User;
+use App\Modules\Users\Policies\AccessPolicy;
 use App\Support\Audit\Audit;
 use App\Support\Config\Settings;
 use App\Support\Http\ApiException;
@@ -21,14 +22,25 @@ final class UploadService
     public function __construct(
         private readonly ObjectStorage $storage,
         private readonly Audit $audit,
+        private readonly AccessPolicy $policy,
     ) {}
 
-    public function get(string $id): StoredFile
+    public function get(string $id, User $actor): StoredFile
     {
-        return StoredFile::query()
+        $file = StoredFile::query()
             ->whereKey($id)
             ->where('status', 'READY')
-            ->first() ?? throw new ApiException(404, 'File not found');
+            ->first();
+        // Only the uploader and root users may read a file; 404 hides whether it exists.
+        if (
+            $file === null ||
+            ($file->uploader_id !== $actor->id &&
+                !$this->policy->isRoot($actor))
+        ) {
+            throw new ApiException(404, 'File not found');
+        }
+
+        return $file;
     }
 
     public function create(UploadedFile $file, User $actor): StoredFile

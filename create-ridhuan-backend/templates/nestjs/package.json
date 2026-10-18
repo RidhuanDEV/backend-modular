@@ -21,7 +21,7 @@
     "generate:feature": "node dist/tools/generate-feature.js",
     "test": "tsc -p tsconfig.test.json && node --test dist-test/test/*.test.js",
     "test:integration": "tsc -p tsconfig.test.json && node --test dist-test/integration/*.integration.js",
-    "test:database": "tsc -p tsconfig.test.json && node --test dist-test/integration/template.integration.js",
+    "test:database": "tsc -p tsconfig.test.json && node --test --test-concurrency=1 dist-test/integration/template.integration.js dist-test/integration/refresh-cookie.integration.js",
     "test:redis": "tsc -p tsconfig.test.json && node --test dist-test/integration/redis.integration.js",
     "test:s3": "tsc -p tsconfig.test.json && node --test dist-test/integration/s3.integration.js",
     "verify:template": "npm run build && npm run typecheck && npm run prisma:validate && npm run verify:contract && npm test",

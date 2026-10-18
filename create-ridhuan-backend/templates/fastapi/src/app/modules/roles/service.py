@@ -7,7 +7,13 @@ from app.core.context import Context
 from app.core.errors import ApiError
 from app.modules.permissions.models import Permission
 from app.modules.roles.models import Role, RolePermission
-from app.modules.roles.repository import permissions_within_actor, role_within_actor
+from app.modules.roles.repository import (
+    SYSTEM_ROLES,
+    SystemPermissionHolders,
+    assert_not_system_name,
+    permissions_within_actor,
+    role_within_actor,
+)
 from app.modules.roles.schemas import RoleBase, RoleResponse, public_role, role_base
 from app.modules.users.models import User
 
@@ -20,6 +26,7 @@ async def list_roles(ctx: Context) -> list[RoleResponse]:
 
 
 async def create(ctx: Context, name: str) -> RoleBase:
+    assert_not_system_name(SYSTEM_ROLES, "role", name)
     role = Role(name=name)
     ctx.session.add(role)
     await ctx.session.flush()
@@ -31,7 +38,9 @@ async def create(ctx: Context, name: str) -> RoleBase:
 async def update_role(ctx: Context, id: UUID, name: str | None) -> RoleBase:
     role = await role_within_actor(ctx.session, ctx.require_actor(), id)
     before = public_role(role)
-    if name is not None:
+    if name is not None and name != role.name:
+        assert_not_system_name(SYSTEM_ROLES, "role", role.name)
+        assert_not_system_name(SYSTEM_ROLES, "role", name)
         role.name = name
     await ctx.session.flush()
     response = role_base(role)
@@ -41,6 +50,7 @@ async def update_role(ctx: Context, id: UUID, name: str | None) -> RoleBase:
 
 async def delete_role(ctx: Context, id: UUID) -> None:
     role = await role_within_actor(ctx.session, ctx.require_actor(), id)
+    assert_not_system_name(SYSTEM_ROLES, "role", role.name)
     if await ctx.session.scalar(select(User.id).where(User.role_id == id).limit(1)):
         raise ApiError(409, "Role is still assigned to users")
     before = public_role(role)
@@ -52,7 +62,6 @@ async def assign(ctx: Context, id: UUID, ids: list[UUID]) -> RoleResponse:
     role = await role_within_actor(ctx.session, ctx.require_actor(), id)
     before = public_role(role)
     selected = set(ids)
-    await permissions_within_actor(ctx.require_actor(), selected)
     found = set(
         await ctx.session.scalars(
             select(Permission.id).where(Permission.id.in_(selected))
@@ -60,6 +69,8 @@ async def assign(ctx: Context, id: UUID, ids: list[UUID]) -> RoleResponse:
     )
     if found != selected:
         raise ApiError(404, "Permission not found")
+    await permissions_within_actor(ctx.require_actor(), selected)
+    holders = await SystemPermissionHolders(ctx.session).lock()
     await ctx.session.execute(
         delete(RolePermission).where(RolePermission.role_id == id)
     )
@@ -69,7 +80,7 @@ async def assign(ctx: Context, id: UUID, ids: list[UUID]) -> RoleResponse:
             for permission in selected
         ]
     )
-    await ctx.session.flush()
+    await holders.check()
     # Refresh the loaded relationship after replacing grants.
     role = await ctx.session.scalar(
         select(Role)

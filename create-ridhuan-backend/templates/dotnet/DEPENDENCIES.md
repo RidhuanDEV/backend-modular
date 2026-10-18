@@ -8,6 +8,7 @@
 | Microsoft.EntityFrameworkCore.Relational | 10.0.12 | Microsoft | MIT | [NuGet metadata](https://www.nuget.org/packages/Microsoft.EntityFrameworkCore.Relational/10.0.12) |
 | AWSSDK.S3 | 4.0.103.4 | AWS | Apache-2.0 | [NuGet metadata](https://www.nuget.org/packages/AWSSDK.S3/4.0.103.4) |
 | MailKit | 4.18.1 | Jeffrey Stedfast / .NET Foundation contributors | MIT | [NuGet metadata](https://www.nuget.org/packages/MailKit/4.18.1) |
+| System.Security.Cryptography.Pkcs | 10.0.13 (pinned) | Microsoft | MIT | [NuGet metadata](https://www.nuget.org/packages/System.Security.Cryptography.Pkcs/10.0.13) |
 | MSTest | 4.0.2 | Microsoft | MIT | [NuGet metadata](https://www.nuget.org/packages/MSTest/4.0.2) |
 | Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.12 | Microsoft | MIT | [NuGet metadata](https://www.nuget.org/packages/Microsoft.AspNetCore.Authentication.JwtBearer/10.0.12) |
 | Microsoft.AspNetCore.Mvc.Testing | 10.0.12 | Microsoft | MIT | [NuGet metadata](https://www.nuget.org/packages/Microsoft.AspNetCore.Mvc.Testing/10.0.12) |

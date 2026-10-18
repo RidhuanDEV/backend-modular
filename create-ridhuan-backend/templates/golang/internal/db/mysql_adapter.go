@@ -275,6 +275,24 @@ func (m *mysqlQueries) UserHasPermission(ctx context.Context, arg sqlc.UserHasPe
 	return m.q.UserHasPermission(ctx, mysqlsqlc.UserHasPermissionParams{ID: arg.ID, Name: arg.Name})
 }
 
+func (m *mysqlQueries) RevokeUserRefreshFamilies(ctx context.Context, userID string) error {
+	return m.q.RevokeUserRefreshFamilies(ctx, userID)
+}
+func (m *mysqlQueries) RevokeUserAuthRefreshTokens(ctx context.Context, userID string) error {
+	return m.q.RevokeUserAuthRefreshTokens(ctx, userID)
+}
+func (m *mysqlQueries) LockPermissionByName(ctx context.Context, name string) ([]string, error) {
+	return m.q.LockPermissionByName(ctx, name)
+}
+
+func (m *mysqlQueries) CountActivePermissionHolders(ctx context.Context, name string) (int64, error) {
+	return m.q.CountActivePermissionHolders(ctx, name)
+}
+
+func (m *mysqlQueries) ListRoleIDsWithPermissionName(ctx context.Context, name string) ([]string, error) {
+	return m.q.ListRoleIDsWithPermissionName(ctx, name)
+}
+
 func (m *mysqlQueries) ClaimEmail(ctx context.Context, arg sqlc.ClaimEmailParams) error {
 	return m.q.ClaimEmail(ctx, mysqlsqlc.ClaimEmailParams{LeaseID: arg.LeaseID, LeaseUntil: arg.LeaseUntil, ID: arg.ID})
 }

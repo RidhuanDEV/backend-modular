@@ -95,6 +95,8 @@ export class StorageService {
             Key: key,
             Body: body,
             ContentType: mimeType,
+            // A direct bucket URL must download, never render inline in the browser.
+            ContentDisposition: "attachment",
           }),
         );
       } finally {

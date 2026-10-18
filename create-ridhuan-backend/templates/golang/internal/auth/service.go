@@ -285,8 +285,20 @@ func (s *Service) optionalSessionAudit(ctx context.Context, p audit.Policy, acto
 		s.Audit.Log.Warn("optional session audit failed", "endpoint", p.ID)
 	}
 }
+
+// Authenticate verifies the token and loads the active user.
 func (s *Service) Authenticate(ctx context.Context, raw string) (*Actor, error) {
-	deny := func() (*Actor, error) { return nil, fault.New(fault.Unauthorized, "Unauthorized") }
+	claims, err := s.VerifyAccessToken(raw)
+	if err != nil {
+		return nil, err
+	}
+	return s.LoadActor(ctx, claims)
+}
+
+// VerifyAccessToken checks signature and claims only, with no database access,
+// so the per-user rate limit can run before any query is made for the request.
+func (s *Service) VerifyAccessToken(raw string) (*Claims, error) {
+	deny := func() (*Claims, error) { return nil, fault.New(fault.Unauthorized, "Unauthorized") }
 	if !strings.HasPrefix(raw, "Bearer ") {
 		return deny()
 	}
@@ -302,10 +314,15 @@ func (s *Service) Authenticate(ctx context.Context, raw string) (*Actor, error) 
 	if err != nil || !token.Valid || claims.TokenUse != "access" || fault.UUID(claims.ID) != nil {
 		return deny()
 	}
+	return claims, nil
+}
+
+// LoadActor resolves verified claims to the active user and its current role.
+func (s *Service) LoadActor(ctx context.Context, claims *Claims) (*Actor, error) {
 	row, err := s.Queries.FindActiveUserByID(ctx, claims.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return deny()
+			return nil, fault.New(fault.Unauthorized, "Unauthorized")
 		}
 		return nil, fault.DB(err)
 	}

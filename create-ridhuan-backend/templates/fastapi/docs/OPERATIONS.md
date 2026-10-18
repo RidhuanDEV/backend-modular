@@ -15,7 +15,7 @@ Use independent databases for each generated project. Set the provider during ge
 
 PostgreSQL pool: ten connections, five overflow; connection/acquisition timeouts are three seconds. MySQL uses the equivalent async pool with UTC session initialization. Instants returned by DTOs are aware UTC, and display zones are IANA conversions. Size pool limits against replica count and database capacity.
 
-Configure certificate-verified TLS for remote databases and SMTP. Local Compose is a development fixture. Avoid broad proxy trust; default Uvicorn startup disables forwarded headers. If deploying behind a proxy, configure trust explicitly for the known proxy and verify limiter client identification.
+Configure certificate-verified TLS for remote databases and SMTP. Local Compose is a development fixture. Avoid broad proxy trust; with `FORWARDED_ALLOW_IPS` empty (the default) Uvicorn ignores forwarded headers. Behind a proxy, set it to the known proxy addresses only and verify limiter client identification. `DOCS_ENABLED` defaults to off when `ENVIRONMENT=production`.
 
 ## Failure and rollback
 

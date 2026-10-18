@@ -22,6 +22,13 @@ public interface IBackendStore
     void AddRefreshFamily(RefreshFamily family);
     Task BeginSessionAsync(CancellationToken ct);
     Task RevokeRefreshFamilyAsync(Guid familyId, DateTimeOffset revokedAt, CancellationToken ct);
+    Task RevokeUserSessionsAsync(Guid userId, DateTimeOffset revokedAt, CancellationToken ct);
+    Task LockPermissionsByNameAsync(IReadOnlyList<string> names, CancellationToken ct);
+    Task<IReadOnlyList<string>> UnheldPermissionNamesAsync(
+        IReadOnlyList<string> names,
+        CancellationToken ct
+    );
+    Task<IReadOnlyList<Role>> RolesWithPermissionAsync(string name, CancellationToken ct);
     Task DeleteExpiredRefreshTokensAsync(Guid userId, DateTimeOffset now, CancellationToken ct);
     void AddUser(User user);
     void AddRole(Role role);
