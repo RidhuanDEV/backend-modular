@@ -53,7 +53,7 @@ final class ContractsTest extends DatabaseCase
         ])->assertStatus(422);
     }
 
-    public function test_rotation_slides_family_and_replay_revocation_commits(): void
+    public function test_rotation_keeps_absolute_lifetime_and_replay_revocation_commits(): void
     {
         $service = app(AuthService::class);
         $tokens = $service->login(
@@ -62,16 +62,38 @@ final class ContractsTest extends DatabaseCase
         $old = RefreshToken::query()
             ->where('token_hash', hash('sha256', $tokens->refreshToken))
             ->firstOrFail();
+        $family = RefreshFamily::query()->findOrFail($old->family_id);
+        // Login: absolute family lifetime (90d default), idle token window (30d default).
+        self::assertTrue(
+            $family->expires_at->between(
+                now('UTC')->addDays(90)->subMinute(),
+                now('UTC')->addDays(90)->addMinute(),
+            ),
+        );
+        self::assertTrue(
+            $old->expires_at->between(
+                now('UTC')->addDays(30)->subMinute(),
+                now('UTC')->addDays(30)->addMinute(),
+            ),
+        );
+        $cap = now('UTC')->addDay()->startOfSecond();
         RefreshFamily::query()
             ->whereKey($old->family_id)
-            ->update(['expires_at' => now('UTC')->addDay()]);
+            ->update(['expires_at' => $cap]);
         $rotated = $service->refresh($tokens->refreshToken);
         self::assertNotSame($tokens->refreshToken, $rotated->refreshToken);
         self::assertNotNull($old->fresh()?->consumed_at);
+        // Rotation neither extends the family nor issues a token past it.
         self::assertTrue(
             RefreshFamily::query()
                 ->findOrFail($old->family_id)
-                ->expires_at->greaterThan(now('UTC')->addDays(29)),
+                ->expires_at->equalTo($cap),
+        );
+        self::assertTrue(
+            RefreshToken::query()
+                ->where('token_hash', hash('sha256', $rotated->refreshToken))
+                ->firstOrFail()
+                ->expires_at->equalTo($cap),
         );
         try {
             $service->refresh($tokens->refreshToken);
@@ -88,6 +110,37 @@ final class ContractsTest extends DatabaseCase
         } catch (ApiException $error) {
             self::assertSame(401, $error->status);
         }
+    }
+
+    public function test_admin_grants_permission_created_after_seed(): void
+    {
+        $permission = $this->postJson(
+            '/api/permissions',
+            ['name' => 'manage_invoices'],
+            $this->headers(),
+        )
+            ->assertCreated()
+            ->json('data.id');
+        self::assertIsString($permission);
+        $role = Role::query()->create(['name' => 'billing']);
+        $this->postJson(
+            '/api/roles/' . $role->id . '/permissions',
+            ['permissionIds' => [$permission]],
+            $this->headers(),
+        )->assertSuccessful();
+        self::assertTrue($role->permissions()->whereKey($permission)->exists());
+    }
+
+    public function test_unknown_email_login_is_rejected_like_a_wrong_password(): void
+    {
+        $this->postJson('/api/auth/login', [
+            'email' => 'nobody@example.com',
+            'password' => 'FixtureOnly!123',
+        ])->assertUnauthorized();
+        $this->postJson('/api/auth/login', [
+            'email' => $this->admin->email,
+            'password' => 'WrongPassword!123',
+        ])->assertUnauthorized();
     }
 
     public function test_consumed_logout_and_expired_family_are_not_revived(): void

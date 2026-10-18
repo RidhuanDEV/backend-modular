@@ -535,6 +535,36 @@ public sealed class RuntimeTests
     }
 
     [TestMethod]
+    public async Task EmailCaseVariantsAreOneAccount()
+    {
+        await Send(
+            HttpMethod.Post,
+            "/api/auth/register",
+            new { email = "  Mixed.Case@Example.Test ", password = "fixture-password" },
+            HttpStatusCode.Created
+        );
+        await Send(
+            HttpMethod.Post,
+            "/api/auth/register",
+            new { email = "mixed.case@example.test", password = "fixture-password" },
+            HttpStatusCode.Conflict
+        );
+        await Send(
+            HttpMethod.Post,
+            "/api/auth/login",
+            new { email = "MIXED.CASE@EXAMPLE.TEST", password = "fixture-password" },
+            HttpStatusCode.OK
+        );
+        await using var db = Db();
+        Assert.AreEqual(
+            1,
+            await db
+                .Users.IgnoreQueryFilters()
+                .CountAsync(u => u.Email == "mixed.case@example.test")
+        );
+    }
+
+    [TestMethod]
     public async Task RefreshRotationNeverExtendsAbsoluteLifetime()
     {
         static string Hash(string raw) =>

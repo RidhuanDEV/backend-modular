@@ -1,4 +1,4 @@
-FROM golang:1.27.1-alpine AS build
+FROM golang:1.27.2-alpine AS build
 ENV GOMAXPROCS=2 GOMEMLIMIT=512MiB
 WORKDIR /src
 COPY go.mod go.sum ./

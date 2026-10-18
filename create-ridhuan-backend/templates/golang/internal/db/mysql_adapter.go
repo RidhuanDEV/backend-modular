@@ -275,10 +275,6 @@ func (m *mysqlQueries) UserHasPermission(ctx context.Context, arg sqlc.UserHasPe
 	return m.q.UserHasPermission(ctx, mysqlsqlc.UserHasPermissionParams{ID: arg.ID, Name: arg.Name})
 }
 
-func (m *mysqlQueries) AdvanceRefreshFamily(ctx context.Context, arg sqlc.AdvanceRefreshFamilyParams) error {
-	return m.q.AdvanceRefreshFamily(ctx, mysqlsqlc.AdvanceRefreshFamilyParams{ExpiresAt: arg.ExpiresAt, ID: arg.ID})
-}
-
 func (m *mysqlQueries) ClaimEmail(ctx context.Context, arg sqlc.ClaimEmailParams) error {
 	return m.q.ClaimEmail(ctx, mysqlsqlc.ClaimEmailParams{LeaseID: arg.LeaseID, LeaseUntil: arg.LeaseUntil, ID: arg.ID})
 }

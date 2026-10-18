@@ -10,20 +10,6 @@ import (
 	"database/sql"
 )
 
-const advanceRefreshFamily = `-- name: AdvanceRefreshFamily :exec
-UPDATE refresh_families SET expires_at=$1 WHERE id=$2
-`
-
-type AdvanceRefreshFamilyParams struct {
-	ExpiresAt sql.NullTime `json:"expires_at"`
-	ID        string       `json:"id"`
-}
-
-func (q *Queries) AdvanceRefreshFamily(ctx context.Context, arg AdvanceRefreshFamilyParams) error {
-	_, err := q.db.Exec(ctx, advanceRefreshFamily, arg.ExpiresAt, arg.ID)
-	return err
-}
-
 const createAuthRefreshToken = `-- name: CreateAuthRefreshToken :exec
 INSERT INTO auth_refresh_tokens(family_id, user_id, token_hash, expires_at)
 VALUES ($1, $2, $3, $4)

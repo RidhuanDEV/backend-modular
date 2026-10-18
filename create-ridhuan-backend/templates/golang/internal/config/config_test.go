@@ -67,3 +67,29 @@ func TestSMTPConfigurationIsOptionalButValidatedWhenEnabled(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRefreshLifetimes(t *testing.T) {
+	for _, item := range []struct {
+		idle, absolute string
+		valid          bool
+	}{
+		{"", "", true}, {"7", "14", true}, {"0", "90", false}, {"30", "0", false}, {"31", "30", false}, {"30", "3651", false}, {"x", "90", false},
+	} {
+		t.Run(item.idle+"-"+item.absolute, func(t *testing.T) {
+			t.Setenv("NODE_ENV", "test")
+			t.Setenv("DATABASE_URL", "postgres://fixture_user:fixture_password@localhost:5432/fixture_db")
+			t.Setenv("JWT_SECRET", strings.Repeat("x", 40))
+			if item.idle != "" {
+				t.Setenv("REFRESH_TOKEN_IDLE_DAYS", item.idle)
+				t.Setenv("REFRESH_TOKEN_ABSOLUTE_DAYS", item.absolute)
+			}
+			c, err := Load()
+			if (err == nil) != item.valid {
+				t.Fatalf("expected accepted=%v, got %v", item.valid, err)
+			}
+			if item.idle == "" && (c.RefreshIdleDays != 30 || c.RefreshAbsoluteDays != 90) {
+				t.Fatalf("defaults %d/%d", c.RefreshIdleDays, c.RefreshAbsoluteDays)
+			}
+		})
+	}
+}

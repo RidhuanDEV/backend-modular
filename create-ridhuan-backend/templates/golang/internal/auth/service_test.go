@@ -46,3 +46,15 @@ func TestJWTBoundariesRejectBeforeDatabase(t *testing.T) {
 		})
 	}
 }
+
+func TestIdleExpiryNeverPassesFamilyExpiry(t *testing.T) {
+	s := &Service{RefreshIdle: 30 * 24 * time.Hour, RefreshAbsolute: 90 * 24 * time.Hour}
+	login := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	family := login.Add(s.RefreshAbsolute)
+	if got := s.idleExpiry(login, family); !got.Equal(login.Add(s.RefreshIdle)) {
+		t.Fatalf("early rotation expiry %v", got)
+	}
+	if got := s.idleExpiry(login.Add(80*24*time.Hour), family); !got.Equal(family) {
+		t.Fatalf("late rotation expiry %v, want family %v", got, family)
+	}
+}

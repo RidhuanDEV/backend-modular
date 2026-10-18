@@ -88,6 +88,17 @@ class CoreTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> settings(Map.of("APP_ENV", "production", "ADMIN_PASSWORD", "change-me")));
+    for (var lifetimes :
+        List.of(
+            Map.of("REFRESH_TOKEN_IDLE_DAYS", "0"),
+            Map.of("REFRESH_TOKEN_ABSOLUTE_DAYS", "0"),
+            Map.of("REFRESH_TOKEN_IDLE_DAYS", "31", "REFRESH_TOKEN_ABSOLUTE_DAYS", "30")))
+      assertThrows(IllegalArgumentException.class, () -> settings(lifetimes));
+    var custom =
+        settings(Map.of("REFRESH_TOKEN_IDLE_DAYS", "7", "REFRESH_TOKEN_ABSOLUTE_DAYS", "14"));
+    assertEquals(java.time.Duration.ofDays(7), custom.refreshIdle());
+    assertEquals(java.time.Duration.ofDays(14), custom.refreshAbsolute());
+    assertEquals(java.time.Duration.ofDays(90), settings(Map.of()).refreshAbsolute());
   }
 
   @Test

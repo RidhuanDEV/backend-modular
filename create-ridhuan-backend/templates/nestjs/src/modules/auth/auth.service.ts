@@ -22,7 +22,7 @@ import type {
 
 import { lockRefreshFamily } from "../../common/auth/refresh-family";
 
-const REFRESH_DAYS = 30;
+const DAY_MS = 86400000;
 function hashToken(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -62,10 +62,18 @@ export class AuthService {
     };
   }
 
+  // A token lives for the idle window but never past its family's absolute expiry.
+  private idleExpiry(now: Date, familyExpiresAt: Date): Date {
+    const idle = this.config.get("REFRESH_TOKEN_IDLE_DAYS", { infer: true });
+    return new Date(
+      Math.min(now.getTime() + idle * DAY_MS, familyExpiresAt.getTime()),
+    );
+  }
+
   private async issue(
     user: { id: string },
-    familyId = randomUUID(),
-    expiresAt = new Date(Date.now() + REFRESH_DAYS * 86400000),
+    familyId: string,
+    familyExpiresAt: Date,
     writer: Pick<
       Prisma.TransactionClient,
       "refreshToken" | "refreshFamily"
@@ -83,14 +91,14 @@ export class AuthService {
     );
     const refreshToken = randomBytes(48).toString("base64url");
     await writer.refreshFamily.create({
-      data: { id: familyId, userId: user.id, expiresAt },
+      data: { id: familyId, userId: user.id, expiresAt: familyExpiresAt },
     });
     await writer.refreshToken.create({
       data: {
         tokenHash: hashToken(refreshToken),
         familyId,
         userId: user.id,
-        expiresAt,
+        expiresAt: this.idleExpiry(new Date(), familyExpiresAt),
       },
     });
     return { token, refreshToken };
@@ -160,7 +168,11 @@ export class AuthService {
       const tokens = await this.issue(
         user,
         randomUUID(),
-        new Date(Date.now() + REFRESH_DAYS * 86400000),
+        new Date(
+          Date.now() +
+            this.config.get("REFRESH_TOKEN_ABSOLUTE_DAYS", { infer: true }) *
+              DAY_MS,
+        ),
         tx,
       );
       if (policy.audit === "required") await this.audit.write(change, tx);
@@ -235,27 +247,23 @@ export class AuthService {
           );
         return undefined;
       }
-      const expiresAt = new Date(now.getTime() + REFRESH_DAYS * 86400000);
+      // Rotation never extends the family: its expiry is the absolute lifetime.
       await tx.refreshToken.update({
         where: { id: stored.id },
         data: { revokedAt: now },
-      });
-      await tx.refreshFamily.update({
-        where: { id: family.id },
-        data: { expiresAt },
       });
       await tx.refreshToken.create({
         data: {
           tokenHash: hashToken(raw),
           familyId: family.id,
           userId: family.userId,
-          expiresAt,
+          expiresAt: this.idleExpiry(now, family.expiresAt),
         },
       });
       mutated = true;
       state = {
         before,
-        after: { expiresAt: expiresAt.toISOString(), revoked: false },
+        after: { expiresAt: before.expiresAt, revoked: false },
       };
       if (change.policy.audit === "required")
         await this.audit.write({ ...change, ...state }, tx);

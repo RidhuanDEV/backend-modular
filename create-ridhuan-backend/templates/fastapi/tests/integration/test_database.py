@@ -2,19 +2,22 @@ import asyncio
 import json
 import logging
 import os
+from datetime import timedelta
 from uuid import uuid4
 
 import httpx
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 
 from app.cli.seed import seed
+from app.core.clock import now
 from app.core.event_loop import run
-from app.core.security import verify_access
+from app.core.security import token_hash, verify_access
 from app.core.settings import Settings
 from app.database.engine import create_database, sessions
 from app.main import create_app
+from app.modules.auth.models import RefreshFamily, RefreshToken
 from app.modules.auth.schemas import AuthUser, Tokens
 from app.modules.notifications.schemas import NotificationResponse
 from app.modules.roles.models import Role
@@ -274,6 +277,79 @@ def test_required_audit_rolls_back_and_optional_audit_commits(
                 await connection.execute(
                     text(f"ALTER TABLE activity_logs DROP {operation} {constraint}")
                 )
+            await engine.dispose()
+
+    run(check())
+
+
+def test_refresh_rotation_is_capped_by_absolute_lifetime() -> None:
+    async def check() -> None:
+        provider = os.getenv("TEST_DB_PROVIDER", "postgresql")
+        config = Settings(
+            jwt_secret=SecretStr("fixture-only-secret-000000000000000000"),
+            db_provider="mysql" if provider == "mysql" else "postgresql",
+            database_url=SecretStr(os.environ["TEST_DATABASE_URL"]),
+            admin_email="admin@example.test",
+            admin_password=SecretStr("Fixture-password-20261001"),
+            rate_limit_auth_max=1000,
+            refresh_token_idle_days=2,
+            refresh_token_absolute_days=5,
+        )
+        await seed(config)
+        app = create_app(config)
+        engine = create_database(config)
+        try:
+            async with (
+                app.router.lifespan_context(app),
+                httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=app), base_url="http://fixture"
+                ) as client,
+            ):
+                login = await client.post(
+                    "/api/auth/login",
+                    json={
+                        "email": config.admin_email,
+                        "password": "Fixture-password-20261001",
+                    },
+                )
+                assert login.status_code == 200, login.text
+                tokens = Tokens.model_validate(login.json()["data"])
+
+                async def lifetimes(raw: str) -> tuple[RefreshFamily, RefreshToken]:
+                    async with sessions(engine)() as session:
+                        token = await session.scalar(
+                            select(RefreshToken).where(
+                                RefreshToken.token_hash == token_hash(raw)
+                            )
+                        )
+                        assert token is not None
+                        family = await session.get(RefreshFamily, token.family_id)
+                        assert family is not None
+                        return family, token
+
+                family, token = await lifetimes(tokens.refreshToken)
+                created = family.expires_at
+                assert timedelta(days=4, hours=23) < created - token.created_at
+                assert token.expires_at - token.created_at < timedelta(days=2, hours=1)
+                rotated = await client.post(
+                    "/api/auth/refresh", json={"refreshToken": tokens.refreshToken}
+                )
+                assert rotated.status_code == 200, rotated.text
+                next_tokens = Tokens.model_validate(rotated.json()["data"])
+                family, _ = await lifetimes(next_tokens.refreshToken)
+                # Rotation never extends the family's absolute expiry.
+                assert family.expires_at == created
+                async with engine.begin() as connection:
+                    await connection.execute(
+                        update(RefreshFamily)
+                        .where(RefreshFamily.id == family.id)
+                        .values(expires_at=now() - timedelta(seconds=1))
+                    )
+                expired = await client.post(
+                    "/api/auth/refresh", json={"refreshToken": next_tokens.refreshToken}
+                )
+                assert expired.status_code == 401, expired.text
+        finally:
             await engine.dispose()
 
     run(check())

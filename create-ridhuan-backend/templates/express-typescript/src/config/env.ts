@@ -78,6 +78,18 @@ const envSchema = z
     JWT_SECRET: z.string().min(32),
     JWT_ISSUER: z.string().min(1).default("modular-express"),
     JWT_AUDIENCE: z.string().min(1).default("modular-express-api"),
+    REFRESH_TOKEN_IDLE_DAYS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(3650)
+      .default(30),
+    REFRESH_TOKEN_ABSOLUTE_DAYS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(3650)
+      .default(90),
     SMTP_ENABLED: z
       .enum(["true", "false"])
       .default("false")
@@ -149,6 +161,14 @@ const envSchema = z
         code: "custom",
         path: ["SMTP_ENABLED"],
         message: "SMTP requires host, sender, and matching username/password",
+      });
+    }
+    if (value.REFRESH_TOKEN_ABSOLUTE_DAYS < value.REFRESH_TOKEN_IDLE_DAYS) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["REFRESH_TOKEN_ABSOLUTE_DAYS"],
+        message:
+          "REFRESH_TOKEN_ABSOLUTE_DAYS must be at least REFRESH_TOKEN_IDLE_DAYS",
       });
     }
     if (

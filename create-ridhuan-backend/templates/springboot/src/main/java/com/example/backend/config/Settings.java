@@ -60,6 +60,7 @@ public final class Settings {
     integer("UPLOAD_MAX_BYTES", 10485760, 1, 1073741824);
     integer("CLEANUP_BATCH", 500, 1, 5000);
     integer("CLEANUP_RETENTION_DAYS", 30, 1, 36500);
+    if (refreshAbsolute().compareTo(refreshIdle()) < 0) invalid("REFRESH_TOKEN_ABSOLUTE_DAYS");
     if (bool("CLEANUP_AUDIT_ENABLED", false)) {
       if (text("CLEANUP_AUDIT_RETENTION_DAYS", "").isBlank())
         invalid("CLEANUP_AUDIT_RETENTION_DAYS");
@@ -139,6 +140,16 @@ public final class Settings {
 
   public Duration seconds(String key, int fallback) {
     return Duration.ofSeconds(integer(key, fallback, 1, 86400000));
+  }
+
+  /** Each rotated refresh token lives at most this long. */
+  public Duration refreshIdle() {
+    return Duration.ofDays(integer("REFRESH_TOKEN_IDLE_DAYS", 30, 1, 3650));
+  }
+
+  /** Fixed on the refresh family at login; rotation never extends it. */
+  public Duration refreshAbsolute() {
+    return Duration.ofDays(integer("REFRESH_TOKEN_ABSOLUTE_DAYS", 90, 1, 3650));
   }
 
   public Provider provider() {

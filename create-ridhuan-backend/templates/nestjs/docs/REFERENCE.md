@@ -49,7 +49,7 @@ Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/auth/refresh -Cont
 curl.exe -X POST http://localhost:3000/api/upload -H "Authorization: Bearer $($login.data.token)" -F "file=@example.png"
 ```
 
-Access tokens expire after 15 minutes. Refresh tokens are random opaque values stored only as SHA-256 hashes; each refresh rotates once within a sliding 30 day family lifetime extended at each successful rotation. Replay revokes the family. Logout accepts `refreshToken` and revokes that family. Public user responses contain only explicit DTO fields.
+Access tokens expire after 15 minutes. Refresh tokens are random opaque values stored only as SHA-256 hashes; each refresh rotates once; the new token lives `REFRESH_TOKEN_IDLE_DAYS` (default 30) but never past the family expiry fixed at login by `REFRESH_TOKEN_ABSOLUTE_DAYS` (default 90). Replay revokes the family. Logout accepts `refreshToken` and revokes that family. Public user responses contain only explicit DTO fields.
 
 Registration returns a public user DTO. Login and refresh return only `token` and `refreshToken`. Logout returns HTTP 204 without a response body. The route and default policy baseline is pinned in `contracts/express-endpoints.json` and checked by `npm run verify:contract` after build.
 
@@ -124,4 +124,4 @@ For an external MySQL database, use `sslaccept=strict` (or `sslmode=verify-full`
 
 ## Hardening upgrade
 
-Read [HARDENING-UPGRADE.md](HARDENING-UPGRADE.md) before migrating existing data. It documents sliding refresh/logout, ordered SSE replay, async email worker/outbox, retention commands and optional OpenTelemetry. Local PostgreSQL/MySQL regression and generated-consumer checks pass; [verification evidence](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) records the exact runtime and CI boundaries.
+Read [HARDENING-UPGRADE.md](HARDENING-UPGRADE.md) before migrating existing data. It documents refresh idle/absolute lifetimes, logout, ordered SSE replay, async email worker/outbox, retention commands and optional OpenTelemetry. Local PostgreSQL/MySQL regression and generated-consumer checks pass; [verification evidence](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) records the exact runtime and CI boundaries.

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -113,6 +114,39 @@ func TestPostgresContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	token := loginBody.Data.Token
+	// Rotation keeps the family's absolute expiry and bounds each token by the idle window.
+	lifetimes := func(raw string) (family, idle time.Duration, familyID string, familyExpires time.Time) {
+		t.Helper()
+		hash := sha256.Sum256([]byte(raw))
+		var created, tokenExpires time.Time
+		if err := pool.QueryRow(ctx, `SELECT f.id::text, f.expires_at, t.expires_at, t.created_at FROM auth_refresh_tokens t JOIN refresh_families f ON f.id = t.family_id WHERE t.token_hash = $1`, hash[:]).Scan(&familyID, &familyExpires, &tokenExpires, &created); err != nil {
+			t.Fatal(err)
+		}
+		return familyExpires.Sub(created), tokenExpires.Sub(created), familyID, familyExpires
+	}
+	day := 24 * time.Hour
+	if family, idle, _, _ := lifetimes(loginBody.Data.RefreshToken); (family-90*day).Abs() > time.Minute || (idle-30*day).Abs() > time.Minute {
+		t.Fatalf("login lifetimes family=%v idle=%v", family, idle)
+	}
+	_, _, _, issuedFamilyExpires := lifetimes(loginBody.Data.RefreshToken)
+	rotated := request("POST", "/api/auth/refresh", "", map[string]string{"refreshToken": loginBody.Data.RefreshToken})
+	if rotated.Code != 200 {
+		t.Fatalf("refresh %d %s", rotated.Code, rotated.Body.String())
+	}
+	var rotatedBody Success[Token]
+	if err = json.Unmarshal(rotated.Body.Bytes(), &rotatedBody); err != nil {
+		t.Fatal(err)
+	}
+	_, _, familyID, familyExpires := lifetimes(rotatedBody.Data.RefreshToken)
+	if !familyExpires.Equal(issuedFamilyExpires) {
+		t.Fatalf("rotation moved family expiry %v -> %v", issuedFamilyExpires, familyExpires)
+	}
+	if _, err = pool.Exec(ctx, `UPDATE refresh_families SET expires_at = now() - interval '1 second' WHERE id = $1`, familyID); err != nil {
+		t.Fatal(err)
+	}
+	if rec := request("POST", "/api/auth/refresh", "", map[string]string{"refreshToken": rotatedBody.Data.RefreshToken}); rec.Code != 401 {
+		t.Fatalf("refresh past absolute lifetime %d", rec.Code)
+	}
 	if rec := request("GET", "/api/users", "", nil); rec.Code != 401 {
 		t.Fatalf("unauthenticated list status %d", rec.Code)
 	}

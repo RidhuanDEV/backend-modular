@@ -15,7 +15,7 @@ import (
 )
 
 func testConfig() config.Config {
-	return config.Config{JWTSecret: "a_very_long_test_secret_at_least_32_chars", Rates: map[string]config.Rate{"auth": {WindowMS: 900000, Max: 20}, "public": {WindowMS: 900000, Max: 100}, "internal": {WindowMS: 900000, Max: 300}}, Policies: map[string]config.PolicyOverride{}, CORSOrigins: map[string]struct{}{"http://localhost:5173": {}}, RateStore: "memory"}
+	return config.Config{JWTSecret: "a_very_long_test_secret_at_least_32_chars", RefreshIdleDays: 30, RefreshAbsoluteDays: 90, Rates: map[string]config.Rate{"auth": {WindowMS: 900000, Max: 20}, "public": {WindowMS: 900000, Max: 100}, "internal": {WindowMS: 900000, Max: 300}}, Policies: map[string]config.PolicyOverride{}, CORSOrigins: map[string]struct{}{"http://localhost:5173": {}}, RateStore: "memory"}
 }
 
 func TestRegistryAndOpenAPI(t *testing.T) {

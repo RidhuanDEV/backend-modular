@@ -5,6 +5,7 @@ import { signToken } from "../../core/auth/jwt.service.js";
 import { HttpError } from "../../core/errors/http-error.js";
 import { auditService } from "../../core/audit/audit.service.js";
 import { prisma } from "../../config/prisma.js";
+import { env } from "../../config/env.js";
 import { AuditAction } from "../../constants/audit.constants.js";
 import { AUTH_MODULE, USER_MODULE } from "../../constants/modules.constants.js";
 import type { RegisterDto, LoginDto } from "./auth.schema.js";
@@ -15,7 +16,7 @@ import { lockRefreshFamily } from "../../core/auth/refresh-family.js";
 
 const SALT_ROUNDS = 12;
 const DEFAULT_ROLE = "user";
-const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const repository = new AuthRepository();
 
 function toAuthUserResponse(user: User): AuthUserResponseDto {
@@ -30,6 +31,16 @@ function toAuthUserResponse(user: User): AuthUserResponseDto {
 
 function hashRefreshToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+// A token lives for the idle window but never past its family's absolute expiry.
+function idleExpiry(now: Date, familyExpiresAt: Date): Date {
+  return new Date(
+    Math.min(
+      now.getTime() + env.REFRESH_TOKEN_IDLE_DAYS * DAY_MS,
+      familyExpiresAt.getTime(),
+    ),
+  );
 }
 
 function createRefreshToken(): string {
@@ -105,7 +116,9 @@ export class AuthService {
 
     await auditService.transaction(async (tx) => {
       const familyId = randomUUID();
-      const expiresAt = new Date(now.getTime() + REFRESH_TOKEN_TTL_MS);
+      const expiresAt = new Date(
+        now.getTime() + env.REFRESH_TOKEN_ABSOLUTE_DAYS * DAY_MS,
+      );
       await tx.refreshFamily.create({
         data: { id: familyId, userId: user.id, expiresAt },
       });
@@ -114,7 +127,7 @@ export class AuthService {
           tokenHash: hashRefreshToken(refreshToken),
           familyId,
           userId: user.id,
-          expiresAt,
+          expiresAt: idleExpiry(now, expiresAt),
         },
       });
       await auditService.persist({
@@ -179,21 +192,17 @@ export class AuthService {
         });
         return undefined;
       }
-      const expiresAt = new Date(now.getTime() + REFRESH_TOKEN_TTL_MS);
+      // Rotation never extends the family: its expiry is the absolute lifetime.
       await tx.refreshToken.update({
         where: { id: session.id },
         data: { revokedAt: now },
-      });
-      await tx.refreshFamily.update({
-        where: { id: family.id },
-        data: { expiresAt },
       });
       await tx.refreshToken.create({
         data: {
           tokenHash: hashRefreshToken(nextRefreshToken),
           familyId: family.id,
           userId: family.userId,
-          expiresAt,
+          expiresAt: idleExpiry(now, family.expiresAt),
         },
       });
       await auditService.persist({
@@ -202,7 +211,7 @@ export class AuthService {
         entityId: family.id,
         userId: family.userId,
         before,
-        after: { expiresAt: expiresAt.toISOString(), revoked: false },
+        after: { expiresAt: before.expiresAt, revoked: false },
         requestId,
         trx: tx,
       });

@@ -90,6 +90,14 @@ final class Settings
         if (strlen($secret) < 32 || $secret === self::string('app.key')) {
             throw new InvalidArgumentException('Invalid JWT_SECRET');
         }
+        if (
+            self::integer('backend.refresh.absolute', 1, 3650) <
+            self::integer('backend.refresh.idle', 1, 3650)
+        ) {
+            throw new InvalidArgumentException(
+                'REFRESH_TOKEN_ABSOLUTE_DAYS must be at least REFRESH_TOKEN_IDLE_DAYS',
+            );
+        }
         $key = self::string('app.key');
         if (
             !str_starts_with($key, 'base64:') ||

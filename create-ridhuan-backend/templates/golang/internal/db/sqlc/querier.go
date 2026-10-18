@@ -10,7 +10,6 @@ import (
 )
 
 type Querier interface {
-	AdvanceRefreshFamily(ctx context.Context, arg AdvanceRefreshFamilyParams) error
 	AssignRolePermission(ctx context.Context, arg AssignRolePermissionParams) error
 	ClaimEmail(ctx context.Context, arg ClaimEmailParams) error
 	ClaimableEmail(ctx context.Context, now sql.NullTime) (EmailJob, error)

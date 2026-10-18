@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr = SecretStr("")
     jwt_issuer: str = "modular-fastapi"
     jwt_audience: str = "modular-fastapi-api"
+    refresh_token_idle_days: int = Field(default=30, ge=1, le=3650)
+    refresh_token_absolute_days: int = Field(default=90, ge=1, le=3650)
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
     endpoint_policies_json: str = "{}"
     app_instance_count: int = Field(default=1, ge=1)
@@ -104,6 +106,10 @@ class Settings(BaseSettings):
         ):
             raise ValueError(
                 f"{self.db_provider} database requires an ASCII identifier and at most {db_maximum} characters"
+            )
+        if self.refresh_token_absolute_days < self.refresh_token_idle_days:
+            raise ValueError(
+                "REFRESH_TOKEN_ABSOLUTE_DAYS must be at least REFRESH_TOKEN_IDLE_DAYS"
             )
         if (
             self.cleanup_audit_enabled

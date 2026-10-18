@@ -97,6 +97,26 @@ class SystemsTest {
         seed.seed();
         var users = context.getBean(UserRepository.class);
         var admin = users.findByEmail("admin@example.com").orElseThrow();
+        // The root role may grant a permission created after seeding; others may not.
+        var access = context.getBean(com.example.backend.platform.security.Access.class);
+        var fixtureDb = context.getBean(Db.class);
+        UUID invoices = UUID.randomUUID(), billing = UUID.randomUUID();
+        fixtureDb.update(
+            "INSERT INTO permissions(id,name,created_at,updated_at) VALUES(?,?,?,?)",
+            invoices,
+            "manage_invoices",
+            java.time.Instant.now(),
+            java.time.Instant.now());
+        fixtureDb.update(
+            "INSERT INTO roles(id,name,created_at,updated_at) VALUES(?,?,?,?)",
+            billing,
+            "BILLING",
+            java.time.Instant.now(),
+            java.time.Instant.now());
+        fixtureDb.update(
+            "INSERT INTO role_permissions(role_id,permission_id) VALUES(?,?)", billing, invoices);
+        assertDoesNotThrow(() -> access.grant(admin.id, List.of(invoices)));
+        assertDoesNotThrow(() -> access.within(admin.id, billing));
         String passwordHash = admin.password;
         seed.seed();
         assertEquals(passwordHash, users.findByEmail(admin.email).orElseThrow().password);
@@ -108,12 +128,17 @@ class SystemsTest {
         AuthDto.Tokens
             original = auth.login(new AuthDto.Login(admin.email, "fixture-admin-password")),
             current = original;
-        for (int month = 0; month < 6; month++) {
+        // Rotations inside the 30-day idle window succeed until the 90-day absolute cap.
+        for (int month = 0; month < 3; month++) {
           clock.advance(29 * 86400L);
           current = auth.refresh(new AuthDto.Refresh(current.refreshToken()));
         }
+        clock.advance(29 * 86400L);
+        AuthDto.Tokens capped = current;
+        assertThrows(
+            RuntimeException.class, () -> auth.refresh(new AuthDto.Refresh(capped.refreshToken())));
         assertEquals(1, db.count("SELECT COUNT(*) FROM refresh_families"));
-        assertTrue(db.count("SELECT COUNT(*) FROM refresh_tokens") > 5);
+        assertEquals(4, db.count("SELECT COUNT(*) FROM refresh_tokens"));
         AuthDto.Tokens latest = current;
         assertThrows(
             RuntimeException.class,
@@ -150,7 +175,12 @@ class SystemsTest {
         } finally {
           pool.shutdownNow();
         }
-        assertEquals(0, db.count("SELECT COUNT(*) FROM refresh_families WHERE revoked_at IS NULL"));
+        // The capped family is expired rather than revoked; none may remain usable.
+        assertEquals(
+            0,
+            db.count(
+                "SELECT COUNT(*) FROM refresh_families WHERE revoked_at IS NULL AND expires_at > ?",
+                clock.instant()));
         var note =
             notifications.create(
                 new NotificationDto.Create(admin.id, "worker", "immutable", false), admin.id);

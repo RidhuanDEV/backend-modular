@@ -10,6 +10,10 @@ return [
         'issuer' => env('JWT_ISSUER', 'modular-laravel'),
         'audience' => env('JWT_AUDIENCE', 'modular-laravel'),
     ],
+    'refresh' => [
+        'idle' => env('REFRESH_TOKEN_IDLE_DAYS', '30'),
+        'absolute' => env('REFRESH_TOKEN_ABSOLUTE_DAYS', '90'),
+    ],
     'policies' => env('ENDPOINT_POLICIES_JSON', '{}'),
     'cors' => env(
         'CORS_ORIGINS',

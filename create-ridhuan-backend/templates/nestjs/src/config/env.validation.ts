@@ -7,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
   Min,
   MinLength,
   validateSync,
@@ -45,6 +46,18 @@ class EnvironmentInput {
   @IsString()
   @MinLength(1)
   JWT_AUDIENCE!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(3650)
+  REFRESH_TOKEN_IDLE_DAYS!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(3650)
+  REFRESH_TOKEN_ABSOLUTE_DAYS!: number;
 
   @IsString()
   ENDPOINT_POLICIES_JSON!: string;
@@ -154,6 +167,8 @@ export interface AppConfig {
   JWT_SECRET: string;
   JWT_ISSUER: string;
   JWT_AUDIENCE: string;
+  REFRESH_TOKEN_IDLE_DAYS: number;
+  REFRESH_TOKEN_ABSOLUTE_DAYS: number;
   ENDPOINT_POLICIES_JSON: string;
   APP_INSTANCE_COUNT: number;
   TRUST_PROXY_HOPS: number;
@@ -195,6 +210,8 @@ const defaults: Record<string, string> = {
   CORS_ORIGINS: "http://localhost:5173,http://localhost:3000",
   JWT_ISSUER: "modular-nestjs",
   JWT_AUDIENCE: "modular-nestjs-api",
+  REFRESH_TOKEN_IDLE_DAYS: "30",
+  REFRESH_TOKEN_ABSOLUTE_DAYS: "90",
   ENDPOINT_POLICIES_JSON: "{}",
   APP_INSTANCE_COUNT: "1",
   TRUST_PROXY_HOPS: "0",
@@ -296,6 +313,11 @@ export function validateEnvironment(raw: Record<string, unknown>): AppConfig {
   ) {
     throw new Error("JWT_SECRET must be a real secret in production");
   }
+  if (input.REFRESH_TOKEN_ABSOLUTE_DAYS < input.REFRESH_TOKEN_IDLE_DAYS) {
+    throw new Error(
+      "REFRESH_TOKEN_ABSOLUTE_DAYS must be at least REFRESH_TOKEN_IDLE_DAYS",
+    );
+  }
   const origins = parseOrigins(input.CORS_ORIGINS);
   if (input.NODE_ENV === "production" && origins.length === 0) {
     throw new Error("CORS_ORIGINS is required in production");
@@ -347,6 +369,8 @@ export function validateEnvironment(raw: Record<string, unknown>): AppConfig {
     JWT_SECRET: input.JWT_SECRET,
     JWT_ISSUER: input.JWT_ISSUER,
     JWT_AUDIENCE: input.JWT_AUDIENCE,
+    REFRESH_TOKEN_IDLE_DAYS: input.REFRESH_TOKEN_IDLE_DAYS,
+    REFRESH_TOKEN_ABSOLUTE_DAYS: input.REFRESH_TOKEN_ABSOLUTE_DAYS,
     ENDPOINT_POLICIES_JSON: input.ENDPOINT_POLICIES_JSON,
     APP_INSTANCE_COUNT: input.APP_INSTANCE_COUNT,
     TRUST_PROXY_HOPS: input.TRUST_PROXY_HOPS,

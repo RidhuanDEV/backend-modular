@@ -92,7 +92,7 @@ public class AuthService {
       throw ApiException.unauthorized();
     UserEntity user = users.lock(found.get().id).orElseThrow(ApiException::unauthorized);
     if (user.deletedAt != null) throw ApiException.unauthorized();
-    Instant now = clock.instant(), expiry = now.plus(Duration.ofDays(30));
+    Instant now = clock.instant(), expiry = now.plus(settings.refreshAbsolute());
     UUID family = UUID.randomUUID();
     String raw = opaque();
     db.update(
@@ -101,7 +101,7 @@ public class AuthService {
         user.id,
         expiry,
         now);
-    insertToken(raw, family, expiry, now);
+    insertToken(raw, family, idleExpiry(now, expiry), now);
     audit.write(
         EndpointId.AUTH_LOGIN,
         user.id,
@@ -132,10 +132,9 @@ public class AuthService {
               }
               if (!old.expiresAt().isAfter(now)) return null;
               String raw = opaque();
-              Instant expiry = now.plus(Duration.ofDays(30));
+              // Rotation never extends the family: its expiry is the absolute lifetime.
               db.update("UPDATE refresh_tokens SET consumed_at=? WHERE token_hash=?", now, hashed);
-              db.update("UPDATE refresh_families SET expires_at=? WHERE id=?", expiry, family.id());
-              insertToken(raw, family.id(), expiry, now);
+              insertToken(raw, family.id(), idleExpiry(now, family.expiresAt()), now);
               audit.write(
                   EndpointId.AUTH_REFRESH,
                   user.id,
@@ -147,6 +146,12 @@ public class AuthService {
             });
     if (result == null) throw ApiException.unauthorized();
     return result;
+  }
+
+  /** A token lives for the idle window but never past its family's absolute expiry. */
+  private Instant idleExpiry(Instant now, Instant family) {
+    Instant idle = now.plus(settings.refreshIdle());
+    return idle.isBefore(family) ? idle : family;
   }
 
   public void logout(AuthDto.Refresh input) {

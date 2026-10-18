@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/NET-backend.git",
-    "commit": "5ae263e75bd2a4aa569c4df518b0ad132eee0c67",
+    "commit": "ae5fa3fbb417e995d2e7c6262d716c906f53493d",
     "dirty": false
   },
   "requirements": {
@@ -23,7 +23,7 @@
     ".env.mysql.example": "84d0ca028d88354b4389333d10414460eb64dd6a1aa59385c89ddcc53872d32c",
     ".template.config/backend-template.json": "8bab9620de0632280e328edebd2a4fa788665526529fea40b2fdb5c7deddd269",
     ".template.config/template.json": "99be5e833334e4b8b75866f0c04062ffc8d019c855e7b24346e14503a9eb53b0",
-    "CHANGELOG.md": "30676d104b4debe2780594dbae61be660b3cfc05169c17b754a5f9c5118304d7",
+    "CHANGELOG.md": "4265a8d51220776b37a8e82f3db555a9fb5243ea3c4f6b34ef02a1f17a1e1eb2",
     "CONTRIBUTING.md": "29ba284d95965f128b6f15d446d8cda4aea5be2039aa18e0dd903417c4abd4dc",
     "DEPENDENCIES.md": "c06b3e5097c7aeb83728734975839737f176129d0c422d128044e86adea86077",
     "Directory.Build.props": "52a373435a28b5485869db3a1dd890ef7b9f5dc828f850d09ede1b15f9cb3784",
@@ -84,7 +84,7 @@
     "src/ModularBackend.Api/packages.lock.json": "840b87d1de47bbc1a059782b43d216c068fff53506230ad683933ea7e156ec83",
     "src/ModularBackend.Application/Abstractions.cs": "e6068567cb7623257e3548d6c32d54c6245540f31f97afdd65b1f519d322c325",
     "src/ModularBackend.Application/AuditRedactor.cs": "28f197939bf28a7c2cadefc02d5367ffd45b75fbaf1d25a2071c17cb193dfae2",
-    "src/ModularBackend.Application/BackendService.cs": "4f6143d2574f0501c7000432a2ae63972d74beff60cdc36cc61f34358a54ba55",
+    "src/ModularBackend.Application/BackendService.cs": "a81a54baf6611f7fabc2c4b45532ea1618107e5493774d85f3fd642c17d50917",
     "src/ModularBackend.Application/Contracts.cs": "94e043574dad1603a62ace3a5f84ee7462c1232087e9de8e835df6d7318ab62c",
     "src/ModularBackend.Application/ModularBackend.Application.csproj": "b78513ff5f891530fe28be2b1b74ad2790578625725ad8a39c187750bd5ecf59",
     "src/ModularBackend.Application/NotificationService.cs": "3b204d96178738862f13a3516e4459e2f20a6ba16b85b5cf0c496a95142ec76b",
@@ -137,7 +137,7 @@
     "tests/ModularBackend.ContractTests/packages.lock.json": "c21ab581015a47b19426cf7951f1ab3068f3c56e197ede0c294f201af0e44560",
     "tests/ModularBackend.IntegrationTests/MSTestSettings.cs": "1fb96fc034aacda647e6487b8b2a9dd7892b5686d575bb9cc1370fa829643697",
     "tests/ModularBackend.IntegrationTests/ModularBackend.IntegrationTests.csproj": "94afa31798d2db33b21b7be285ca917464338257d190652826cdc17df077232b",
-    "tests/ModularBackend.IntegrationTests/RuntimeTests.cs": "5e91788965aeed613b5d777863a0c31a233006eabc64340891cd6fcea39fa681",
+    "tests/ModularBackend.IntegrationTests/RuntimeTests.cs": "00f59cccd8ab5d6337e998260e3a20062a6b51babd3647d5c6d8741625fd183f",
     "tests/ModularBackend.IntegrationTests/packages.lock.json": "c21ab581015a47b19426cf7951f1ab3068f3c56e197ede0c294f201af0e44560",
     "tests/ModularBackend.UnitTests/MSTestSettings.cs": "72f34577d30d2f5c78b3c50d2a2d898b52acca841ca165b68e352462f8fe525d",
     "tests/ModularBackend.UnitTests/ModularBackend.UnitTests.csproj": "45daed72b73c80add0a68b3f77991d4237d71ff65b77b2e219a7f8941cc306cc",

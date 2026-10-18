@@ -96,4 +96,4 @@ MySQL application passwords are UTF-8. The aiomysql 0.3.2 boundary preserves the
 
 ## Hardening upgrade
 
-Read [HARDENING-UPGRADE.md](HARDENING-UPGRADE.md) before migrating existing data. It documents sliding refresh/logout, ordered SSE replay, async email worker/outbox, retention commands and optional OpenTelemetry. Local PostgreSQL/MySQL regression and generated-consumer checks pass; [verification evidence](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) records the exact runtime and CI boundaries.
+Read [HARDENING-UPGRADE.md](HARDENING-UPGRADE.md) before migrating existing data. It documents refresh idle/absolute lifetimes, logout, ordered SSE replay, async email worker/outbox, retention commands and optional OpenTelemetry. Local PostgreSQL/MySQL regression and generated-consumer checks pass; [verification evidence](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) records the exact runtime and CI boundaries.

@@ -7,7 +7,7 @@ The endpoint inventory is derived from the actual registry, Pydantic DTOs and ro
 - Invalid DTOs return the template's failure envelope and HTTP 400 rather than FastAPI's default 422.
 - Roles and permissions use explicit public DTOs. Permission renaming/deletion checks the actor's held grants; admin remains the seed bootstrap role.
 - UTC timestamps retain microseconds in FastAPI; Prisma and Go retain their established millisecond storage precision.
-- Refresh expiry is absolute for a family rather than extended by each rotation.
+- Refresh sessions combine an idle window (`REFRESH_TOKEN_IDLE_DAYS`, default 30) with an absolute family lifetime fixed at login (`REFRESH_TOKEN_ABSOLUTE_DAYS`, default 90); rotation never extends the family.
 - SSE ordering uses an internal per-recipient sequence rather than timestamps/UUID ordering. The wire event ID is still a UUID, and unknown/foreign cursors are rejected before the response starts.
 - Health probes bypass rate limiting. Redis used only for caching never fails readiness; Redis used by the limiter does.
 - The initial caching example is `user.get`; endpoint overrides are limited to implemented cache/audit producers.

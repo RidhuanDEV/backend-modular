@@ -22,7 +22,6 @@ import (
 )
 
 const accessTokenTTL = 15 * time.Minute
-const refreshTokenTTL = 30 * 24 * time.Hour
 
 // Unknown emails still pay one bcrypt comparison so response time does not reveal which accounts exist.
 var dummyPasswordHash = sync.OnceValue(func() []byte {
@@ -45,6 +44,16 @@ type Service struct {
 	Audit            *audit.Writer
 	Secret           []byte
 	Issuer, Audience string
+	// RefreshAbsolute is fixed on the family at login; RefreshIdle bounds each rotated token.
+	RefreshIdle, RefreshAbsolute time.Duration
+}
+
+// idleExpiry keeps a token within the idle window but never past its family's absolute expiry.
+func (s *Service) idleExpiry(now, family time.Time) time.Time {
+	if idle := now.Add(s.RefreshIdle); idle.Before(family) {
+		return idle
+	}
+	return family
 }
 
 func (s *Service) Register(ctx context.Context, p audit.Policy, b model.Credentials) (model.AuthUser, error) {
@@ -87,11 +96,13 @@ func (s *Service) Login(ctx context.Context, p audit.Policy, b model.Credentials
 	actor := &Actor{ID: row.ID, Email: row.Email, RoleID: row.RoleID}
 	return audit.Mutate(ctx, s.Audit, p, actor, "LOGIN", func(q sqlc.Querier) (model.TokenPair, audit.Change, error) {
 		// Keep consumed hashes until the family is retained by cleanup.
-		pair, tokenHash, familyID, err := s.issueTokenPair(row.ID, row.Email, row.RoleID, "", time.Now().UTC().Add(refreshTokenTTL))
+		now := time.Now().UTC()
+		familyExpires := now.Add(s.RefreshAbsolute)
+		pair, tokenHash, familyID, err := s.issueTokenPair(row.ID, row.Email, row.RoleID, "", s.idleExpiry(now, familyExpires))
 		if err != nil {
 			return model.TokenPair{}, audit.Change{}, err
 		}
-		if err = q.CreateRefreshFamily(ctx, sqlc.CreateRefreshFamilyParams{ID: familyID, UserID: row.ID, ExpiresAt: sql.NullTime{Time: pair.RefreshTokenExpiresAt, Valid: true}}); err != nil {
+		if err = q.CreateRefreshFamily(ctx, sqlc.CreateRefreshFamilyParams{ID: familyID, UserID: row.ID, ExpiresAt: sql.NullTime{Time: familyExpires, Valid: true}}); err != nil {
 			return model.TokenPair{}, audit.Change{}, err
 		}
 		err = q.CreateAuthRefreshToken(ctx, sqlc.CreateAuthRefreshTokenParams{FamilyID: familyID, UserID: row.ID, TokenHash: tokenHash, ExpiresAt: sql.NullTime{Time: pair.RefreshTokenExpiresAt, Valid: true}})
@@ -176,17 +187,14 @@ func (s *Service) Refresh(ctx context.Context, p audit.Policy, raw string) (mode
 				return err
 			}
 		} else {
-			expires := sql.NullTime{Time: now.Add(refreshTokenTTL), Valid: true}
-			after.ExpiresAt = expires.Time
+			// Rotation never extends the family: its expiry is the absolute lifetime.
+			expires := sql.NullTime{Time: s.idleExpiry(now, family.ExpiresAt.Time.UTC()), Valid: true}
 			var tokenHash []byte
 			pair, tokenHash, _, err = s.issueTokenPair(user.ID, user.Email, user.RoleID, family.ID, expires.Time)
 			if err != nil {
 				return err
 			}
 			if _, err = q.RevokeAuthRefreshToken(ctx, stored.ID); err != nil {
-				return err
-			}
-			if err = q.AdvanceRefreshFamily(ctx, sqlc.AdvanceRefreshFamilyParams{ID: family.ID, ExpiresAt: expires}); err != nil {
 				return err
 			}
 			if err = q.CreateAuthRefreshToken(ctx, sqlc.CreateAuthRefreshTokenParams{FamilyID: family.ID, UserID: user.ID, TokenHash: tokenHash, ExpiresAt: expires}); err != nil {

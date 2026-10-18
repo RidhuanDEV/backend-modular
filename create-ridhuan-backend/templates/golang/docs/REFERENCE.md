@@ -16,7 +16,7 @@ Saat upgrade, jalankan seed secara eksplisit untuk menambahkan `manage_notificat
 
 Proyek ini ditujukan untuk satu aplikasi yang dikembangkan dan dirilis sebagai satu unit dengan batas package per fitur. Pilih layanan terpisah bila fitur perlu dirilis, diskalakan, atau dimiliki secara independen. Database aplikasi ini milik proyek Go dan tidak berbagi schema dengan starter Express atau stack lain.
 
-Perlu Go 1.27.1 untuk initializer dan mode manual. Compose memerlukan Docker Engine/Desktop serta Docker Compose v2. Mode manual memerlukan PostgreSQL 18; Redis hanya diperlukan bila cache atau rate store Redis diaktifkan.
+Perlu Go 1.27.2 untuk initializer dan mode manual. Compose memerlukan Docker Engine/Desktop serta Docker Compose v2. Mode manual memerlukan PostgreSQL 18; Redis hanya diperlukan bila cache atau rate store Redis diaktifkan.
 
 ## Fitur
 
@@ -83,7 +83,7 @@ $token = $login.data.token
 Invoke-RestMethod http://localhost:8080/api/auth/me -Headers @{ Authorization = "Bearer $token" }
 ```
 
-Untuk mencoba endpoint admin, set `ADMIN_EMAIL` dan `ADMIN_PASSWORD` sebelum seed, login memakai nilai tersebut, lalu panggil `GET /api/users` dengan bearer token. Login mengembalikan access token 15 menit di `data.token` dan refresh token opaque 30 hari di `data.refreshToken`. Kirim refresh token ke `POST /api/auth/refresh` untuk rotasi; token lama hanya dapat dipakai sekali. Endpoint protected menerima `Authorization: Bearer <token>`.
+Untuk mencoba endpoint admin, set `ADMIN_EMAIL` dan `ADMIN_PASSWORD` sebelum seed, login memakai nilai tersebut, lalu panggil `GET /api/users` dengan bearer token. Login mengembalikan access token 15 menit di `data.token` dan refresh token opaque (default 30 hari idle, maksimal 90 hari sejak login) di `data.refreshToken`. Kirim refresh token ke `POST /api/auth/refresh` untuk rotasi; token lama hanya dapat dipakai sekali. Endpoint protected menerima `Authorization: Bearer <token>`.
 
 ## Cakupan API dan permission
 
@@ -164,7 +164,7 @@ Jalankan di PowerShell dengan perintah Go yang sama; `.env` dimuat oleh aplikasi
 
 Huma menghasilkan OpenAPI dari operasi HTTP yang sama dengan request runtime. `/docs/openapi.json` menyediakan spesifikasi; `/docs` memuat Redoc 2.5.4 dari jsDelivr dengan versi dan SRI integrity hash yang dipin. Bila Content Security Policy diterapkan, izinkan `https://cdn.jsdelivr.net` pada `script-src` dan origin API sendiri pada `connect-src`. Jika dokumentasi tidak boleh publik, batasi path `/docs` pada ingress/reverse proxy; aplikasi belum memiliki env flag untuk menonaktifkannya.
 
-Access JWT berlaku 15 menit dan refresh token opaque menggunakan sliding 30 hari sejak rotasi sukses terakhir. Refresh token hanya disimpan sebagai SHA-256 hash, dirotasi setiap kali dipakai, dan pemakaian ulang token yang telah dicabut membatalkan seluruh keluarga token. Setiap rotasi sukses memperpanjang expiry keluarga menjadi waktu UTC server + 30 hari tanpa batas absolut. Access token lama tanpa claim `tokenUse` ditolak setelah upgrade ini; pengguna perlu login sekali lagi. `POST /api/auth/logout` menerima refresh token aktif maupun token sebelum rotasi dan mencabut seluruh keluarga sesi, dengan respons 204. Akun dan permission tetap diperiksa terhadap database pada request terlindungi. Password dibatasi 72 byte karena bcrypt, upload memakai UUID dan memeriksa signature file, credentialed CORS nonaktif, dan forwarded headers tidak dipercaya secara default.
+Access JWT berlaku 15 menit dan refresh token opaque punya idle timeout dan umur absolut. Refresh token hanya disimpan sebagai SHA-256 hash, dirotasi setiap kali dipakai, dan pemakaian ulang token yang telah dicabut membatalkan seluruh keluarga token. Setiap rotasi sukses memberi token baru yang berlaku `REFRESH_TOKEN_IDLE_DAYS` (default 30) sejak waktu UTC server, tetapi tidak pernah melewati expiry keluarga yang ditetapkan saat login dengan `REFRESH_TOKEN_ABSOLUTE_DAYS` (default 90). Setelah itu pengguna harus login ulang. `REFRESH_TOKEN_ABSOLUTE_DAYS` harus >= `REFRESH_TOKEN_IDLE_DAYS`. Access token lama tanpa claim `tokenUse` ditolak setelah upgrade ini; pengguna perlu login sekali lagi. `POST /api/auth/logout` menerima refresh token aktif maupun token sebelum rotasi dan mencabut seluruh keluarga sesi, dengan respons 204. Akun dan permission tetap diperiksa terhadap database pada request terlindungi. Password dibatasi 72 byte karena bcrypt, upload memakai UUID dan memeriksa signature file, credentialed CORS nonaktif, dan forwarded headers tidak dipercaya secara default.
 
 ## Testing dan operasional
 
@@ -198,4 +198,4 @@ For an external MySQL database, set `sslmode=verify-full` in `DATABASE_URL`; opt
 
 ## Hardening upgrade
 
-Read [HARDENING-UPGRADE.md](HARDENING-UPGRADE.md) before migrating existing data. It documents sliding refresh/logout, ordered SSE replay, async email worker/outbox, retention commands and optional OpenTelemetry. Local PostgreSQL/MySQL regression and generated-consumer checks pass; [verification evidence](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) records the exact runtime and CI boundaries.
+Read [HARDENING-UPGRADE.md](HARDENING-UPGRADE.md) before migrating existing data. It documents refresh idle/absolute lifetimes, logout, ordered SSE replay, async email worker/outbox, retention commands and optional OpenTelemetry. Local PostgreSQL/MySQL regression and generated-consumer checks pass; [verification evidence](https://github.com/RidhuanDEV/backend-modular/blob/main/docs/BACKEND-HARDENING-TEST-RESULTS.md) records the exact runtime and CI boundaries.

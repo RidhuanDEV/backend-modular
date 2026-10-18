@@ -32,6 +32,10 @@ def public_user(user: User) -> AuthUser:
     )
 
 
+def idle_expiry(instant: datetime, absolute: datetime, settings: Settings) -> datetime:
+    return min(instant + timedelta(days=settings.refresh_token_idle_days), absolute)
+
+
 class LoginSnapshot(DTO):
     email: str
 
@@ -65,8 +69,11 @@ async def login(ctx: Context, dto: Login, settings: Settings) -> Tokens:
         raise ApiError(401, "Invalid email or password")
     raw = refresh_token()
     instant = now()
+    # The family expiry is the absolute session lifetime and never moves.
     family = RefreshFamily(
-        id=uuid4(), user_id=user.id, expires_at=instant + timedelta(days=30)
+        id=uuid4(),
+        user_id=user.id,
+        expires_at=instant + timedelta(days=settings.refresh_token_absolute_days),
     )
     ctx.session.add(family)
     await ctx.session.flush()
@@ -75,7 +82,7 @@ async def login(ctx: Context, dto: Login, settings: Settings) -> Tokens:
             token_hash=token_hash(raw),
             family_id=family.id,
             user_id=user.id,
-            expires_at=instant + timedelta(days=30),
+            expires_at=idle_expiry(instant, family.expires_at, settings),
         )
     )
     await ctx.commit(
@@ -138,13 +145,12 @@ async def refresh(ctx: Context, raw: str, settings: Settings) -> Tokens:
         raise ApiError(401, "Invalid or expired refresh token")
     session.revoked_at = instant
     next_raw = refresh_token()
-    family.expires_at = instant + timedelta(days=30)
     ctx.session.add(
         RefreshToken(
             token_hash=token_hash(next_raw),
             family_id=session.family_id,
             user_id=user.id,
-            expires_at=family.expires_at,
+            expires_at=idle_expiry(instant, family.expires_at, settings),
         )
     )
     await ctx.commit(

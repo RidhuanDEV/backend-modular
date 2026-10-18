@@ -41,8 +41,10 @@ $application = Application::configure(basePath: dirname(__DIR__))
                 $request instanceof Request
                     ? $request->attributes->get('traceId')
                     : null;
+            // The full exception (message and stack) stays in server logs only.
             Log::error('request_failed', [
                 'type' => $error::class,
+                'exception' => $error,
                 ...is_string($requestId) ? ['requestId' => $requestId] : [],
                 ...is_string($traceId) ? ['traceId' => $traceId] : [],
             ]);

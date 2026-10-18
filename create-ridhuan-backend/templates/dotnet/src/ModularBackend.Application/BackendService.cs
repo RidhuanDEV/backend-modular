@@ -35,6 +35,9 @@ public sealed class BackendService(
 
     private static AuthUserResult AuthMap(User u) => new(u.Id, u.Email, u.RoleId);
 
+    // Emails are case-insensitive identities; MySQL uses a binary collation, so normalize here.
+    private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
+
     private static RoleResult Map(Role r, bool grants = true) =>
         new(
             r.Id,
@@ -131,7 +134,7 @@ public sealed class BackendService(
             "REGISTER",
             async token =>
             {
-                if (await store.UserByEmailAsync(email, token) is not null)
+                if (await store.UserByEmailAsync(NormalizeEmail(email), token) is not null)
                     throw new ApiException(409, "Email already registered");
                 var role =
                     await store.RoleByNameAsync("user", token)
@@ -152,7 +155,7 @@ public sealed class BackendService(
     {
         var user = new User
         {
-            Email = email,
+            Email = NormalizeEmail(email),
             PasswordHash = "",
             RoleId = role.Id,
             Role = role,
@@ -251,7 +254,7 @@ public sealed class BackendService(
         CancellationToken ct
     )
     {
-        var user = await store.UserByEmailAsync(email, ct);
+        var user = await store.UserByEmailAsync(NormalizeEmail(email), ct);
         if (user is null)
             VerifyAgainstDummyHash(password);
         if (user is null || user.DeletedAt is not null || !passwords.Verify(user, password))
@@ -511,7 +514,7 @@ public sealed class BackendService(
                 await EnsureRoleWithinActorAsync(ctx, user.Role, token);
                 var before = JsonSerializer.Serialize(Map(user));
                 if (email is not null)
-                    user.Email = email;
+                    user.Email = NormalizeEmail(email);
                 if (roleId is not null)
                 {
                     var nextRole =

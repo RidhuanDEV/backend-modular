@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import request from "supertest";
 import type { INestApplication } from "@nestjs/common";
@@ -151,6 +151,52 @@ test("auth refresh rotation, replay revocation and public DTO", async () => {
     .send({ refreshToken: "unknown-refresh-token-with-enough-length" });
   assert.equal(logout.status, 204);
   assert.equal(logout.text, "");
+});
+
+test("refresh rotation never extends the absolute session lifetime", async () => {
+  const email = `lifetime-${randomUUID()}@example.com`;
+  await request(app.getHttpServer())
+    .post("/api/auth/register")
+    .send({ email, password: "strong-password-123" });
+  const login = await request(app.getHttpServer())
+    .post("/api/auth/login")
+    .send({ email, password: "strong-password-123" });
+  assert.equal(login.status, 200);
+  const first = textField(field(login.body, "data"), "refreshToken");
+  const lifetimes = async (raw: string) => {
+    const token = await prisma.refreshToken.findUniqueOrThrow({
+      where: { tokenHash: createHash("sha256").update(raw).digest("hex") },
+      include: { family: true },
+    });
+    return {
+      family: token.family.expiresAt.getTime() - token.createdAt.getTime(),
+      token: token.expiresAt.getTime() - token.createdAt.getTime(),
+      familyExpiresAt: token.family.expiresAt,
+      familyId: token.familyId,
+    };
+  };
+  const day = 86400000;
+  const issued = await lifetimes(first);
+  assert.ok(Math.abs(issued.family - 90 * day) < 60000);
+  assert.ok(Math.abs(issued.token - 30 * day) < 60000);
+  const rotated = await request(app.getHttpServer())
+    .post("/api/auth/refresh")
+    .send({ refreshToken: first });
+  assert.equal(rotated.status, 200);
+  const second = textField(field(rotated.body, "data"), "refreshToken");
+  const after = await lifetimes(second);
+  assert.equal(
+    after.familyExpiresAt.getTime(),
+    issued.familyExpiresAt.getTime(),
+  );
+  await prisma.refreshFamily.update({
+    where: { id: after.familyId },
+    data: { expiresAt: new Date(Date.now() - 1000) },
+  });
+  const expired = await request(app.getHttpServer())
+    .post("/api/auth/refresh")
+    .send({ refreshToken: second });
+  assert.equal(expired.status, 401);
 });
 
 test("admin CRUD writes public data and activity logs", async () => {

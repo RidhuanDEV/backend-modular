@@ -11,6 +11,9 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class Access {
+  /** The seeded bootstrap role may grant any permission, including ones created after seeding. */
+  public static final String ROOT_ROLE = "ADMIN";
+
   private final UserRepository users;
   private final Db jdbc;
 
@@ -49,17 +52,28 @@ public class Access {
     active(actor());
   }
 
+  private boolean root(UUID actor) {
+    return !jdbc.query(
+            "SELECT 1 FROM roles WHERE id=? AND name=?",
+            (row, index) -> row.getInt(1),
+            active(actor).roleId,
+            ROOT_ROLE)
+        .isEmpty();
+  }
+
   public void within(UUID actor, UUID role) {
+    if (root(actor)) return;
     if (!permissions(actor).containsAll(rolePermissions(role))) throw ApiException.denied();
   }
 
   public void grant(UUID actor, List<UUID> ids) {
+    boolean root = root(actor);
     Set<String> own = permissions(actor);
     for (UUID id : ids) {
       List<String> names =
           jdbc.query("SELECT name FROM permissions WHERE id=?", (r, i) -> r.getString(1), id);
       if (names.isEmpty()) throw ApiException.missing();
-      if (!own.contains(names.getFirst())) throw ApiException.denied();
+      if (!root && !own.contains(names.getFirst())) throw ApiException.denied();
     }
   }
 }

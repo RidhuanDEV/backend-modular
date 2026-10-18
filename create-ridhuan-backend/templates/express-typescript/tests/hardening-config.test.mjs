@@ -56,3 +56,36 @@ test("startup rejects unsupported audit capabilities and required GET", () => {
     0,
   );
 });
+
+function sessionStartup(idle, absolute) {
+  return spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", 'await import("./dist/config/env.js");'],
+    {
+      cwd,
+      encoding: "utf8",
+      windowsHide: true,
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
+        DB_PROVIDER: "postgresql",
+        DATABASE_URL: "postgresql://fixture:fixture@localhost:5432/fixture",
+        JWT_SECRET: "identifier_fixture_secret_0123456789abcdef",
+        ...(idle === undefined ? {} : { REFRESH_TOKEN_IDLE_DAYS: idle }),
+        ...(absolute === undefined
+          ? {}
+          : { REFRESH_TOKEN_ABSOLUTE_DAYS: absolute }),
+      },
+    },
+  );
+}
+test("refresh lifetimes are configurable and validated at startup", () => {
+  assert.equal(sessionStartup().status, 0);
+  assert.equal(sessionStartup("7", "14").status, 0);
+  for (const [idle, absolute] of [
+    ["0", "90"],
+    ["30", "0"],
+    ["31", "30"],
+  ])
+    assert.notEqual(sessionStartup(idle, absolute).status, 0);
+});

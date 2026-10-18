@@ -12,12 +12,6 @@ type tracedQueries struct{ q sqlc.Querier }
 
 var _ sqlc.Querier = (*tracedQueries)(nil)
 
-func (t *tracedQueries) AdvanceRefreshFamily(ctx context.Context, arg sqlc.AdvanceRefreshFamilyParams) error {
-	ctx, span := telemetry.Start(ctx, "database")
-	r0 := t.q.AdvanceRefreshFamily(ctx, arg)
-	telemetry.Finish(span, r0)
-	return r0
-}
 func (t *tracedQueries) AssignRolePermission(ctx context.Context, arg sqlc.AssignRolePermissionParams) error {
 	ctx, span := telemetry.Start(ctx, "database")
 	r0 := t.q.AssignRolePermission(ctx, arg)

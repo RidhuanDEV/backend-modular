@@ -11,13 +11,17 @@ use App\Modules\Auth\Models\RefreshToken;
 use App\Modules\Roles\Models\Role;
 use App\Modules\Users\Models\User;
 use App\Support\Audit\Audit;
+use App\Support\Config\Settings;
 use App\Support\Http\ApiException;
 use App\Support\Time\Clock;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 final class AuthService
 {
+    private static ?string $dummyHash = null;
+
     public function __construct(
         private readonly JwtService $jwt,
         private readonly Audit $audit,
@@ -56,19 +60,23 @@ final class AuthService
     public function login(Credentials $data): Tokens
     {
         $user = User::query()->where('email', $data->email)->first();
-        // Fixed bcrypt cost-12 hash: unknown accounts pay the same verification cost.
+        // Unknown accounts verify against a hash from the active hasher, so the
+        // cost (and driver) always matches real accounts.
+        $dummy = self::$dummyHash ??= Hash::make(bin2hex(random_bytes(16)));
         $matches = Hash::check(
             $data->password,
-            $user === null
-                ? '$2y$12$JcK1rxsdrOYpwFs/uQgkOOarUTKF1cr7MrMDF4TxrJFKNDskCgWOe'
-                : $user->password,
+            $user === null ? $dummy : $user->password,
         );
         if ($user === null || !$matches) {
             throw new ApiException(401, 'Invalid email or password');
         }
         $raw = self::opaque();
         DB::transaction(function () use ($user, $raw): void {
-            $expires = $this->clock->now()->addDays(30);
+            $now = $this->clock->now();
+            // The family expiry is the absolute session lifetime and never moves.
+            $expires = $now->addDays(
+                Settings::integer('backend.refresh.absolute', 1, 3650),
+            );
             $family = RefreshFamily::query()->create([
                 'user_id' => $user->id,
                 'expires_at' => $expires,
@@ -77,7 +85,7 @@ final class AuthService
                 'family_id' => $family->id,
                 'user_id' => $user->id,
                 'token_hash' => hash('sha256', $raw),
-                'expires_at' => $expires,
+                'expires_at' => self::idleExpiry($now, $expires),
             ]);
             $this->audit->write(
                 'LOGIN',
@@ -132,23 +140,23 @@ final class AuthService
 
                 return null;
             }
-            $expiry = $now->addDays(30);
             $token->consumed_at = $now;
             $token->save();
-            $family->expires_at = $expiry;
-            $family->save();
+            // Rotation never extends the family: its expiry is the absolute lifetime.
             RefreshToken::query()->create([
                 'family_id' => $family->id,
                 'user_id' => $actor->id,
                 'token_hash' => hash('sha256', $replacement),
-                'expires_at' => $expiry,
+                'expires_at' => self::idleExpiry($now, $family->expires_at),
             ]);
             $this->audit->write(
                 'REFRESH',
                 'auth',
                 $family->id,
                 $actor->id,
-                after: ['expiresAt' => $expiry->toIso8601ZuluString()],
+                after: [
+                    'expiresAt' => $family->expires_at->toIso8601ZuluString(),
+                ],
             );
 
             return $actor;
@@ -187,6 +195,18 @@ final class AuthService
                 after: ['revoked' => true],
             );
         });
+    }
+
+    /** A token lives for the idle window but never past its family's expiry. */
+    private static function idleExpiry(
+        CarbonImmutable $now,
+        CarbonImmutable $family,
+    ): CarbonImmutable {
+        $idle = $now->addDays(
+            Settings::integer('backend.refresh.idle', 1, 3650),
+        );
+
+        return $idle->lessThan($family) ? $idle : $family;
     }
 
     private static function opaque(): string

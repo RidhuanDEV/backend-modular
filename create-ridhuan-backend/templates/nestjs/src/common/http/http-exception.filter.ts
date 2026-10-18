@@ -81,11 +81,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = "Validation failed";
       }
     }
+    // The stack stays server-side; the client only receives the generic body below.
     if (status >= 500 && !(exception instanceof HttpException))
-      this.logger.error({
-        message: "Request failed",
-        errorType: exception instanceof Error ? exception.name : "unknown",
-      });
+      this.logger.error(
+        {
+          message: "Request failed",
+          errorType: exception instanceof Error ? exception.name : "unknown",
+        },
+        exception instanceof Error ? exception.stack : undefined,
+      );
     const body: Failure = { success: false, message, errors };
     response.status(status).json(body);
   }

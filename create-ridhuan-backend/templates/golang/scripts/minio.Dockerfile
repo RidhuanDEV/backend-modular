@@ -1,5 +1,5 @@
 # Local S3 fixture built from official release source: registry images are unavailable.
-FROM golang:1.27.1-alpine AS server-build
+FROM golang:1.27.2-alpine AS server-build
 ENV GOMAXPROCS=2 GOMEMLIMIT=512MiB
 RUN apk add --no-cache ca-certificates git
 WORKDIR /src
@@ -9,7 +9,7 @@ RUN --mount=type=cache,id=modular-go-minio-modules,target=/go/pkg/mod \
     --mount=type=cache,id=modular-go-minio-build,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -p 1 -trimpath -o /out/minio .
 
-FROM golang:1.27.1-alpine AS client-build
+FROM golang:1.27.2-alpine AS client-build
 ENV GOMAXPROCS=2 GOMEMLIMIT=512MiB
 RUN apk add --no-cache ca-certificates git
 WORKDIR /src

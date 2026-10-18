@@ -12,6 +12,9 @@ use Illuminate\Support\Facades\DB;
 
 final class AccessPolicy
 {
+    /** The seeded bootstrap role may grant any permission, including ones created after seeding. */
+    public const ROOT_ROLE = 'admin';
+
     public function permits(User $user, string $name): bool
     {
         return DB::table('role_permissions')
@@ -32,6 +35,9 @@ final class AccessPolicy
         $role =
             Role::query()->with('permissions')->find($actor->role_id) ??
             throw new ApiException(403, 'Actor role is unavailable');
+        if ($role->name === self::ROOT_ROLE) {
+            return;
+        }
         $owned = $role->permissions
             ->map(fn(Permission $permission): string => $permission->id)
             ->all();
