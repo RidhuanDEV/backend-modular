@@ -21,7 +21,14 @@ export function validate(schemas: ValidationSchemas) {
 
       if (schemas.query) {
         const parsed = await schemas.query.parseAsync(req.query);
-        Object.assign(req.query, parsed);
+        // Express 5 exposes req.query as a prototype getter that re-parses the URL on
+        // every access, so mutating it is lost. Shadow it on the request instead.
+        Object.defineProperty(req, "query", {
+          value: parsed,
+          writable: true,
+          configurable: true,
+          enumerable: true,
+        });
       }
 
       if (schemas.params) {

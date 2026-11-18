@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-laravel.git",
-    "commit": "a4bca4fa9aa1ae89b23fd9d3f0b7cdf5285d2655",
+    "commit": "05083310dca110e5836ab39d90e70d574c63b586",
     "dirty": false
   },
   "requirements": {
@@ -93,8 +93,8 @@
     "app/Modules/Roles/Models/Role.php": "ce846c3c6a2d8f55dca6f79d729c3309d2e952f99f331a6d5e024635f05e6428",
     "app/Modules/Roles/Models/RolePermission.php": "9c04a35e43f21b1ccc144468d092d7cea441f0228e552f0d540d5e9add7d01cc",
     "app/Modules/Roles/Services/RoleService.php": "adc484f3fe8180b2d505f576507d6e7e5c58642619bf4760b94b5dc08c5a400b",
-    "app/Modules/System/Http/DocsController.php": "3d9106e10a39dbf0208cd65300164543db9f988b0793b805132e918aca9a11bf",
-    "app/Modules/System/Http/SystemController.php": "f82c8352d6223cd1a75f630b4f82392a6ca46ae434cd9888ecff7884663b1436",
+    "app/Modules/System/Http/DocsController.php": "2d295ecc4c4aab5f46aa3a7e50ecf76bb4380edf104e9be756079defe98562db",
+    "app/Modules/System/Http/SystemController.php": "f752cc5a9467cfde1a2301bbc92a046db32e73d4b2199822479f83f960c13192",
     "app/Modules/Uploads/Http/Requests/DownloadRequest.php": "0131ec18f5e42f3e3d8915bf30574701ec47bd3de69f9128ff6ae6ff48292215",
     "app/Modules/Uploads/Http/Requests/UploadRequest.php": "a0b10f7f0b338d12f23243b2a008770ce0d414d532c255cdb17a1faae4acbdcf",
     "app/Modules/Uploads/Http/Resources/StoredFileResource.php": "f984f7bcde84592144945a6e143d6dd95f9a71701fece863406d28fb7b1bf6d2",
@@ -105,7 +105,7 @@
     "app/Modules/Users/Data/UpdateUser.php": "0320eebc9c5422e4aa2ff4983e67286e48d96efb9fcd1d10d153770f2d96cf94",
     "app/Modules/Users/Data/UserQuery.php": "2878caa86af08c3a69193ee4979f50bf20d16e014ed9c73ff1949d1efa4c6fa6",
     "app/Modules/Users/Http/Requests/CreateUserRequest.php": "d53b3636fa6915143e3381f41f4fb6e2bfc854392937a6be59c6f9806b699cbe",
-    "app/Modules/Users/Http/Requests/ListUsersRequest.php": "a3d6e798f2c161bf1b75fb24adb1cbe2441f06d4fdfa6bb4beef1ddbf119ee79",
+    "app/Modules/Users/Http/Requests/ListUsersRequest.php": "daea7ea854fc4b7a911916ec930f62e558ccb1f7c78bc5e3046097d5a9fe078e",
     "app/Modules/Users/Http/Requests/UpdateUserRequest.php": "3c652d99c28063db385b08bc31826ba576682d6303a8e9573e34811ccc3b0adf",
     "app/Modules/Users/Http/Resources/UserResource.php": "52fd7dc830a4c12716946c6edf67827a024915114bec1c05838b72b68cfa0855",
     "app/Modules/Users/Http/UserController.php": "2f9070c8c8f1b5e9295da51d4547b80d2723976545925dcb93873b41778bf922",
@@ -124,7 +124,7 @@
     "app/Support/Http/ErrorEnvelope.php": "a938958943810815abb4a70bf78856be15ed96f6a317e5403650936b95decfe9",
     "app/Support/Http/Input.php": "33d68b10770aa2719c98e15732630943de15f9c8473478db381629b66a183fa8",
     "app/Support/Observability/DeclaredModelProperties.php": "f8aa44ce1ee77ba87225ab8f10017e6be7e02d5948db821107c7a04a4464dc51",
-    "app/Support/Observability/EndpointDocumentation.php": "4acaaeedd3625539ebb8cf6412bafb59ab384e30d5e2485edc586c3b0caaf3fc",
+    "app/Support/Observability/EndpointDocumentation.php": "100fb030c519ec7112a4eb363fa14c56d5489c1991f427426b1e0bec50b8d151",
     "app/Support/Observability/OpenApi.php": "d15b6bb07c12cb160fe0e8f908b9de2a97ae5e8839aafc9b7034a539f0d9f381",
     "app/Support/Observability/ResourceEnvelopeInference.php": "4f5f22f5f376ecbfebf2bff3703f2081069d20d3c5301db1e8e6b3166ff6bef4",
     "app/Support/Observability/Telemetry.php": "d849d803fb0d6f372c4ee0b275d33439d285f85b4a61c599b020438696f39cef",
@@ -215,6 +215,6 @@
     "tests/Integration/ProcessTest.php": "f0c1177911681398fc1c53e047e8d29817333ce30d699b8ca6c89e37030919a8",
     "tests/TestCase.php": "1cdd2af8e86d6edbfad0d36d61b9708d208831a30b18b4d02e566fc1bbcb19df",
     "tests/Unit/BoundaryTest.php": "373f3d3e58c36176779ee490f8975754136171ca02ce4800ca717396a9a94e1b",
-    "tests/Unit/OpenApiTest.php": "0b210cc719a725b70ee0273966e60309851fb8d319ff8d0f359a057672bf448a"
+    "tests/Unit/OpenApiTest.php": "70177a05b76a8c3d2bd5956589ad10c7d2ac6564e1a58b500f70693e31d7687b"
   }
 }

@@ -1,4 +1,6 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 using ModularBackend.Api.Endpoints;
@@ -31,6 +33,7 @@ public sealed class PolicyTransformer(EndpointRegistry registry) : IOpenApiOpera
         operation.Extensions["x-cache"] = new JsonNodeExtension(
             JsonValue.Create(policy.Cache.ToString().ToLowerInvariant())
         );
+        DocumentQueryParameters(operation, context);
         var schema = await context.GetOrCreateSchemaAsync(typeof(Failure), cancellationToken: ct);
         operation.Responses ??= new OpenApiResponses();
         if (
@@ -72,9 +75,9 @@ public sealed class PolicyTransformer(EndpointRegistry registry) : IOpenApiOpera
                 },
             };
         }
-        foreach (
-            var status in new[] { "400", "401", "403", "404", "409", "413", "429", "500", "503" }
-        )
+        if (id is EndpointId.AuthLogin or EndpointId.AuthRefresh or EndpointId.AuthLogout)
+            DocumentRefreshCookie(operation, id);
+        foreach (var status in ErrorStatuses(policy, operation))
             operation.Responses[status] = new OpenApiResponse
             {
                 Description = "Error envelope",
@@ -83,6 +86,130 @@ public sealed class PolicyTransformer(EndpointRegistry registry) : IOpenApiOpera
                     ["application/json"] = new() { Schema = schema },
                 },
             };
+    }
+
+    // Statuses the pipeline can produce for this operation: validation and body parsing,
+    // authentication and permissions, path lookups, database conflicts on writes, body
+    // limits, rate limiting (system probes are exempt), database outages and the 500 handler.
+    private static IEnumerable<string> ErrorStatuses(
+        EndpointPolicy policy,
+        OpenApiOperation operation
+    )
+    {
+        var id = policy.Id;
+        var write = policy.Method != "GET";
+        var body = operation.RequestBody is not null;
+        if (write || body || operation.Parameters is { Count: > 0 })
+            yield return "400";
+        if (!policy.Public || id is EndpointId.AuthLogin or EndpointId.AuthRefresh)
+            yield return "401";
+        if (
+            !string.IsNullOrEmpty(policy.Permission)
+            || id is EndpointId.AuthRefresh or EndpointId.AuthLogout
+        )
+            yield return "403";
+        if (policy.Path.Contains('{') || id == EndpointId.NotificationCreate)
+            yield return "404";
+        if (write)
+            yield return "409";
+        if (body)
+            yield return "413";
+        if (policy.Module != "system")
+            yield return "429";
+        yield return "500";
+        if (
+            id
+            is not (
+                EndpointId.HealthGet
+                or EndpointId.LiveGet
+                or EndpointId.DocsSpec
+                or EndpointId.DocsModuleSpec
+                or EndpointId.DocsUi
+            )
+        )
+            yield return "503";
+    }
+
+    // Query binding is case-insensitive, but clients should see the camelCase wire names
+    // used everywhere else, with the server defaults that make the parameters optional.
+    private static void DocumentQueryParameters(
+        OpenApiOperation operation,
+        OpenApiOperationTransformerContext context
+    )
+    {
+        foreach (var parameter in operation.Parameters?.OfType<OpenApiParameter>() ?? [])
+        {
+            if (parameter.In != ParameterLocation.Query || string.IsNullOrEmpty(parameter.Name))
+                continue;
+            var description = context.Description.ParameterDescriptions.FirstOrDefault(d =>
+                string.Equals(d.Name, parameter.Name, StringComparison.OrdinalIgnoreCase)
+            );
+            parameter.Name = JsonNamingPolicy.CamelCase.ConvertName(parameter.Name);
+            if (
+                (description?.DefaultValue ?? RecordDefault(description)) is { } value
+                && parameter.Schema is OpenApiSchema schema
+            )
+            {
+                schema.Default = JsonSerializer.SerializeToNode(value);
+                parameter.Required = false;
+            }
+        }
+    }
+
+    // [FromQuery] records expose defaults only on their primary constructor parameters.
+    private static object? RecordDefault(ApiParameterDescription? description)
+    {
+        var metadata = description?.ModelMetadata;
+        if (metadata?.ContainerType is not { } container || metadata.PropertyName is not { } name)
+            return null;
+        return container
+            .GetConstructors()
+            .SelectMany(c => c.GetParameters())
+            .FirstOrDefault(p => p.Name == name && p.HasDefaultValue)
+            ?.DefaultValue;
+    }
+
+    private const string RefreshCookieModes =
+        "Refresh token transport is set by RefreshCookie:Transport (RefreshCookie__Transport). "
+        + "body (default): the refresh token travels in JSON. "
+        + "cookie: login and refresh set it as an httpOnly cookie scoped to /api/auth and omit it from the response body; "
+        + "refresh and logout read the cookie when the body has no refreshToken, and then require the X-Requested-With header (send credentials: \"include\" cross-origin). "
+        + "A refreshToken in the body always takes precedence.";
+
+    // Documents both refresh token transports on the endpoints that issue or consume it.
+    private static void DocumentRefreshCookie(OpenApiOperation operation, EndpointId id)
+    {
+        operation.Description = RefreshCookieModes;
+        var success = id == EndpointId.AuthLogout ? "204" : "200";
+        if (
+            operation.Responses is { } responses
+            && responses.TryGetValue(success, out var found)
+            && found is OpenApiResponse response
+        )
+            response.Headers = new Dictionary<string, IOpenApiHeader>
+            {
+                ["Set-Cookie"] = new OpenApiHeader
+                {
+                    Description =
+                        id == EndpointId.AuthLogout
+                            ? "Cookie mode only: clears the refresh cookie"
+                            : "Cookie mode only: httpOnly refresh token cookie (Path=/api/auth)",
+                    Schema = new OpenApiSchema { Type = JsonSchemaType.String },
+                },
+            };
+        if (id == EndpointId.AuthLogin)
+            return;
+        operation.Parameters ??= [];
+        operation.Parameters.Add(
+            new OpenApiParameter
+            {
+                Name = "X-Requested-With",
+                In = ParameterLocation.Header,
+                Required = false,
+                Description = "Required (any value) when the refresh token comes from the cookie",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String },
+            }
+        );
     }
 }
 

@@ -24,7 +24,7 @@ import { ${permissionConst} } from "../../constants/permissions.constants.js";
       "none",
       "read",
       200,
-      `query: search${pascal}Schema, response: success(z.array(${response}))`,
+      `query: search${pascal}Schema, response: success(z.array(${response}.partial()))`,
     ],
     [
       ".get",

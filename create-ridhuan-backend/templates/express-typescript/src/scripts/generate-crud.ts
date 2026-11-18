@@ -241,7 +241,10 @@ function validateModuleName(name: string): string {
 
 function genSchema(name: string): string {
   const pascal = pascalCase(name);
+  const camel = camelCase(name);
   return `import { z } from 'zod';
+import { fieldsQuery } from '../../core/http/fields.js';
+import { ${camel}SelectableFields } from './queries/${name}.query.js';
 
 export const create${pascal}Schema = z.object({
   // Define your create fields here
@@ -255,8 +258,8 @@ export const search${pascal}Schema = z.object({
   search: z.string().optional(),
   sortBy: z.string().optional(),
   orderBy: z.enum(['asc', 'desc']).optional(),
-  /** Comma-separated response/model field names to include in list results. */
-  fields: z.string().optional(),
+  /** Comma-separated response fields to return; unknown names are a 400. */
+  fields: fieldsQuery(${camel}SelectableFields),
 });
 
 export const ${camelCase(name)}IdSchema = z.object({
@@ -378,6 +381,7 @@ function genQuery(name: string): string {
   const pascal = pascalCase(name);
   const camel = camelCase(name);
   return `import type { QueryBuilderConfig } from '../../../core/database/query-builder.js';
+import type { ${pascal}ResponseDto } from '../dto/${name}-response.dto.js';
 
 /**
  * Query builder config for ${pascal}.
@@ -387,8 +391,6 @@ function genQuery(name: string): string {
  * searchFields:    Model fields searched with \`contains\` when ?search= is provided.
  * sortableFields:  Allowlist of model fields valid for ?sortBy=. Any field not in
  *                  this list silently falls back to createdAt.
- * selectableFields: Allowlist for ?fields= field selection. Only these fields
- *                  can be returned, preventing internal/sensitive column leaks.
  * filters:         Maps query-param key to model field + Prisma operator.
  * defaultIncludes: Eager-loaded relations to prevent N+1 queries.
  */
@@ -402,12 +404,6 @@ export const ${camel}QueryConfig: QueryBuilderConfig = {
     'updatedAt',
     // 'name',
   ],
-  selectableFields: [
-    'id',
-    'createdAt',
-    'updatedAt',
-    // 'name',
-  ],
   filters: {
     // yearMin:       { column: 'year',       type: 'number', operator: 'gte' },
     // yearMax:       { column: 'year',       type: 'number', operator: 'lte' },
@@ -417,6 +413,14 @@ export const ${camel}QueryConfig: QueryBuilderConfig = {
   },
   defaultIncludes: {},
 };
+
+/** Response fields a client may request with ?fields=. */
+export const ${camel}SelectableFields: readonly (keyof ${pascal}ResponseDto)[] = [
+  'id',
+  'createdAt',
+  'updatedAt',
+  // 'name',
+];
 `;
 }
 
@@ -510,7 +514,8 @@ import { AuditAction } from '../../constants/audit.constants.js';
 import { ${moduleConst} } from '../../constants/modules.constants.js';
 import { to${pascal}Response, to${pascal}ResponseList } from './mappers/${name}.mapper.js';
 import { ${camel}Policy } from './policies/${name}.policy.js';
-import { ${camel}QueryConfig } from './queries/${name}.query.js';
+import { ${camel}QueryConfig, ${camel}SelectableFields } from './queries/${name}.query.js';
+import { projectFields, selectedFields } from '../../core/http/fields.js';
 import type { Create${pascal}Dto } from './dto/create-${name}.dto.js';
 import type { Update${pascal}Dto } from './dto/update-${name}.dto.js';
 import type { Search${pascal}Dto } from './dto/search-${name}.dto.js';
@@ -525,9 +530,16 @@ const CACHE_PREFIX = ${moduleConst};
 
 export class ${pascal}Service {
   async findAll(query: Search${pascal}Dto): Promise<{ data: ${pascal}ResponseProjection[]; meta: PaginationMeta }> {
-    const cacheKey = \`\${CACHE_PREFIX}:list:\${JSON.stringify(query)}\`;
+    // The cache holds full rows; ?fields= only projects them, so it is not part of the key.
+    const { fields, ...listQuery } = query;
+    const keys = selectedFields(fields, ${camel}SelectableFields);
+    const project = (result: { data: ${pascal}ResponseProjection[]; meta: PaginationMeta }) => ({
+      data: result.data.map((row) => projectFields(row, keys)),
+      meta: result.meta,
+    });
+    const cacheKey = \`\${CACHE_PREFIX}:list:\${JSON.stringify(listQuery)}\`;
     const cached = await cacheService.get(cacheKey, z.object({ data: z.array(${camel}ResponseSchema), meta: paginationCacheSchema }));
-    if (cached) return cached;
+    if (cached) return project(cached);
 
     const findOptions = buildFindOptions(query, ${camel}QueryConfig);
     const { rows, count } = await repository.findAll(findOptions);
@@ -539,7 +551,7 @@ export class ${pascal}Service {
     };
 
     await cacheService.set(cacheKey, result, 60);
-    return result;
+    return project(result);
   }
 
   async findById(id: string): Promise<${pascal}ResponseDto> {
@@ -638,7 +650,7 @@ import { sendSuccess, sendCreated, sendNoContent } from '../../utils/response.js
 import type { Create${pascal}Dto } from './dto/create-${name}.dto.js';
 import type { Update${pascal}Dto } from './dto/update-${name}.dto.js';
 import type { Search${pascal}Dto } from './dto/search-${name}.dto.js';
-import { create${pascal}Schema, update${pascal}Schema } from './${name}.schema.js';
+import { create${pascal}Schema, search${pascal}Schema, update${pascal}Schema } from './${name}.schema.js';
 
 const service = new ${pascal}Service();
 
@@ -649,21 +661,8 @@ export class ${pascal}Controller {
     next: NextFunction,
   ): Promise<void> => {
     try {
-      const pageVal = req.query['page'];
-      const limitVal = req.query['limit'];
-      const sortByVal = req.query['sortBy'];
-      const orderByVal = req.query['orderBy'];
-      const searchVal = req.query['search'];
-      const fieldsVal = req.query['fields'];
-
-      const query: Search${pascal}Dto = {
-        page: typeof pageVal === 'number' ? pageVal : Number(pageVal) || 1,
-        limit: typeof limitVal === 'number' ? limitVal : Number(limitVal) || 10,
-        sortBy: typeof sortByVal === 'string' ? sortByVal : undefined,
-        orderBy: orderByVal === 'desc' ? 'desc' : 'asc',
-        search: typeof searchVal === 'string' ? searchVal : undefined,
-        fields: typeof fieldsVal === 'string' ? fieldsVal : undefined,
-      };
+      // Already validated by the route; parsing again yields the typed DTO.
+      const query: Search${pascal}Dto = search${pascal}Schema.parse(req.query);
 
       const result = await service.findAll(query);
       sendSuccess(res, result);
@@ -782,7 +781,7 @@ function getOrCreateCollection(): PostmanCollection {
       schema:
         "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     },
-    variable: [{ key: "baseUrl", value: "http://localhost:3000/api" }],
+    variable: [{ key: "baseUrl", value: "http://localhost:3000" }],
     item: [],
   };
 }
@@ -809,9 +808,9 @@ function updatePostman(name: string): void {
           method: "GET",
           header: [authHeader],
           url: {
-            raw: `{{baseUrl}}/${plural}?page=1&limit=10`,
+            raw: `{{baseUrl}}/api/${plural}?page=1&limit=10`,
             host: ["{{baseUrl}}"],
-            path: [plural],
+            path: ["api", plural],
           },
         },
       },
@@ -821,9 +820,9 @@ function updatePostman(name: string): void {
           method: "GET",
           header: [authHeader],
           url: {
-            raw: `{{baseUrl}}/${plural}/:id`,
+            raw: `{{baseUrl}}/api/${plural}/:id`,
             host: ["{{baseUrl}}"],
-            path: [plural, ":id"],
+            path: ["api", plural, ":id"],
           },
         },
       },
@@ -833,9 +832,9 @@ function updatePostman(name: string): void {
           method: "POST",
           header: [authHeader, jsonHeader],
           url: {
-            raw: `{{baseUrl}}/${plural}`,
+            raw: `{{baseUrl}}/api/${plural}`,
             host: ["{{baseUrl}}"],
-            path: [plural],
+            path: ["api", plural],
           },
           body: {
             mode: "raw",
@@ -850,9 +849,9 @@ function updatePostman(name: string): void {
           method: "PATCH",
           header: [authHeader, jsonHeader],
           url: {
-            raw: `{{baseUrl}}/${plural}/:id`,
+            raw: `{{baseUrl}}/api/${plural}/:id`,
             host: ["{{baseUrl}}"],
-            path: [plural, ":id"],
+            path: ["api", plural, ":id"],
           },
           body: {
             mode: "raw",
@@ -867,9 +866,9 @@ function updatePostman(name: string): void {
           method: "DELETE",
           header: [authHeader],
           url: {
-            raw: `{{baseUrl}}/${plural}/:id`,
+            raw: `{{baseUrl}}/api/${plural}/:id`,
             host: ["{{baseUrl}}"],
-            path: [plural, ":id"],
+            path: ["api", plural, ":id"],
           },
         },
       },

@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-fastapi.git",
-    "commit": "b14f22be68f4bfdfa671d41db785d584e20cd56b",
+    "commit": "042a3f1cdfb8e5484026801d6639b697433e0b10",
     "dirty": false
   },
   "requirements": {
@@ -25,7 +25,7 @@
     "compose.mysql.yaml": "ad177ac7184870842d67ca545e9cca82ff2a26bcfcd1865165db321aa33bd014",
     "compose.override.yaml.example": "402bea15cbda04f28f7ad07ed1590dbe3abf7b2d558b5b701ba1c2f8422399c7",
     "compose.yaml": "d503ff585c2143d2e9b08cad643aac39ea346f5d919cc599340d8359ddaca99c",
-    "contracts/behavior-differences.md": "04d21dc5597fa3a5e56ec183a3ef3399c6910141f654b7ec6d38674b54592805",
+    "contracts/behavior-differences.md": "ff5d166580c216bce1c2ce3d95320d6f482836f530380d842beb01bfe9310eb4",
     "contracts/endpoints.json": "014eb5d7b28ea140ceef716d58eab189eab9a6c6df5055acc4b8c161b7709ffb",
     "DEPENDENCIES.md": "a6084079cbe2e85c2a03c2158386e9dc96de1e8eb6a9ef83e7b940a3cb120691",
     "Dockerfile": "19999bf057bdbef9c7873b25d21ea309f5d24ddafab80f02fe49fc5310806d2c",
@@ -75,7 +75,7 @@
     "src/app/database/errors.py": "6f483f34e20b8dd064dd3060e2abf73d0f2825ef289f8cf197cfa1b918a9d5be",
     "src/app/database/models.py": "d181ccd30107c5ea5e13e38dce415c16ebedebad1623170548b8f920b41b769b",
     "src/app/database/types.py": "03d9361edabeab787ba8e189691739e4273017164e2d32d31a1be3dc9985c37b",
-    "src/app/main.py": "8c92aee685d22fa6ad14a30c9b33f86e17e5da4303fdcc3dd5fc8711a6fda106",
+    "src/app/main.py": "b87477ca648696a59be549400190cebd9930559f0b5b8a640f668df196f14bdf",
     "src/app/modules/auth/models.py": "1e22d91691fa7be4930bf95dbf25ed1a60928b5de7e14747bb49156123296783",
     "src/app/modules/auth/refresh_cookie.py": "094d015c9845d49de3d650bc86c6947d8d2f2b47b0e3fa61306194c60111cd2d",
     "src/app/modules/auth/router.py": "714a4e8a9e7b3db645ba9819239c6c25e8ad2d0ae18f257686422c3f2951b476",
@@ -120,7 +120,7 @@
     "src/app/__init__.py": "6473dcd204176e537dedf5f7b2b6881b2910584531de7d6f72e446cf897198c1",
     "tests/integration/test_database.py": "7c68daa3915919dfe971f04fa8d5d9e0a31e1d1871f40199575da780cd8d11c6",
     "tests/unit/test_blocking.py": "8bcaa8d8d12e1dc287c26e1867cd878f76e23085e980fb36c640b82c3c081a13",
-    "tests/unit/test_contract.py": "455f21ed7b25922943abea2076871aa906c6c13d8ad983e3775dc74b7806304b",
+    "tests/unit/test_contract.py": "c1e863625eccc2f4c44b64462c455c513d8fd1f71411688dc1b5e8c8509f888f",
     "tests/unit/test_mail.py": "5c314a4a26e156e389819be04ea69805738e32274b308727c074b48f6c48080f",
     "tests/unit/test_session.py": "2d37520696c241008f30260a5778926a114053dd2f81065524b5abccea01306c",
     "uv.lock": "1c4f258780df2a5c55e69726143fd79ccccca67e56cda0fd365d2b9d5e78320b"

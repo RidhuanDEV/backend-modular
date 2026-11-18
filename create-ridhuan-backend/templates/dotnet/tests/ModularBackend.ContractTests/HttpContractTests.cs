@@ -11,6 +11,105 @@ namespace ModularBackend.ContractTests;
 public sealed class HttpContractTests
 {
     [TestMethod]
+    public async Task DocumentsUserListQueryAsWireNamesWithDefaults()
+    {
+        await using var host = new TestHost();
+        using var client = host.CreateClient();
+        using var doc = JsonDocument.Parse(await client.GetStringAsync("/docs/openapi.json"));
+        var parameters = doc
+            .RootElement.GetProperty("paths")
+            .GetProperty("/api/users")
+            .GetProperty("get")
+            .GetProperty("parameters")
+            .EnumerateArray()
+            .Where(p => p.GetProperty("in").GetString() == "query")
+            .ToDictionary(p => p.GetProperty("name").GetString() ?? "", p => p.Clone());
+        CollectionAssert.AreEquivalent(
+            new[] { "page", "limit", "sortBy", "orderBy", "search", "fields" },
+            parameters.Keys.ToArray()
+        );
+        foreach (var (name, parameter) in parameters)
+            Assert.IsFalse(
+                parameter.TryGetProperty("required", out var required) && required.GetBoolean(),
+                name
+            );
+        Assert.AreEqual(
+            1,
+            parameters["page"].GetProperty("schema").GetProperty("default").GetInt32()
+        );
+        Assert.AreEqual(
+            10,
+            parameters["limit"].GetProperty("schema").GetProperty("default").GetInt32()
+        );
+    }
+
+    [TestMethod]
+    public async Task DocumentsOnlyErrorsThePipelineCanReturn()
+    {
+        await using var host = new TestHost();
+        using var client = host.CreateClient();
+        using var doc = JsonDocument.Parse(await client.GetStringAsync("/docs/openapi.json"));
+        var paths = doc.RootElement.GetProperty("paths");
+        string[] Codes(string path, string method) =>
+            paths
+                .GetProperty(path)
+                .GetProperty(method)
+                .GetProperty("responses")
+                .EnumerateObject()
+                .Select(r => r.Name)
+                .Where(code => code[0] is '4' or '5')
+                .Order()
+                .ToArray();
+        CollectionAssert.AreEqual(new[] { "500", "503" }, Codes("/ready", "get"));
+        CollectionAssert.AreEqual(new[] { "500" }, Codes("/live", "get"));
+        CollectionAssert.AreEqual(
+            new[] { "400", "401", "403", "429", "500", "503" },
+            Codes("/api/users", "get")
+        );
+        CollectionAssert.Contains(Codes("/api/users/{id}", "get"), "404");
+        CollectionAssert.DoesNotContain(Codes("/api/auth/login", "post"), "403");
+        CollectionAssert.Contains(Codes("/api/auth/login", "post"), "401");
+    }
+
+    [TestMethod]
+    public async Task DocumentsRefreshCookieTransport()
+    {
+        await using var host = new TestHost();
+        using var client = host.CreateClient();
+        using var doc = JsonDocument.Parse(await client.GetStringAsync("/docs/openapi.json"));
+        var paths = doc.RootElement.GetProperty("paths");
+        foreach (
+            var (path, status) in new[]
+            {
+                ("/api/auth/login", "200"),
+                ("/api/auth/refresh", "200"),
+                ("/api/auth/logout", "204"),
+            }
+        )
+        {
+            var operation = paths.GetProperty(path).GetProperty("post");
+            StringAssert.Contains(operation.GetProperty("description").GetString(), "Transport");
+            Assert.IsTrue(
+                operation
+                    .GetProperty("responses")
+                    .GetProperty(status)
+                    .GetProperty("headers")
+                    .TryGetProperty("Set-Cookie", out _),
+                path
+            );
+            var header = operation.TryGetProperty("parameters", out var parameters)
+                ? parameters
+                    .EnumerateArray()
+                    .Where(p => p.GetProperty("name").GetString() == "X-Requested-With")
+                    .ToArray()
+                : [];
+            Assert.HasCount(path == "/api/auth/login" ? 0 : 1, header, path);
+            if (header.Length == 1)
+                Assert.AreEqual("header", header[0].GetProperty("in").GetString());
+        }
+    }
+
+    [TestMethod]
     public async Task DocumentsContainAllRegistryOperationsAndRuntimeValidationEnvelopes()
     {
         await using var host = new TestHost();

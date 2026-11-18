@@ -289,7 +289,8 @@ export const endpointRegistry = {
     cache: "read",
     status: 200,
     query: searchUserSchema,
-    response: success(z.array(user)),
+    // ?fields= may project each row down to a subset of these fields.
+    response: success(z.array(user.partial())),
   },
   "user.get": {
     method: "GET",

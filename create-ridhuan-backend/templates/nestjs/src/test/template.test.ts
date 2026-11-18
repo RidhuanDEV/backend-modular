@@ -310,3 +310,97 @@ test("refresh lifetimes default to 30 idle / 90 absolute and are validated", () 
       }),
     );
 });
+
+type JsonRecord = Record<string, unknown>;
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function child(value: unknown, ...keys: string[]): unknown {
+  let current = value;
+  for (const key of keys)
+    current = isRecord(current) ? current[key] : undefined;
+  return current;
+}
+
+test("OpenAPI documents error responses and optional defaulted query parameters", async () => {
+  const response = await request(app.getHttpServer()).get("/docs/openapi.json");
+  const document: unknown = response.body;
+  assert.ok(
+    isRecord(child(document, "components", "schemas", "ErrorResponse")),
+  );
+  const paths = child(document, "paths");
+  assert.ok(isRecord(paths));
+  for (const [path, item] of Object.entries(paths)) {
+    if (!isRecord(item)) continue;
+    for (const [method, operation] of Object.entries(item)) {
+      const responses = child(operation, "responses");
+      assert.ok(isRecord(responses), `${method} ${path}`);
+      for (const code of ["429", "500"])
+        assert.ok(responses[code], `${method} ${path} lacks ${code}`);
+      for (const [code, error] of Object.entries(responses))
+        if (Number(code) >= 400)
+          assert.equal(
+            child(error, "content", "application/json", "schema", "$ref"),
+            "#/components/schemas/ErrorResponse",
+            `${method} ${path} ${code}`,
+          );
+      const parameters = child(operation, "parameters");
+      for (const parameter of Array.isArray(parameters) ? parameters : [])
+        if (
+          child(parameter, "in") === "query" &&
+          child(parameter, "schema", "default") !== undefined
+        )
+          assert.equal(
+            child(parameter, "required"),
+            false,
+            `${path} ${String(child(parameter, "name"))}`,
+          );
+    }
+  }
+  // Query parameters come from the Swagger CLI plugin, which only runs in nest build.
+  const users = child(paths, "/api/users", "get", "responses");
+  for (const code of ["401", "403"]) assert.ok(child(users, code), code);
+  for (const code of ["400", "404"])
+    assert.ok(child(paths, "/api/users/{id}", "get", "responses", code), code);
+  assert.ok(child(paths, "/ready", "get", "responses", "503"));
+  assert.equal(child(paths, "/live", "get", "responses", "401"), undefined);
+  assert.equal(
+    child(paths, "/api/auth/login", "post", "responses", "403"),
+    undefined,
+  );
+});
+
+test("OpenAPI documents the refresh token cookie transport", async () => {
+  const response = await request(app.getHttpServer()).get("/docs/openapi.json");
+  const paths = child(response.body, "paths");
+  for (const path of [
+    "/api/auth/login",
+    "/api/auth/refresh",
+    "/api/auth/logout",
+  ]) {
+    const operation = child(paths, path, "post");
+    const description = child(operation, "description");
+    assert.ok(
+      typeof description === "string" &&
+        description.includes("REFRESH_TOKEN_TRANSPORT"),
+      path,
+    );
+    const responses = child(operation, "responses");
+    assert.ok(isRecord(responses));
+    const success = Object.entries(responses).find(
+      ([code]) => Number(code) < 300,
+    );
+    assert.ok(child(success?.[1], "headers", "Set-Cookie"), path);
+    const parameters = child(operation, "parameters");
+    const header = (Array.isArray(parameters) ? parameters : []).find(
+      (parameter) => child(parameter, "name") === "X-Requested-With",
+    );
+    if (path === "/api/auth/login") assert.equal(header, undefined);
+    else {
+      assert.equal(child(header, "in"), "header");
+      assert.equal(child(header, "required"), false);
+      for (const code of ["400", "403"])
+        assert.ok(responses[code], `${path} ${code}`);
+    }
+  }
+});

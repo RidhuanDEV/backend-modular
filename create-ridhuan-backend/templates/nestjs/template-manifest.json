@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-nestjs.git",
-    "commit": "6b265f5139bd87899efcdf68a3ec35f957162a58",
+    "commit": "a775721e2fa25589060604206629b6d042400f5e",
     "dirty": false
   },
   "requirements": {
@@ -67,6 +67,7 @@
     "src/common/dto/pagination.dto.ts": "f42504ff71f973cfd4ecc43a5f25abebd22b63af595c13d85e6566b916e8d610",
     "src/common/dto/password.ts": "937fa2e46a60877c6363bafd2ae8f49918b4514001504117508ef809852a05ec",
     "src/common/endpoint/endpoint.registry.ts": "038b6616bd9d21e4b9561f6414bd61700ba45749b49447023b3af67fc40482f3",
+    "src/common/endpoint/openapi-contract.ts": "2d39c7c12dbf88d26d29f09fe1b9d63df611e4b87a78d78b376aae50b3aefe8a",
     "src/common/endpoint/registry-verifier.ts": "f495dbf8fad52742040359aeaa2dee555e8f5ac4b741e1baf9cfa08d7b08ecf5",
     "src/common/http/access-log.middleware.ts": "85610ec394d09f75a96e8b07eb572d26caa018874b6a30c1e36804267918b03d",
     "src/common/http/http-exception.filter.ts": "740116844b7ade1d615b069539f5b16d9824a1c7b75aa3e00c7b2e56357daea3",
@@ -82,7 +83,7 @@
     "src/integration/refresh-cookie.integration.ts": "f82827d5bb4c76f3354814487eba4e3d110af8afe9ea73191a994b84eeb7084d",
     "src/integration/s3.integration.ts": "bb832ccc2ae122c235ae20a500b37727b3d1cdb7664d35b38e937851f65d1549",
     "src/integration/template.integration.ts": "e3cc89e6af96ed0362e8fa7cec60284fc3b15c4f4df58e5b0570c33099976c98",
-    "src/main.ts": "37287b74047014934de8a895b501b38117320a0b361a5dcff64efdfe26a34881",
+    "src/main.ts": "210c0ed215a42decb39da6d76ee3e79c16a6f1ffe20021ab5430ee9ab29d64de",
     "src/modules/auth/auth.controller.ts": "9a552d00583b27085a1b6164fdad8f6c2909dddc9cff2be37c1d87b586f84bce",
     "src/modules/auth/auth.module.ts": "11e3f143817d1b39731b28a3cb4cba8cd06cc43bf8a6f9e5248200479854e165",
     "src/modules/auth/auth.service.ts": "7e2e2ed291055378779542bdfc2ff490139baf3813bd23d5878a0d18e0fed190",
@@ -126,7 +127,7 @@
     "src/platform/sse/sse.service.ts": "2c5cce7e7602f0eaa775653bf7703c323a0b1a87d95d14fdb767686686e926b0",
     "src/platform/storage/storage.service.ts": "75eb0a3ffbb79cd4ff304410fe830f3610c7b95cfb50ee6035d7260ee534171f",
     "src/platform/time/time.service.ts": "a278a3721598167d6ad04161d8a90ba4c616d77a7b982195c51a3dd541c85942",
-    "src/test/template.test.ts": "927245b3c3a9093aa30858f5c2eafa042089f6eea70611d758b1a03b072245ce",
+    "src/test/template.test.ts": "82be210becdbb62f6d486eba3340069bdfe797660a0e43037bc05422e224448e",
     "src/tools/cleanup-orphan-uploads.ts": "85504d74a3f184756c726bc3c3b24021cb7d5fbed6b99b6d74d62fd8926fafad",
     "src/tools/email-worker.ts": "ec47e8c4ffec84761dad4b4c7e4395b2299c54c21a57455b714bf35ea2874758",
     "src/tools/export-openapi.ts": "abd99446ec2d711ed3234b3b32832a4d88612b8ccfc8a0346d432c40e0dc8b17",

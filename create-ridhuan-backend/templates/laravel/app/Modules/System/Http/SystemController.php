@@ -27,6 +27,7 @@ final class SystemController
                     [
                         'success' => false,
                         'message' => 'Required dependency unavailable',
+                        'errors' => [],
                     ],
                     503,
                 );

@@ -94,7 +94,9 @@ public class PolicyInterceptor implements AsyncHandlerInterceptor {
   private @org.jspecify.annotations.Nullable EndpointId infrastructure(String path) {
     return path.equals("/docs/openapi.json") || path.equals("/docs/openapi.json/swagger-config")
         ? EndpointId.DOCS_SPEC
-        : path.equals("/docs") || path.startsWith("/swagger-ui") ? EndpointId.DOCS_UI : null;
+        : path.equals("/docs") || path.equals("/docs/") || path.startsWith("/swagger-ui")
+            ? EndpointId.DOCS_UI
+            : null;
   }
 
   @Override

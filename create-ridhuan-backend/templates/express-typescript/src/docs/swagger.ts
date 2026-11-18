@@ -22,21 +22,27 @@ export function setupSwagger(app: Express): void {
     }
     res.json(generateOpenApi(moduleName));
   });
-  mountEndpoint(
-    app,
-    "docs.ui",
-    swaggerUi.setup(undefined, {
-      swaggerOptions: {
-        urls: [
-          { url: "/docs/openapi.json", name: "All modules" },
-          ...activeDocModules().map((moduleName) => ({
-            url: `/docs/specs/${moduleName}.json`,
-            name: moduleName,
-          })),
-        ],
-      },
-    }),
-  );
+  const ui = swaggerUi.setup(undefined, {
+    swaggerOptions: {
+      urls: [
+        { url: "/docs/openapi.json", name: "All modules" },
+        ...activeDocModules().map((moduleName) => ({
+          url: `/docs/specs/${moduleName}.json`,
+          name: moduleName,
+        })),
+      ],
+    },
+  });
+  // Swagger UI loads its assets relative to the page, which only resolves under
+  // "/docs/"; the bare "/docs" would request them from the site root (404).
+  mountEndpoint(app, "docs.ui", (req, res, next) => {
+    const url = new URL(req.originalUrl, "http://localhost");
+    if (!url.pathname.endsWith("/")) {
+      res.redirect(301, `${url.pathname}/${url.search}`);
+      return;
+    }
+    ui(req, res, next);
+  });
   app.use(
     "/docs",
     rateLimiter("public"),

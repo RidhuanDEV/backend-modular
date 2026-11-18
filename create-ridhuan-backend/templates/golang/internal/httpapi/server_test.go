@@ -142,3 +142,130 @@ func TestRedisRateFailureClosesAuthAndOpensPublic(t *testing.T) {
 		t.Fatalf("public fail-open status %d", docsResponse.Code)
 	}
 }
+
+func TestOpenAPIDocumentsRefreshCookieTransport(t *testing.T) {
+	server, err := newTestServer(testConfig(), nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	server.Router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/docs/openapi.json", nil))
+	var document struct {
+		Paths map[string]map[string]struct {
+			Description string `json:"description"`
+			Parameters  []struct {
+				Name     string `json:"name"`
+				In       string `json:"in"`
+				Required bool   `json:"required"`
+			} `json:"parameters"`
+			Responses map[string]struct {
+				Headers map[string]json.RawMessage `json:"headers"`
+			} `json:"responses"`
+		} `json:"paths"`
+	}
+	if err = json.Unmarshal(rec.Body.Bytes(), &document); err != nil {
+		t.Fatal(err)
+	}
+	for path, status := range map[string]string{"/api/auth/login": "200", "/api/auth/refresh": "200", "/api/auth/logout": "204"} {
+		op := document.Paths[path]["post"]
+		if !strings.Contains(op.Description, "REFRESH_TOKEN_TRANSPORT") {
+			t.Fatalf("%s lacks cookie mode description", path)
+		}
+		if op.Responses[status].Headers["Set-Cookie"] == nil {
+			t.Fatalf("%s %s lacks Set-Cookie header", path, status)
+		}
+		found := false
+		for _, p := range op.Parameters {
+			if p.Name == "X-Requested-With" && p.In == "header" && !p.Required {
+				found = true
+			}
+		}
+		if found != (path != "/api/auth/login") {
+			t.Fatalf("%s X-Requested-With documented=%v", path, found)
+		}
+		for _, code := range []string{"400", "403"} {
+			if path != "/api/auth/login" {
+				if _, ok := op.Responses[code]; !ok {
+					t.Fatalf("%s lacks %s", path, code)
+				}
+			}
+		}
+	}
+}
+
+func TestDocsTrailingSlashRedirects(t *testing.T) {
+	server, err := newTestServer(testConfig(), nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]string{"/docs/": "/docs", "/docs/?x=1": "/docs?x=1"} {
+		rec := httptest.NewRecorder()
+		server.Router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != want {
+			t.Fatalf("%s -> %d %q", path, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+	rec := httptest.NewRecorder()
+	server.Router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/docs", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/docs -> %d", rec.Code)
+	}
+	disabled := testConfig()
+	disabled.DocsDisabled = true
+	server, err = newTestServer(disabled, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	server.Router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/docs/", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("disabled /docs/ -> %d", rec.Code)
+	}
+}
+
+func TestOpenAPIErrorsFollowPipeline(t *testing.T) {
+	server, err := newTestServer(testConfig(), nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	server.Router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/docs/openapi.json", nil))
+	var document struct {
+		Paths map[string]map[string]struct {
+			Responses map[string]json.RawMessage `json:"responses"`
+		} `json:"paths"`
+	}
+	if err = json.Unmarshal(rec.Body.Bytes(), &document); err != nil {
+		t.Fatal(err)
+	}
+	codes := func(path, method string) map[string]bool {
+		out := map[string]bool{}
+		for code := range document.Paths[path][method].Responses {
+			out[code] = true
+		}
+		return out
+	}
+	for path, want := range map[string]map[string]bool{
+		"/ready": {"200": true, "500": true, "503": true},
+		"/live":  {"200": true, "500": true},
+	} {
+		got := codes(path, "get")
+		if len(got) != len(want) {
+			t.Fatalf("%s documents %v, want %v", path, got, want)
+		}
+	}
+	users := codes("/api/users", "get")
+	for _, code := range []string{"400", "401", "403", "429", "500"} {
+		if !users[code] {
+			t.Fatalf("/api/users lacks %s", code)
+		}
+	}
+	for _, code := range []string{"404", "409", "413", "503"} {
+		if users[code] {
+			t.Fatalf("/api/users documents %s", code)
+		}
+	}
+	if !codes("/api/users/{id}", "get")["404"] || !codes("/api/auth/login", "post")["503"] || codes("/api/auth/login", "post")["403"] {
+		t.Fatal("path lookup, auth rate store or login permission errors are wrong")
+	}
+}

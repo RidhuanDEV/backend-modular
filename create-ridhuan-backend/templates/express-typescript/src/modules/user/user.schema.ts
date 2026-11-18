@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { emailField, newPasswordField } from "../auth/auth.schema.js";
+import { fieldsQuery } from "../../core/http/fields.js";
+import { userSelectableFields } from "./queries/user.query.js";
 
 export const createUserSchema = z.object({
   email: emailField(),
@@ -22,5 +24,5 @@ export const searchUserSchema = z.object({
   sortBy: z.string().optional(),
   orderBy: z.enum(["asc", "desc"]).optional(),
   search: z.string().optional(),
-  fields: z.string().optional(),
+  fields: fieldsQuery(userSelectableFields),
 });

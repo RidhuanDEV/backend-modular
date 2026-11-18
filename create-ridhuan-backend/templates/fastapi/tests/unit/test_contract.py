@@ -196,3 +196,87 @@ def test_sse_expiry_completes_response_and_cancels_producer() -> None:
         assert sent[-1]["more_body"] is False
 
     run(check())
+
+
+def test_openapi_documents_refresh_cookie_transport() -> None:
+    document = create_app(settings()).openapi()
+    for path, status in (
+        ("/api/auth/login", "200"),
+        ("/api/auth/refresh", "200"),
+        ("/api/auth/logout", "204"),
+    ):
+        operation = document["paths"][path]["post"]
+        assert "REFRESH_TOKEN_TRANSPORT" in operation["description"]
+        assert "Set-Cookie" in operation["responses"][status]["headers"]
+        headers = [
+            parameter
+            for parameter in operation.get("parameters", [])
+            if parameter["name"] == "X-Requested-With"
+        ]
+        if path == "/api/auth/login":
+            assert headers == []
+        else:
+            assert headers[0]["in"] == "header"
+            assert headers[0]["required"] is False
+            assert {"400", "403"} <= operation["responses"].keys()
+
+
+def test_swagger_ui_assets_are_pinned_with_integrity() -> None:
+    from app.main import SWAGGER_UI_HTML
+
+    assert "swagger-ui-dist@5." in SWAGGER_UI_HTML
+    assert "swagger-ui-dist@5/" not in SWAGGER_UI_HTML
+    for asset in ("swagger-ui.css", "swagger-ui-bundle.js"):
+        line = next(line for line in SWAGGER_UI_HTML.splitlines() if asset in line)
+        assert 'integrity="sha384-' in line
+        assert 'crossorigin="anonymous"' in line
+
+
+def test_openapi_documents_the_error_envelope_per_pipeline() -> None:
+    document = create_app(settings()).openapi()
+    assert "HTTPValidationError" not in document["components"]["schemas"]
+    assert document["components"]["schemas"]["ErrorResponse"]["required"] == [
+        "success",
+        "message",
+    ]
+
+    def errors(path: str, method: str = "get") -> list[str]:
+        return sorted(
+            code
+            for code in document["paths"][path][method]["responses"]
+            if code >= "400"
+        )
+
+    for item in document["paths"].values():
+        for operation in item.values():
+            for code, response in operation["responses"].items():
+                if code >= "400":
+                    assert (
+                        response["content"]["application/json"]["schema"]["$ref"]
+                        == "#/components/schemas/ErrorResponse"
+                    )
+    assert errors("/ready") == ["500", "503"]
+    assert errors("/live") == ["500"]
+    assert errors("/api/users") == ["400", "401", "403", "429", "500", "503"]
+    assert "404" in errors("/api/users/{id}")
+    assert "403" not in errors("/api/auth/login", "post")
+    assert "401" in errors("/api/auth/login", "post")
+
+
+def test_unexpected_errors_keep_the_envelope() -> None:
+    app = create_app(settings())
+
+    @app.get("/boom-fixture")
+    async def boom() -> None:
+        raise RuntimeError("fixture failure")
+
+    async def call() -> httpx.Response:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://fixture",
+        ) as client:
+            return await client.get("/boom-fixture")
+
+    response = asyncio.run(call())
+    assert response.status_code == 500
+    assert response.json() == {"success": False, "message": "Internal server error"}

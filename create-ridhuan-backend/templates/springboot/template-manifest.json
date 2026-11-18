@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/modular-springboot.git",
-    "commit": "09605a21e016e9e903baa248295f9946cdd405fe",
+    "commit": "21d51de571829164edc179955c5b9b441168f7a5",
     "dirty": false
   },
   "requirements": {
@@ -61,7 +61,7 @@
     "src/main/java/com/example/backend/BackendApplication.java": "a73a1232bac1d42c7f5e7580d9d88729c3e19adb2e5d5e4b8722084bda16b1b0",
     "src/main/java/com/example/backend/config/DotenvInitializer.java": "43c5cb85d4bcd003a2e0f3659dfde0f3b84cf30c6806a7a7caab0aa54a59a170",
     "src/main/java/com/example/backend/config/LocalEnvironment.java": "07fc6ee4007b96469b9a0095d5d9f9a85bd5b4c5d5457b5d0b57d86abb6dde42",
-    "src/main/java/com/example/backend/config/OpenApiConfiguration.java": "ed9308a5265cd45976f06d833d4e2a30e9844d07163b0ddd77d045f80d66a5ab",
+    "src/main/java/com/example/backend/config/OpenApiConfiguration.java": "b678860ef1e3ad173219fad85de1e01d1565b72ad7f250776c2e899aa1b99500",
     "src/main/java/com/example/backend/config/package-info.java": "8f7b3628ac697a3736c94bbd606ba784d47c51de3f4d838c34901e58d5bb2737",
     "src/main/java/com/example/backend/config/PlatformConfiguration.java": "f9fab86754d4d4cd78d9679024cfa73fe4cd625fa8b8bc10a75c52878565ef8a",
     "src/main/java/com/example/backend/config/Settings.java": "648eb3c850979c40690f9851446cfc597da6f27409d7a48c68d91b39e0961a4e",
@@ -72,7 +72,7 @@
     "src/main/java/com/example/backend/notifications/package-info.java": "75ee88ed6f07b224575aa4251ac7609ac1532248862bd3196a1ac14816b712c2",
     "src/main/java/com/example/backend/operations/CleanupService.java": "c6aaab49c1911c12a57b29f5735ee26f3f22ad3e7209ecd5ad970a1a5a6412cf",
     "src/main/java/com/example/backend/operations/Commands.java": "c5f65349faf1e73285fe36bc5b98d7a476a6dc301b8d86bb87b151e37b9f019b",
-    "src/main/java/com/example/backend/operations/DocsController.java": "c501ab15ccf65a314766ec7eb63c3a6512a46837a1a7c06f457219c901b2c48c",
+    "src/main/java/com/example/backend/operations/DocsController.java": "a838ec9e3d5e850bface7228a475e5c8e0e4fda4f0544fbc24ed1794374c4b47",
     "src/main/java/com/example/backend/operations/OfflineCommands.java": "98234c0fa15ecc40d663df07f95a198ebacd56940b40569e33f39366c987ad1a",
     "src/main/java/com/example/backend/operations/package-info.java": "206e9d35d4d3fbbf6e78cb504678e3236738d9a360022ae11a54ecff5ffe4f21",
     "src/main/java/com/example/backend/operations/SeedService.java": "8afcaa9721dd6785744427f62ca035d802e871c1661fc27fa73ef42cdee97675",
@@ -93,7 +93,7 @@
     "src/main/java/com/example/backend/platform/endpoint/EndpointRegistry.java": "f876e4314be445a4c2f0195699702d6ec3ebd563e583b3c8bad6d40fd59b608b",
     "src/main/java/com/example/backend/platform/endpoint/MappingVerifier.java": "11fbd17d73ded4e55075959968f6f93f3d1f6131a102ae7eb5b8e4f475900905",
     "src/main/java/com/example/backend/platform/endpoint/package-info.java": "c4a201a400713a5f618ab00cfc1f85f463efccb381dd8b2dff1db775cf6b7222",
-    "src/main/java/com/example/backend/platform/endpoint/PolicyInterceptor.java": "1216d04c5d97301006573d18849a71371c4e59dca54ae9b8db54dc9a07aa9bbf",
+    "src/main/java/com/example/backend/platform/endpoint/PolicyInterceptor.java": "0aeb32ae74be5b8f31e2d03678808d1b91e0da985a86a7005d28c8e59f3f58b3",
     "src/main/java/com/example/backend/platform/endpoint/WebConfiguration.java": "d9acc4d4d8cbb06936e2d24bf4a4ac998d18bff083a79c276391b90c205c1680",
     "src/main/java/com/example/backend/platform/http/Api.java": "01c3a82d2d5cdc68edf53b05361133ab908b92ecb6185caa2a458c786304430f",
     "src/main/java/com/example/backend/platform/http/ApiException.java": "77a1b76e2887b11122a2bc3a6f6913a0ee5caf651afda83e4dfac46d031adb10",
@@ -160,6 +160,7 @@
     "src/main/resources/templates/module/Entity.java.txt": "c90d4d40a1ff582729508fafe7469b965910c37c62636574bb4b73b2a0b30f33",
     "src/main/resources/templates/module/Repository.java.txt": "80fae0586d25cc616a6a9de41f2018d90edbd34e03d32f206dbbead4f7f707ad",
     "src/main/resources/templates/module/Service.java.txt": "3c56aba7a045f73a82560f27796645ae612aed8423a1f0ace86eb3340bc35956",
+    "src/test/java/com/example/backend/config/OpenApiConfigurationTest.java": "bc9d582d2c2e2ec5642dd40bf5362f2fcccbaf4af0ac3d92fb732b6e1f83a756",
     "src/test/java/com/example/backend/CoreTest.java": "0ddba1348c783df0b0993a513ee4e55848053174cfb23b372576c9d8e31019da",
     "src/test/java/com/example/backend/platform/http/StreamConnectionTest.java": "bb1aeed69b8c855c8599430ee2483d7f09dd5e9f65b212a1aeb9c41779e1b707",
     "src/test/java/com/example/backend/platform/storage/StorageScopeTest.java": "e58f40c5cdf0dc6a9b807837ea67c68d862c1e31c0bd1947f83a735fc16f980d",

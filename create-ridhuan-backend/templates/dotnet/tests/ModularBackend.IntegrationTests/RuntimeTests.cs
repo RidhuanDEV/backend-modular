@@ -598,11 +598,25 @@ public sealed class RuntimeTests
         );
         var page = await Get("/api/users?page=1&limit=1&search=updated&sortBy=email&orderBy=desc");
         Assert.AreEqual(1, page.GetProperty("meta").GetProperty("totalItems").GetInt32());
-        var projection = await Get("/api/users?fields=id,email,password");
+        var projection = await Get("/api/users?fields=id,email");
         var projected = projection.GetProperty("data")[0];
         Assert.IsTrue(projected.TryGetProperty("email", out _));
         Assert.IsFalse(projected.TryGetProperty("role", out _));
         Assert.IsFalse(projected.TryGetProperty("password", out _));
+        // Names outside the allowlist are rejected instead of silently returning the full row.
+        foreach (var fields in new[] { "password", "id,email,password", "Email", "id;email" })
+        {
+            using var rejected = await client.GetAsync("/api/users?fields=" + fields);
+            Assert.AreEqual(HttpStatusCode.BadRequest, rejected.StatusCode, fields);
+        }
+        foreach (var fields in new[] { " email , roleId ", "email,", "" })
+            Assert.AreEqual(
+                1,
+                (await Get("/api/users?limit=1&fields=" + fields))
+                    .GetProperty("data")
+                    .GetArrayLength(),
+                fields
+            );
         var role = await Send(
             HttpMethod.Post,
             "/api/roles",

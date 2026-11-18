@@ -15,7 +15,8 @@ import {
   guardSystemPermissionHolders,
   revokeUserSessions,
 } from "../../core/auth/privilege.js";
-import { userQueryConfig } from "./queries/user.query.js";
+import { userQueryConfig, userSelectableFields } from "./queries/user.query.js";
+import { projectFields, selectedFields } from "../../core/http/fields.js";
 import { AuditAction } from "../../constants/audit.constants.js";
 import { USER_MODULE } from "../../constants/modules.constants.js";
 import bcrypt from "bcrypt";
@@ -35,9 +36,19 @@ export class UserService {
   async findAll(
     query: SearchUserDto,
   ): Promise<{ data: UserResponseProjection[]; meta: PaginationMeta }> {
-    const cacheKey = `${CACHE_PREFIX}:list:${JSON.stringify(query)}`;
+    // The cache holds full rows; ?fields= only projects them, so it is not part of the key.
+    const { fields, ...listQuery } = query;
+    const keys = selectedFields(fields, userSelectableFields);
+    const project = (result: {
+      data: UserResponseProjection[];
+      meta: PaginationMeta;
+    }) => ({
+      data: result.data.map((row) => projectFields(row, keys)),
+      meta: result.meta,
+    });
+    const cacheKey = `${CACHE_PREFIX}:list:${JSON.stringify(listQuery)}`;
     const cached = await cacheService.get(cacheKey, userListCacheSchema);
-    if (cached) return cached;
+    if (cached) return project(cached);
 
     const findOptions = buildFindOptions(query, userQueryConfig);
     const { rows, count } = await repository.findAll(findOptions);
@@ -49,7 +60,7 @@ export class UserService {
     };
 
     await cacheService.set(cacheKey, result, 60);
-    return result;
+    return project(result);
   }
 
   async findById(id: string): Promise<UserResponseDto> {

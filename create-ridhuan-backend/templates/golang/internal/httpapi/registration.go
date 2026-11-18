@@ -9,6 +9,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -32,7 +33,37 @@ func (s *Server) operation(id EndpointID) huma.Operation {
 	if !ep.Public {
 		op.Security = []map[string][]string{{"bearer": {}}}
 	}
+	if id == "auth.login" || id == "auth.refresh" || id == "auth.logout" {
+		documentRefreshCookie(&op, id)
+	}
 	return op
+}
+
+const refreshCookieModes = "Refresh token transport is set by REFRESH_TOKEN_TRANSPORT. " +
+	"body (default): the refresh token travels in JSON. " +
+	"cookie: login and refresh set it as an httpOnly cookie scoped to /api/auth and omit it from the response body; " +
+	"refresh and logout read the cookie when the body has no refreshToken, and then require the X-Requested-With header (send credentials: \"include\" cross-origin). " +
+	"A refreshToken in the body always takes precedence."
+
+// documentRefreshCookie documents both refresh token transports on the endpoints that issue or consume it.
+func documentRefreshCookie(op *huma.Operation, id EndpointID) {
+	op.Description = refreshCookieModes
+	cookie := "Cookie mode only: httpOnly refresh token cookie (Path=/api/auth)"
+	if id == "auth.logout" {
+		cookie = "Cookie mode only: clears the refresh cookie"
+	}
+	op.Responses = map[string]*huma.Response{
+		strconv.Itoa(op.DefaultStatus): {Headers: map[string]*huma.Param{
+			"Set-Cookie": {Description: cookie, Schema: &huma.Schema{Type: huma.TypeString}},
+		}},
+	}
+	if id != "auth.login" {
+		op.Parameters = append(op.Parameters, &huma.Param{
+			Name: "X-Requested-With", In: "header", Required: false,
+			Description: "Required (any value) when the refresh token comes from the cookie",
+			Schema:      &huma.Schema{Type: huma.TypeString},
+		})
+	}
 }
 func (s *Server) enforce(ep Endpoint) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
@@ -186,4 +217,39 @@ func raw[I any](s *Server, id EndpointID, handler func(context.Context, *I) (*ra
 		s.Audit.Read(ctx, s.policy(ctx, id), nil, "")
 		return out, nil
 	})
+}
+
+// documentErrors narrows the shared error list on each operation to the statuses its
+// pipeline can produce: enforce (auth, permission, rate limit, content type), body
+// limits, path lookups, database faults on writes and the generic 500.
+func (s *Server) documentErrors() {
+	for path, item := range s.Docs.OpenAPI().Paths {
+		for _, op := range []*huma.Operation{item.Get, item.Post, item.Patch, item.Delete} {
+			if op == nil {
+				continue
+			}
+			ep, ok := s.Policies[EndpointID(op.OperationID)]
+			if !ok {
+				continue
+			}
+			allowed := map[int]bool{500: true}
+			write := ep.Method != http.MethodGet
+			allowed[400] = write || len(op.Parameters) > 0
+			allowed[401] = !ep.Public || ep.ID == "auth.login" || ep.ID == "auth.refresh"
+			allowed[403] = ep.Permission != "" || ep.ID == "auth.refresh" || ep.ID == "auth.logout"
+			allowed[404] = strings.Contains(path, "{")
+			// Unique violations and serialization conflicts on any write.
+			allowed[409] = write
+			allowed[413] = op.RequestBody != nil
+			allowed[429] = ep.ID != "health.get" && ep.ID != "live.get" && ep.ID != "ready.get"
+			// Readiness, an unavailable auth rate store, or disabled uploads.
+			allowed[503] = ep.ID == "ready.get" || ep.Rate == RateAuth || ep.ID == "upload.create"
+			for code := range op.Responses {
+				status, err := strconv.Atoi(code)
+				if err == nil && status >= 400 && !allowed[status] {
+					delete(op.Responses, code)
+				}
+			}
+		}
+	}
 }

@@ -152,6 +152,22 @@ test(
         (await send(rootToken, "POST", "/api/roles", { name: "admin" })).status,
         403,
       );
+      // ?fields= projects list rows; names outside the allowlist are a 400.
+      const projected = await send(
+        rootToken,
+        "GET",
+        "/api/users?fields=email&limit=1",
+      );
+      assert.equal(projected.status, 200);
+      assert.deepEqual(Object.keys((await projected.json()).data[0]), [
+        "email",
+      ]);
+      assert.equal(
+        (await send(rootToken, "GET", "/api/users?fields=password")).status,
+        400,
+      );
+      const full = await send(rootToken, "GET", "/api/users?limit=1");
+      assert.ok(Object.keys((await full.json()).data[0]).includes("role"));
       // F-07: files are readable by their uploader and root users only.
       assert.equal(
         (await send(tokenFor(member), "GET", `/api/upload/${file.id}`)).status,

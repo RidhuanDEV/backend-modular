@@ -14,10 +14,14 @@ final class ListUsersRequest extends BackendRequest
     public function rules(): array
     {
         return [
+            /** @default 1 */
             'page' => ['sometimes', 'integer', 'min:1'],
+            /** @default 10 */
             'limit' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'search' => ['sometimes', 'string', 'max:255'],
+            /** @default createdAt */
             'sortBy' => ['sometimes', 'in:email,createdAt,updatedAt'],
+            /** @default desc */
             'orderBy' => ['sometimes', 'in:asc,desc'],
             // Unknown projection fields are a client error, not a silently empty object.
             'fields' => [

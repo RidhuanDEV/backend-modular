@@ -95,6 +95,15 @@ func NewServer(c config.Config, pool db.Connection, client *redis.Client, servic
 	s.Notifications = &notification.Service{Pool: pool, Audit: services.Audit, SMTP: c}
 	r.Use(s.middleware)
 	s.mount()
+	// The UI lives at /docs; a trailing slash would otherwise be a 404.
+	r.Get("/docs/", func(w http.ResponseWriter, req *http.Request) {
+		target := "/docs"
+		if req.URL.RawQuery != "" {
+			target += "?" + req.URL.RawQuery
+		}
+		http.Redirect(w, req, target, http.StatusMovedPermanently)
+	})
+	s.documentErrors()
 	if len(s.registered) != len(Definitions) {
 		return nil, fmt.Errorf("registry coverage: mounted %d of %d endpoints", len(s.registered), len(Definitions))
 	}

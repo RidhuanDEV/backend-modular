@@ -24,6 +24,17 @@ public class DocsController {
     this.resource = resource;
   }
 
+  /** The UI lives at /docs; a trailing slash would otherwise be a 404. */
+  @io.swagger.v3.oas.annotations.Hidden
+  @GetMapping("/docs/")
+  public org.springframework.http.ResponseEntity<Void> docsWithSlash(
+      jakarta.servlet.http.HttpServletRequest request) {
+    String query = request.getQueryString();
+    return org.springframework.http.ResponseEntity.status(301)
+        .header("Location", query == null ? "/docs" : "/docs?" + query)
+        .build();
+  }
+
   @GetMapping("/docs/specs/{module}.json")
   @EndpointPolicy(EndpointId.DOCS_MODULE_SPEC)
   public OpenAPI module(

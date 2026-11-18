@@ -12,6 +12,7 @@ import {
   verifyOpenApi,
   verifyRegisteredControllers,
 } from "./common/endpoint/registry-verifier";
+import { documentContract } from "./common/endpoint/openapi-contract";
 import { requestContext } from "./common/http/request-context";
 import { accessLog } from "./common/http/access-log.middleware";
 import type { AppConfig } from "./config/env.validation";
@@ -106,6 +107,7 @@ export async function createApp() {
       responses: { "200": { description: "OpenAPI JSON" } },
     },
   };
+  documentContract(doc);
   verifyOpenApi(doc);
   app.get(DocsService).setDocument(doc);
   if (docsEnabled)

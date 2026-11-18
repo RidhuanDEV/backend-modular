@@ -12,7 +12,11 @@ import {
 import type { SearchUserDto } from "./dto/search-user.dto.js";
 import type { CreateUserDto } from "./dto/create-user.dto.js";
 import type { UpdateUserDto } from "./dto/update-user.dto.js";
-import { createUserSchema, updateUserSchema } from "./user.schema.js";
+import {
+  createUserSchema,
+  searchUserSchema,
+  updateUserSchema,
+} from "./user.schema.js";
 
 const service = new UserService();
 
@@ -23,22 +27,8 @@ export class UserController {
     next: NextFunction,
   ): Promise<void> => {
     try {
-      const pageVal = req.query["page"];
-      const limitVal = req.query["limit"];
-      const sortByVal = req.query["sortBy"];
-      const orderByVal = req.query["orderBy"];
-      const searchVal = req.query["search"];
-      const fieldsVal = req.query["fields"];
-
-      const query: SearchUserDto = {
-        page: typeof pageVal === "number" ? pageVal : Number(pageVal) || 1,
-        limit: typeof limitVal === "number" ? limitVal : Number(limitVal) || 10,
-        sortBy: typeof sortByVal === "string" ? sortByVal : undefined,
-        orderBy: orderByVal === "desc" ? "desc" : "asc",
-        search: typeof searchVal === "string" ? searchVal : undefined,
-        fields: typeof fieldsVal === "string" ? fieldsVal : undefined,
-      };
-
+      // Already validated by the route; parsing again yields the typed DTO.
+      const query: SearchUserDto = searchUserSchema.parse(req.query);
       const result = await service.findAll(query);
       sendSuccess(res, {
         data: result.data,

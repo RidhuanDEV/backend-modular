@@ -7,7 +7,7 @@
   ],
   "source": {
     "repository": "https://github.com/RidhuanDEV/golang-backend.git",
-    "commit": "e06952635fecf701c9ed11052ac84b47032859eb",
+    "commit": "7a1a5987cf71d8a20d106df127a7fadee884faa6",
     "dirty": false
   },
   "requirements": {
@@ -136,12 +136,12 @@
     "internal/httpapi/privilege_integration_test.go": "a747ba503b606a1d4fb95eca0c0df3983b484e6773620a2c822d85258afb11a1",
     "internal/httpapi/projection.go": "c73709bd2339ecab3cbc243b5985a484f2fc4894e4f3b8ae2503279e92c5cdbb",
     "internal/httpapi/refresh_cookie.go": "36912381af9b7c0b0f63599172e39709bfd7087b38fa86070456361b60b401b6",
-    "internal/httpapi/registration.go": "f44771bf6723e7810598e30642fa9e6b47c24011a79e7b485217718747d5d35a",
+    "internal/httpapi/registration.go": "85f62e90693a38e116409e7fd4b731e32834c2090445f1fe8f773f372dc403b0",
     "internal/httpapi/registry.go": "98facd2d746fd55cf6f8c844767bcc99e0d6c03626f4bca0fda4b5f78a32c88e",
     "internal/httpapi/roles.go": "bbf356676ed29269e036cd81c671c32d0167389e2e83ab5d033d1fb9bea943b5",
     "internal/httpapi/routes.go": "610ecf85f65e324a7ca197413a96c0f23dfd860f51d3ce3a83ccbda015ac161b",
-    "internal/httpapi/server.go": "b4d036f56d5c149c89363a4cddac212d001880ced17406fb0b101250b7fe2b72",
-    "internal/httpapi/server_test.go": "5bd607b20d0d7ab96fc2b7d13de3e05e02d129578a772d6fcad0b58855cc3752",
+    "internal/httpapi/server.go": "583e719b30acbff513a531afd18300212900b977ca2880dd941f3a011741c4f5",
+    "internal/httpapi/server_test.go": "91455b95f26ae16e379f9e4e531df99564af133934898e1ef6599f68765017af",
     "internal/httpapi/system.go": "2f8ed5bc3ff2ff3aef6bd1bf2c5833285fc265bfd2808b9d25075fcd26162fe3",
     "internal/httpapi/test_dependencies_test.go": "168d4d2dbdadae81174e4aa264ebed678ff9ce99ff0256f3ce79f0514f983a2d",
     "internal/httpapi/types.go": "91aa3231ea256d8f1d6b00e977a0820722dcc5e8f3e5b861099b3785d3050201",

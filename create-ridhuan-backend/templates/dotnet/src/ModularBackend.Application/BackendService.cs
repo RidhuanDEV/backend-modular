@@ -15,6 +15,13 @@ public sealed class BackendService(
     RefreshSessionPolicy sessions
 )
 {
+    private static readonly HashSet<string> SelectableUserFields = new(StringComparer.Ordinal)
+    {
+        "id",
+        "email",
+        "roleId",
+    };
+
     private static UserResult Map(User u) =>
         new(
             u.Id,
@@ -499,13 +506,18 @@ public sealed class BackendService(
             throw new ApiException(400, "Invalid pagination");
         if (query.OrderBy is not (null or "asc" or "desc"))
             throw new ApiException(400, "Invalid orderBy");
-        var (rows, total) = await store.UsersAsync(query, ct);
-        var pages = (int)Math.Ceiling((double)total / query.Limit);
         var fields = (query.Fields ?? "")
             .Split(',')
             .Select(f => f.Trim())
-            .Where(f => f is "id" or "email" or "roleId")
+            .Where(f => f.Length > 0)
             .ToHashSet(StringComparer.Ordinal);
+        if (query.Fields is { Length: > 255 } || !fields.IsSubsetOf(SelectableUserFields))
+            throw new ApiException(
+                400,
+                "fields must be a comma-separated subset of: id, email, roleId"
+            );
+        var (rows, total) = await store.UsersAsync(query, ct);
+        var pages = (int)Math.Ceiling((double)total / query.Limit);
         var projected = rows.Select(u =>
                 fields.Count == 0
                     ? new UserProjection(

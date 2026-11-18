@@ -13,7 +13,7 @@ export interface BaseSearchQuery {
   sortBy?: string | undefined;
   orderBy?: "asc" | "desc" | undefined;
   search?: string | undefined;
-  /** Comma-separated list of response/model field names to include in list responses. */
+  /** Comma-separated response fields; projected after mapping (see core/http/fields). */
   fields?: string | undefined;
 }
 
@@ -63,12 +63,6 @@ export interface QueryBuilderConfig {
   sortableFields?: string[];
 
   /**
-   * Allowlist of response/model fields that may be returned via the ?fields= param.
-   * Only fields present in this list are ever selected.
-   */
-  selectableFields?: string[];
-
-  /**
    * Default Prisma includes (eager-loaded relations).
    * Example: { role: true } or { role: { include: { permissions: true } } }
    */
@@ -82,7 +76,6 @@ export interface PrismaFindOptions {
   skip: number;
   take: number;
   orderBy: Record<string, string>[];
-  select?: Record<string, boolean>;
   include?: Record<string, unknown>;
 }
 
@@ -98,7 +91,7 @@ export function buildFindOptions<Q extends BaseSearchQuery>(
   query: Q,
   config: QueryBuilderConfig = {},
 ): PrismaFindOptions {
-  const { page, limit, sortBy, search, fields, orderBy } = query;
+  const { page, limit, sortBy, search, orderBy } = query;
 
   // ── Pagination ──────────────────────────────────────────────────────────
   const skip = (page - 1) * limit;
@@ -162,38 +155,12 @@ export function buildFindOptions<Q extends BaseSearchQuery>(
     }
   }
 
-  // ── Field selection ───────────────────────────────────────────────────
-  let select: Record<string, boolean> | undefined;
-  if (fields && config.selectableFields?.length) {
-    const requested = Array.from(
-      new Set(
-        fields
-          .split(",")
-          .map((f) => f.trim())
-          .filter(Boolean),
-      ),
-    );
-    const filtered = requested.filter((f) =>
-      config.selectableFields!.includes(f),
-    );
-    if (filtered.length > 0) {
-      select = {};
-      for (const f of filtered) {
-        select[f] = true;
-      }
-    }
-  }
-
   const result: PrismaFindOptions = {
     where,
     skip,
     take: limit,
     orderBy: orderByClause,
   };
-
-  if (select) {
-    result.select = select;
-  }
 
   if (
     config.defaultIncludes &&
